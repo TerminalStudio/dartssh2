@@ -1,0 +1,21 @@
+name: dartssh
+version: 1.0.0+0
+description: Library providing a pure Dart SSH implementation.
+author: Green Appers, Inc. <greenappers@gmail.com>
+homepage: https://github.com/GreenAppers/dartssh
+
+environment:
+  sdk: ">=2.1.0 <3.0.0"
+
+dependencies:
+  meta: ^1.1.6
+  pedantic: ^1.8.0
+  pointycastle: ^1.0.1
+  tweetnacl:
+    git:
+      url: https://github.com/GreenAppers/tweetnacl-dart
+
+dev_dependencies:
+  build_runner: ^1.4.0
+  convert: ^2.1.1
+  test: ^1.6.5
