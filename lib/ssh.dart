@@ -1,6 +1,27 @@
 // Copyright 2019 dartssh developers
 // Use of this source code is governed by a MIT-style license that can be found in the LICENSE file.
 
+typedef NameFunction = String Function(int);
+typedef SupportedFunction = bool Function(int);
+
+String buildPreferenceCsv(
+    NameFunction name, SupportedFunction supported, int end,
+    [int startAfter = 0]) {
+  String ret = '';
+  for (int i = 1 + startAfter; i <= end; i++) {
+    if (supported(i)) ret += (ret.isEmpty ? '' : ',') + name(i);
+  }
+  return ret;
+}
+
+String preferenceIntersection(String intersectCsv, String supportedCsv) {
+  Set<String> supported = Set<String>.of(supportedCsv.split(','));
+  for (String intersect in intersectCsv.split(',')) {
+    if (supported.contains(intersect)) return intersect;
+  }
+  return '';
+}
+
 class Key {
   static const int ED25519 = 1,
       ECDSA_SHA2_NISTP256 = 2,
@@ -48,15 +69,18 @@ class Key {
     }
   }
 
-  static bool supported(int) => true;
-
-  //static string PreferenceCSV(int start_after=0);
-  //static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
+  static bool supported(int id) => true;
 
   static bool ellipticCurveDSA(int id) =>
       id == ECDSA_SHA2_NISTP256 ||
       id == ECDSA_SHA2_NISTP384 ||
       id == ECDSA_SHA2_NISTP521;
+
+  static String preferenceCsv([int startAfter = 0]) =>
+      buildPreferenceCsv(name, supported, End, startAfter);
+
+  static int preferenceIntersect(String intersectCsv, [int startAfter = 0]) =>
+      id(preferenceIntersection(preferenceCsv(startAfter), intersectCsv));
 }
 
 class KEX {
@@ -116,23 +140,29 @@ class KEX {
     }
   }
 
-  static bool supported(int) => true;
-
-  //static string PreferenceCSV(int start_after=0);
-  //static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
+  static bool supported(int id) => true;
 
   static bool X25519DiffieHellman(int id) => id == ECDH_SHA2_X25519;
+
   static bool EllipticCurveDiffieHellman(int id) =>
       id == ECDH_SHA2_NISTP256 ||
       id == ECDH_SHA2_NISTP384 ||
       id == ECDH_SHA2_NISTP521;
+
   static bool DiffieHellmanGroupExchange(int id) =>
       id == DHGEX_SHA256 || id == DHGEX_SHA1;
+
   static bool DiffieHellman(int id) =>
       id == DHGEX_SHA256 ||
       id == DHGEX_SHA1 ||
       id == DH14_SHA1 ||
       id == DH1_SHA1;
+
+  static String preferenceCsv([int startAfter = 0]) =>
+      buildPreferenceCsv(name, supported, End, startAfter);
+
+  static int preferenceIntersect(String intersectCsv, [int startAfter = 0]) =>
+      id(preferenceIntersection(preferenceCsv(startAfter), intersectCsv));
 }
 
 class Cipher {
@@ -177,11 +207,15 @@ class Cipher {
     }
   }
 
-  static bool supported(int) => true;
+  static bool supported(int id) => true;
+
+  static String preferenceCsv([int startAfter = 0]) =>
+      buildPreferenceCsv(name, supported, End, startAfter);
+
+  static int preferenceIntersect(String intersectCsv, [int startAfter = 0]) =>
+      id(preferenceIntersection(preferenceCsv(startAfter), intersectCsv));
 
   //static Crypto::CipherAlgo Algo(int id, int *blocksize=0);
-  //static string PreferenceCSV(int start_after=0);
-  //static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
 }
 
 class MAC {
@@ -241,11 +275,15 @@ class MAC {
     }
   }
 
-  static bool supported(int) => true;
+  static bool supported(int id) => true;
+
+  static String preferenceCsv([int startAfter = 0]) =>
+      buildPreferenceCsv(name, supported, End, startAfter);
+
+  static int preferenceIntersect(String intersectCsv, [int startAfter = 0]) =>
+      id(preferenceIntersection(preferenceCsv(startAfter), intersectCsv));
 
   //static Crypto::MACAlgo Algo(int id, int *prefix_bytes=0);
-  //static string PreferenceCSV(int start_after=0);
-  //static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
 }
 
 class Compression {
@@ -273,8 +311,11 @@ class Compression {
     }
   }
 
-  static bool supported(int) => true;
+  static bool supported(int id) => true;
 
-  //static string PreferenceCSV(int start_after=0);
-  //static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
+  static String preferenceCsv([int startAfter = 0]) =>
+      buildPreferenceCsv(name, supported, End, startAfter);
+
+  static int preferenceIntersect(String intersectCsv, [int startAfter = 0]) =>
+      id(preferenceIntersection(preferenceCsv(startAfter), intersectCsv));
 }
