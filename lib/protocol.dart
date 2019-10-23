@@ -38,7 +38,7 @@ int serializedStringLength(dynamic x) => 4 + x.length;
 /// string: https://www.ietf.org/rfc/rfc4251.txt
 void serializeString(SerializableOutput output, dynamic x) {
   output.addUint32(x.length);
-  output.addBytes(x is String ? x.codeUnits : x);
+  output.addBytes(x is String ? Uint8List.fromList(x.codeUnits) : x);
 }
 
 /// string: https://www.ietf.org/rfc/rfc4251.txt
@@ -444,8 +444,8 @@ class MSG_SERVICE_ACCEPT extends SSHMessage {
 /// Key exchange begins by each side sending the following packet.
 class MSG_KEXINIT extends SSHMessage {
   static const int ID = 20;
-  String cookie,
-      kexAlgorithms,
+  Uint8List cookie;
+  String kexAlgorithms,
       serverHostKeyAlgorithms,
       encryptionAlgorithmsClientToServer,
       encryptionAlgorithmsServerToClient,
@@ -492,7 +492,7 @@ class MSG_KEXINIT extends SSHMessage {
 
   @override
   void serialize(SerializableOutput output) {
-    output.addBytes(cookie.codeUnits);
+    output.addBytes(cookie);
     serializeString(output, kexAlgorithms);
     serializeString(output, serverHostKeyAlgorithms);
     serializeString(output, encryptionAlgorithmsClientToServer);
@@ -509,7 +509,7 @@ class MSG_KEXINIT extends SSHMessage {
 
   @override
   void deserialize(SerializableInput input) {
-    cookie = String.fromCharCodes(input.getBytes(16));
+    cookie = input.getBytes(16);
     kexAlgorithms = deserializeString(input);
     serverHostKeyAlgorithms = deserializeString(input);
     encryptionAlgorithmsClientToServer = deserializeString(input);

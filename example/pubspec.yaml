@@ -1,0 +1,14 @@
+name: ssh
+version: 1.0.0+0
+description: Command line SSH client with dartssh.
+author: Green Appers, Inc. <greenappers@gmail.com>
+homepage: https://github.com/GreenAppers/cruzawl
+documentation: https://pub.dev/documentation/dartssh/latest/
+
+environment:
+  sdk: ">=2.1.0 <3.0.0"
+
+dependencies:
+  args: ^1.5.2
+  dartssh:
+    path: ../
