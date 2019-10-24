@@ -32,6 +32,7 @@ void main(List<String> arguments) async {
         debugPrint: print,
         tracePrint: print);
 
+    stdin.lineMode = false;
     await for (String input in stdin.transform(utf8.decoder)) {
       print('read $input');
     }

@@ -1,6 +1,7 @@
 // Copyright 2019 dartssh developers
 // Use of this source code is governed by a MIT-style license that can be found in the LICENSE file.
 
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -19,6 +20,7 @@ import 'package:dartssh/ssh.dart';
 
 typedef VoidCallback = void Function();
 typedef StringCallback = void Function(String);
+typedef FingerprintCallback = bool Function(int, Uint8List);
 
 class Forward {
   int port, targetPort;
@@ -41,15 +43,22 @@ class SSHClient {
   List<Forward> forwardLocal, forwardRemote;
   StringCallback response, debugPrint, tracePrint;
   VoidCallback success;
-  /*FingerprintCB hostFingerprintCb;
-  LoadIdentityCB loadIdentityCb;
+  FingerprintCallback hostFingerprint;
+
+  /*LoadIdentityCB loadIdentityCb;
   LoadPasswordCB loadPasswordCb;
   RemoteForwardCB remoteForwardCb;
   sharedPtr<Identity> identity;*/
 
-  String verC = 'SSH-2.0-dartssh_1.0', verS;
-  Uint8List kexInitC, kexInitS, decryptBuf, hText, sessionId;
-  String integrityC2s, integrityS2c, login, pw;
+  String verC = 'SSH-2.0-dartssh_1.0', verS, login, pw;
+  Uint8List kexInitC,
+      kexInitS,
+      decryptBuf,
+      hText,
+      sessionId,
+      integrityC2s,
+      integrityS2c;
+
   num serverVersion = 0;
   int state = 0,
       packetLen = 0,
@@ -71,6 +80,7 @@ class SSHClient {
       loadedPw = false,
       wrotePw = false;
   int padding = 0, packetId = 0;
+  int cipherIdC2s = 0, cipherIdS2c = 0, macIdC2s = 0, macIdS2c = 0;
 
   SocketInterface socket;
   Random random;
@@ -81,14 +91,13 @@ class SSHClient {
   EllipticCurveDiffieHellman ecdh = EllipticCurveDiffieHellman();
   X25519DiffieHellman x25519dh = X25519DiffieHellman();
   Digest kexHash;
-  BlockCipher cipherAlgoC2s, cipherAlgoS2c;
+  BlockCipher encrypt, decrypt;
   HMac macAlgoC2s, macAlgoS2c;
   BigInt K;
 
   /*unorderedMap<int, SSHClient::Channel> channels;
   SSHClient::Channel *sessionChannel=0;
   BigNumContext ctx;
-  Crypto::Cipher encrypt, decrypt;
   ECDef curveId;*/
   int nextChannelId = 1, compressIdC2s, compressIdS2c;
   int kexMethod = 0, hostkeyType = 0, macPrefixC2s = 0, macPrefixS2c = 0;
@@ -96,9 +105,9 @@ class SSHClient {
       maxPacketSize = 32768,
       termWidth = 80,
       termHeight = 25;
+  ZLibDecoder zreader;
+  ZLibEncoder zwriter;
   //unorderedMap<int, const SSHClient::Params::Forward*> forwardRemote;
-  //uniquePtr<ZLibReader> zreader;
-  //uniquePtr<ZLibWriter> zwriter;
 
   SSHClient(
       {this.hostport,
@@ -258,33 +267,11 @@ class SSHClient {
 
       case MSG_KEXDH_REPLY.ID:
       case MSG_KEX_DH_GEX_REPLY.ID:
-        if (state != SSHClientState.FIRST_KEXREPLY &&
-            state != SSHClientState.KEXREPLY) {
-          throw FormatException('$hostport: unexpected state $state');
-        }
-        if (guessedS && !guessedRightS) {
-          guessedS = false;
-          print('$hostport: server guessed wrong, ignoring packet');
-          break;
-        }
+        handleMSG_KEXDH_REPLY(packetId, packet);
+        break;
 
-        Uint8List fingerprint;
-        if (packetId == MSG_KEX_ECDH_REPLY.ID &&
-            KEX.x25519DiffieHellman(kexMethod)) {
-          fingerprint = handleX25519MSG_KEX_ECDH_REPLY(
-                  MSG_KEX_ECDH_REPLY()..deserialize(packetS)) ??
-              fingerprint;
-          // fall thru
-        } else {
-          throw FormatException('$hostport: unsupported $packetId, $kexMethod');
-        }
-
-        /*if (!WriteClearOrEncrypted(c, SSH::MSG_NEWKEYS())) return ERRORv(-1, c->Name(), ": write");
-        if (state == FIRST_KEXREPLY) {
-          state = FIRST_NEWKEYS;
-          if (host_fingerprint_cb) accepted_hostkey = host_fingerprint_cb(hostkey_type, fingerprint);
-          else                     accepted_hostkey = true;
-        } else state = NEWKEYS;*/
+      case MSG_NEWKEYS.ID:
+        handleMSG_NEWKEYS();
         break;
 
       default:
@@ -296,7 +283,6 @@ class SSHClient {
   void handleMSG_KEXINIT(MSG_KEXINIT msg, Uint8List packet) {
     tracePrint('$hostport: MSG_KEXINIT $msg');
 
-    int cipherIdC2s = 0, cipherIdS2c = 0, macIdC2s = 0, macIdS2c = 0;
     guessedS = msg.firstKexPacketFollows;
     kexInitS = packet.sublist(0, packetLen - packetMacLen);
 
@@ -332,9 +318,7 @@ class SSHClient {
     guessedRightS = kexMethod == KEX.id(msg.kexAlgorithms.split(',')[0]) &&
         hostkeyType == Key.id(msg.serverHostKeyAlgorithms.split(',')[0]);
     guessedRightC = kexMethod == 1 && hostkeyType == 1;
-    cipherAlgoC2s = Cipher.cipher(cipherIdC2s);
     encryptBlockSize = Cipher.blockSize(cipherIdC2s);
-    cipherAlgoS2c = Cipher.cipher(cipherIdS2c);
     decryptBlockSize = Cipher.blockSize(cipherIdS2c);
     macAlgoC2s = MAC.mac(macIdC2s, encryptBlockSize);
     macPrefixC2s = MAC.prefixBytes(macIdC2s);
@@ -362,6 +346,41 @@ class SSHClient {
     }
   }
 
+  void handleMSG_KEXDH_REPLY(int packetId, Uint8List packet) {
+    if (state != SSHClientState.FIRST_KEXREPLY &&
+        state != SSHClientState.KEXREPLY) {
+      throw FormatException('$hostport: unexpected state $state');
+    }
+    if (guessedS && !guessedRightS) {
+      guessedS = false;
+      print('$hostport: server guessed wrong, ignoring packet');
+      return;
+    }
+
+    Uint8List fingerprint;
+    if (packetId == MSG_KEX_ECDH_REPLY.ID &&
+        KEX.x25519DiffieHellman(kexMethod)) {
+      fingerprint = handleX25519MSG_KEX_ECDH_REPLY(
+              MSG_KEX_ECDH_REPLY()..deserialize(packetS)) ??
+          fingerprint;
+      // fall thru
+    } else {
+      throw FormatException('$hostport: unsupported $packetId, $kexMethod');
+    }
+
+    writeClearOrEncrypted(MSG_NEWKEYS());
+    if (state == SSHClientState.FIRST_KEXREPLY) {
+      state = SSHClientState.FIRST_NEWKEYS;
+      if (hostFingerprint != null) {
+        acceptedHostkey = hostFingerprint(hostkeyType, fingerprint);
+      } else {
+        acceptedHostkey = true;
+      }
+    } else {
+      state = SSHClientState.NEWKEYS;
+    }
+  }
+
   Uint8List handleX25519MSG_KEX_ECDH_REPLY(MSG_KEX_ECDH_REPLY msg) {
     Uint8List fingerprint;
     tracePrint('$hostport: MSG_KEX_ECDH_REPLY for X25519DH');
@@ -376,6 +395,39 @@ class SSHClient {
     return fingerprint;
   }
 
+  void handleMSG_NEWKEYS() {
+    if (state != SSHClientState.FIRST_NEWKEYS &&
+        state != SSHClientState.NEWKEYS) {
+      throw FormatException('$hostport: unexpected state $state');
+    }
+    if (tracePrint != null) {
+      tracePrint('$hostport: MSG_NEWKEYS');
+    }
+    int keyLenC = Cipher.keySize(cipherIdC2s),
+        keyLenS = Cipher.keySize(cipherIdS2c);
+    encrypt = initCipher(
+        cipherIdC2s,
+        deriveKey(kexHash, sessionId, hText, K, 'A'.codeUnits[0], 24),
+        deriveKey(kexHash, sessionId, hText, K, 'C'.codeUnits[0], keyLenC),
+        true);
+    decrypt = initCipher(
+        cipherIdS2c,
+        deriveKey(kexHash, sessionId, hText, K, 'B'.codeUnits[0], 24),
+        deriveKey(kexHash, sessionId, hText, K, 'D'.codeUnits[0], keyLenS),
+        false);
+    if ((macLenC = MAC.hashSize(macIdC2s)) <= 0) {
+      throw FormatException('$hostport: invalid maclen $encryptBlockSize');
+    } else if ((macLenS = MAC.hashSize(macIdS2c)) <= 0) {
+      throw FormatException('$hostport: invalid maclen $encryptBlockSize');
+    }
+    integrityC2s =
+        deriveKey(kexHash, sessionId, hText, K, 'E'.codeUnits[0], macLenC);
+    integrityS2c =
+        deriveKey(kexHash, sessionId, hText, K, 'F'.codeUnits[0], macLenS);
+    state = SSHClientState.NEWKEYS;
+    writeCipher(MSG_SERVICE_REQUEST('ssh-userauth'));
+  }
+
   bool computeExchangeHashAndVerifyHostKey(Uint8List kS, Uint8List hSig) {
     hText = computeExchangeHash(kexMethod, kexHash, verC, verS, kexInitC,
         kexInitS, kS, K, dh, ecdh, x25519dh);
@@ -386,11 +438,32 @@ class SSHClient {
     return verifyHostKey(hText, hostkeyType, kS, hSig);
   }
 
+  BlockCipher initCipher(int cipherId, Uint8List IV, Uint8List key, bool dir) {
+    BlockCipher cipher = Cipher.cipher(cipherId);
+    if (tracePrint != null) {
+      tracePrint('$hostport: ' +
+          (dir ? 'C->S' : 'S->C') +
+          ' IV  = "${hex.encode(IV)}"');
+      tracePrint('$hostport: ' +
+          (dir ? 'C->S' : 'S->C') +
+          ' key = "${hex.encode(key)}"');
+    }
+    cipher.init(dir, ParametersWithIV(KeyParameter(key), IV));
+    return cipher;
+  }
+
+  void writeCipher(SSHMessage msg) {
+    sequenceNumberC2s++;
+    Uint8List m = msg.toBytes(zwriter, random, encryptBlockSize);
+    Uint8List encM = encrypt.process(m);
+    Uint8List mac = computeMAC(MAC.mac(macIdC2s, encryptBlockSize), macLenC, m,
+        sequenceNumberC2s - 1, integrityC2s, macPrefixC2s);
+    socket.sendRaw(Uint8List.fromList(encM + mac));
+  }
+
   void writeClearOrEncrypted(SSHMessage m) {
     if (state > SSHClientState.FIRST_NEWKEYS) return writeCipher(m);
     sequenceNumberC2s++;
     socket.sendRaw(m.toBytes(null, random, encryptBlockSize));
   }
-
-  void writeCipher(SSHMessage m) {}
 }

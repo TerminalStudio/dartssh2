@@ -6,12 +6,15 @@ import 'dart:typed_data';
 
 import 'package:pointycastle/api.dart' hide Signature;
 import 'package:pointycastle/block/aes_fast.dart';
+import 'package:pointycastle/block/modes/cbc.dart';
+import 'package:pointycastle/block/modes/ctr.dart';
 import 'package:pointycastle/digests/md5.dart';
 import 'package:pointycastle/digests/sha1.dart';
 import 'package:pointycastle/digests/sha256.dart';
 import 'package:pointycastle/digests/sha512.dart';
 import 'package:pointycastle/macs/hmac.dart';
 import 'package:pointycastle/src/utils.dart';
+import 'package:pointycastle/stream/ctr.dart';
 import 'package:tweetnacl/tweetnacl.dart';
 
 import 'package:dartssh/protocol.dart';
@@ -214,6 +217,17 @@ class Cipher {
   static int preferenceIntersect(String intersectCsv, [int startAfter = 0]) =>
       id(preferenceIntersection(preferenceCsv(startAfter), intersectCsv));
 
+  static int keySize(int id) {
+    switch (id) {
+      case AES128_CTR:
+        return 16;
+      case AES128_CBC:
+        return 16;
+      default:
+        throw FormatException('$id');
+    }
+  }
+
   static int blockSize(int id) {
     switch (id) {
       case AES128_CTR:
@@ -228,9 +242,10 @@ class Cipher {
   static BlockCipher cipher(int id) {
     switch (id) {
       case AES128_CTR:
-        return AESFastEngine(); // CTR
+        AESFastEngine aes = AESFastEngine();
+        return CTRBlockCipher(aes.blockSize, CTRStreamCipher(aes));
       case AES128_CBC:
-        return AESFastEngine(); // CBC
+        return CBCBlockCipher(AESFastEngine());
       default:
         throw FormatException('$id');
     }
@@ -291,6 +306,29 @@ class MAC {
         return 'hmac-sha2-512-96';
       default:
         return '';
+    }
+  }
+
+  static int hashSize(int id) {
+    switch (id) {
+      case MD5:
+        return 16;
+      case MD5_96:
+        return 16;
+      case SHA1:
+        return 20;
+      case SHA1_96:
+        return 20;
+      case SHA256:
+        return 32;
+      case SHA256_96:
+        return 32;
+      case SHA512:
+        return 64;
+      case SHA512_96:
+        return 64;
+      default:
+        return 0;
     }
   }
 
@@ -656,6 +694,8 @@ class Digester {
     digest.reset();
   }
 
+  void updateByte(int x) => digest.updateByte(x);
+
   void updateString(String x) => update(Uint8List.fromList(x.codeUnits));
 
   void update(Uint8List x) => updateOffset(x, 0, x.length);
@@ -667,8 +707,7 @@ class Digester {
 
   void updateInt(int x) {
     Uint8List buf = Uint8List(4);
-    ByteData data = ByteData.view(buf.buffer);
-    data.setUint32(0, x, Endian.big);
+    ByteData.view(buf.buffer).setUint32(0, x, Endian.big);
     digest.update(buf, 0, buf.length);
   }
 
@@ -743,4 +782,38 @@ bool verifyHostKey(
   } else {
     return false;
   }
+}
+
+Uint8List deriveKey(Digest algo, Uint8List sessionId, Uint8List hText, BigInt K,
+    int id, int bytes) {
+  Uint8List ret = Uint8List(0);
+  while (ret.length < bytes) {
+    Digester digest = Digester(algo);
+    digest.updateBigInt(K);
+    digest.update(hText);
+    if (ret.isEmpty) {
+      digest.updateByte(id);
+      digest.update(sessionId);
+    } else {
+      digest.update(ret);
+    }
+    ret = Uint8List.fromList(ret + digest.finish());
+  }
+  return Uint8List.view(ret.buffer, 0, bytes);
+}
+
+Uint8List computeMAC(
+    HMac mac, int macLen, Uint8List m, int seq, Uint8List k, int prefix) {
+  mac.init(KeyParameter(k));
+
+  Uint8List buf = Uint8List(4);
+  ByteData.view(buf.buffer).setUint32(0, seq, Endian.big);
+  mac.update(buf, 0, buf.length);
+  mac.update(m, 0, m.length);
+
+  assert(macLen == mac.macSize);
+  Uint8List ret = Uint8List(macLen);
+  int finalLen = mac.doFinal(ret, 0);
+  assert(finalLen == macLen);
+  return ret;
 }
