@@ -28,7 +28,8 @@ void main(List<String> arguments) async {
   try {
     final SSHClient ssh = SSHClient(
         hostport: 'ssh://' + host + (port != null ? ':$port' : ''),
-        debugPrint: print);
+        debugPrint: print,
+        tracePrint: print);
   } catch (error, stacktrace) {
     print('ssh: exception: $error: $stacktrace');
     exitCode = -1;

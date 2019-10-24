@@ -4,7 +4,11 @@
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:convert/convert.dart';
+import 'package:validators/sanitizers.dart';
+
 import 'package:dartssh/protocol.dart';
+import 'package:dartssh/serializable.dart';
 import 'package:dartssh/socket.dart';
 import 'package:dartssh/socket_html.dart'
     if (dart.library.io) 'package:dartssh/socket_io.dart';
@@ -32,7 +36,7 @@ class SSHClient {
   String hostport, user, termvar, startupCommand;
   bool compress, agentForwarding, closeOnDisconnect, backgroundServices;
   List<Forward> forwardLocal, forwardRemote;
-  StringCallback response, debugPrint;
+  StringCallback response, debugPrint, tracePrint;
   VoidCallback success;
   /*FingerprintCB hostFingerprintCb;
   LoadIdentityCB loadIdentityCb;
@@ -41,16 +45,16 @@ class SSHClient {
   sharedPtr<Identity> identity;*/
 
   String verC = 'SSH-2.0-dartssh_1.0', verS;
-  Uint8List kexInitC, kexInitS;
-  String hText, sessionId, integrityC2s, integrityS2c, decryptBuf, login, pw;
+  Uint8List kexInitC, kexInitS, decryptBuf;
+  String hText, sessionId, integrityC2s, integrityS2c, login, pw;
+  num serverVersion = 0;
   int state = 0,
       packetLen = 0,
       packetMacLen = 0,
       macLenC = 0,
       macLenS = 0,
       encryptBlockSize = 0,
-      decryptBlockSize = 0,
-      serverVersion = 0;
+      decryptBlockSize = 0;
   int sequenceNumberC2s = 0,
       sequenceNumberS2c = 0,
       loginPrompts = 0,
@@ -67,9 +71,10 @@ class SSHClient {
 
   SocketInterface socket;
   Random random;
+  QueueBuffer readBuffer = QueueBuffer(Uint8List(0));
+  SerializableInput packetS;
 
-  /*Serializable::ConstStream packetS;
-  unorderedMap<int, SSHClient::Channel> channels;
+  /*unorderedMap<int, SSHClient::Channel> channels;
   SSHClient::Channel *sessionChannel=0;
   BigNumContext ctx;
   BigNum K;
@@ -105,6 +110,7 @@ class SSHClient {
       this.response,
       this.success,
       this.debugPrint,
+      this.tracePrint,
       this.socket,
       this.random}) {
     socket ??= SocketImpl();
@@ -124,7 +130,7 @@ class SSHClient {
   void onConnected(dynamic x) {
     socket.handleError((error) => disconnect('socket error'));
     socket.handleDone((v) => disconnect('socket done'));
-    socket.listen(handleMessage);
+    socket.listen(handleRead);
     handleConnected();
   }
 
@@ -143,19 +149,9 @@ class SSHClient {
         compressPref = Compression.preferenceCsv(compress ? 0 : 1);
 
     sequenceNumberC2s++;
-    kexInitC = MSG_KEXINIT(
-            randBytes(random, 16),
-            kexPref,
-            keyPref,
-            cipherPref,
-            cipherPref,
-            macPref,
-            macPref,
-            compressPref,
-            compressPref,
-            '',
-            '',
-            guess ? 1 : 0)
+    kexInitC = MSG_KEXINIT
+        .create(randBytes(random, 16), kexPref, keyPref, cipherPref, cipherPref,
+            macPref, macPref, compressPref, compressPref, '', '', guess ? 1 : 0)
         .toBytes(null, random, 8);
 
     if (debugPrint != null) {
@@ -165,7 +161,104 @@ class SSHClient {
     socket.sendRaw(kexInitC);
   }
 
-  void handleMessage(Uint8List message) {
-    print('got message');
+  void handleRead(Uint8List dataChunk) {
+    readBuffer.add(dataChunk);
+
+    if (state == SSHClientState.INIT) {
+      handleInitialState();
+      if (state == SSHClientState.INIT) return;
+    }
+
+    // SSHClient::Channel *chan;
+    while (true) {
+      bool encrypted = state > SSHClientState.FIRST_NEWKEYS;
+
+      if (packetLen == 0) {
+        packetMacLen =
+            macLenS != 0 ? (macPrefixS2c != 0 ? macPrefixS2c : macLenS) : 0;
+        if (readBuffer.data.length < binaryPacketHeaderSize ||
+            (encrypted && readBuffer.data.length < decryptBlockSize)) {
+          return;
+        }
+        //if (encrypted) decryptBuf = ReadCipher(c, StringPiece(c->rb.begin(), decryptBlockSize));
+        SerializableInput packet =
+            SerializableInput(encrypted ? decryptBuf : readBuffer.data);
+        packetLen = 4 + packet.getUint32() + packetMacLen;
+        padding = packet.getUint8();
+      }
+      if (readBuffer.data.length < packetLen) return;
+      /*if (encrypted) decryptBuf +=
+				ReadCipher(c, StringPiece(c->rb.begin() + decryptBlockSize, packetLen - decryptBlockSize - packetMacLen));*/
+
+      sequenceNumberS2c++;
+      /*if (encrypted && packetMacLen) {
+				string mac = SSH::MAC(macAlgoS2c, MACLenS, StringPiece(decryptBuf.data(), packetLen - packetMacLen),
+															sequenceNumberS2c-1, integrityS2c, macPrefixS2c);
+				if (mac != string(c->rb.begin() + packetLen - packetMacLen, packetMacLen))
+					return ERRORv(-1, c->Name(), ": verify MAC failed");
+			}*/
+
+      Uint8List packet = encrypted ? decryptBuf : readBuffer.data;
+      /*if (zreader) {
+        zreader->out.clear();
+        if (!zreader->Add(StringPiece(packet    + SSH::BinaryPacketHeaderSize,
+                                      packetLen - SSH::BinaryPacketHeaderSize - packetMacLen - padding),
+                          true)) ERRORv(-1, c->Name(), ": decompress failed");
+        packetS = Serializable::ConstStream((packet = zreader->out.data()), zreader->out.size());
+      } else*/
+      if (true) {
+        packetS = SerializableInput(Uint8List.view(
+            packet.buffer,
+            packet.offsetInBytes + binaryPacketHeaderSize,
+            packetLen - binaryPacketHeaderSize - packetMacLen - padding));
+      }
+
+      handlePacket();
+      readBuffer.flush(packetLen);
+      packetLen = 0;
+    }
+  }
+
+  /// Protocol Version Exchange
+  void handleInitialState() {
+    int processed = 0, newlineIndex;
+    while ((newlineIndex =
+            readBuffer.data.indexOf('\n'.codeUnits[0], processed)) !=
+        -1) {
+      String line = String.fromCharCodes(Uint8List.view(
+              readBuffer.data.buffer,
+              readBuffer.data.offsetInBytes + processed,
+              newlineIndex - processed))
+          .trim();
+      if (tracePrint != null) tracePrint('$hostport: SSH_INIT: $line');
+      processed = newlineIndex + 1;
+      if (line.startsWith('SSH-')) {
+        verS = line;
+        serverVersion = toFloat(line.substring(4));
+        state++;
+        break;
+      }
+    }
+    readBuffer.flush(processed);
+  }
+
+  void handlePacket() {
+    int v;
+    packetId = packetS.getUint8();
+    switch (packetId) {
+      case MSG_KEXINIT.ID:
+        state = state == SSHClientState.FIRST_KEXINIT
+            ? SSHClientState.FIRST_KEXREPLY
+            : SSHClientState.KEXREPLY;
+        MSG_KEXINIT msg = MSG_KEXINIT();
+        msg.deserialize(packetS);
+        assert(packetS.done);
+        tracePrint('$hostport: MSG_KEXINIT $msg');
+        break;
+
+      default:
+        print('$hostport: unknown packet number: $packetId, len $packetLen');
+        break;
+    }
   }
 }

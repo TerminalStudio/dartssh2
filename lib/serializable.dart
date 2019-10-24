@@ -3,20 +3,32 @@
 
 import 'dart:typed_data';
 
+int nextMultipleOfN(int input, int n) =>
+    (input % n != 0) ? (input ~/ n + 1) * n : input;
+
+class QueueBuffer {
+  Uint8List data;
+  QueueBuffer(this.data);
+
+  void add(Uint8List x) => data = Uint8List.fromList((data ?? []) + x);
+  void flush(int x) => data = data.sublist(x);
+}
+
 abstract class SerializableBuffer {
   int offset = 0;
-  Uint8List buffer;
-  ByteData data;
-  Endian endian;
-  SerializableBuffer(this.buffer, {this.endian = Endian.little})
-      : this.data = ByteData.view(buffer.buffer);
+  final Uint8List buffer;
+  final ByteData data;
+  final Endian endian;
+  SerializableBuffer(this.buffer, {this.endian = Endian.big})
+      : this.data =
+            ByteData.view(buffer.buffer, buffer.offsetInBytes, buffer.length);
 
   bool get done => offset == buffer.length;
   int get remaining => buffer.length - offset;
 
   Uint8List view() => viewOffset(0, offset);
   Uint8List viewOffset(int start, int end) =>
-      Uint8List.view(buffer.buffer, start, end - start);
+      Uint8List.view(buffer.buffer, buffer.offsetInBytes + start, end - start);
 }
 
 class SerializableInput extends SerializableBuffer {
