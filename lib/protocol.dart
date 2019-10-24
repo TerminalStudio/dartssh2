@@ -9,8 +9,6 @@ import 'package:pointycastle/src/utils.dart';
 
 import 'package:dartssh/serializable.dart';
 
-const int binaryPacketHeaderSize = 5;
-
 int nextMultipleOfN(int input, int n) =>
     (input % n != 0) ? (input ~/ n + 1) * n : input;
 
@@ -30,9 +28,6 @@ void serializeMpInt(SerializableOutput output, BigInt x) {
 /// mpint: https://www.ietf.org/rfc/rfc4251.txt
 BigInt deserializeMpInt(SerializableInput input) =>
     decodeBigInt(deserializeStringBytes(input));
-
-/// string: https://www.ietf.org/rfc/rfc4251.txt
-int serializedStringLength(dynamic x) => 4 + x.length;
 
 /// string: https://www.ietf.org/rfc/rfc4251.txt
 void serializeString(SerializableOutput output, dynamic x) {
@@ -57,6 +52,15 @@ Uint8List randBytes(Random generator, int n) {
   return random;
 }
 
+class BinaryPacket {
+  static const int headerSize = 5;
+  final int length, padding;
+  BinaryPacket(Uint8List packet) : this.deserialize(SerializableInput(packet));
+  BinaryPacket.deserialize(SerializableInput input)
+      : length = input.getUint32(),
+        padding = input.getUint8();
+}
+
 /// Binary Packet Protocol.
 abstract class SSHMessage extends Serializable {
   int id;
@@ -74,9 +78,9 @@ abstract class SSHMessage extends Serializable {
 
   Uint8List toPacket(Uint8List payload, Random random, int blockSize) {
     Uint8List buffer = Uint8List(nextMultipleOfN(
-        4 + binaryPacketHeaderSize + payload.length, max(8, blockSize)));
+        4 + BinaryPacket.headerSize + payload.length, max(8, blockSize)));
     SerializableOutput output = SerializableOutput(buffer);
-    int padding = buffer.length - binaryPacketHeaderSize - payload.length;
+    int padding = buffer.length - BinaryPacket.headerSize - payload.length;
     output.addUint32(buffer.length - 4);
     output.addUint8(padding);
     output.addBytes(payload);
@@ -218,7 +222,7 @@ class MSG_KEXINIT extends SSHMessage {
       compressionAlgorithmsServerToClient,
       languagesClientToServer,
       languagesServerToClient;
-  int firstKexPacketFollows = 0;
+  bool firstKexPacketFollows = false;
 
   MSG_KEXINIT() : super(ID);
   MSG_KEXINIT.create(
@@ -266,7 +270,7 @@ class MSG_KEXINIT extends SSHMessage {
     serializeString(output, compressionAlgorithmsServerToClient);
     serializeString(output, languagesClientToServer);
     serializeString(output, languagesServerToClient);
-    output.addUint8(firstKexPacketFollows);
+    output.addUint8(firstKexPacketFollows ? 1 : 0);
     output.addUint32(0);
   }
 
@@ -283,7 +287,7 @@ class MSG_KEXINIT extends SSHMessage {
     compressionAlgorithmsServerToClient = deserializeString(input);
     languagesClientToServer = deserializeString(input);
     languagesServerToClient = deserializeString(input);
-    firstKexPacketFollows = input.getUint8();
+    firstKexPacketFollows = input.getBool();
   }
 
   String toString() =>
@@ -336,7 +340,7 @@ class MSG_KEXDH_INIT extends SSHMessage {
   void serialize(SerializableOutput output) => serializeMpInt(output, e);
 
   @override
-  void deserialize(SerializableInput input) {}
+  void deserialize(SerializableInput input) => e = deserializeMpInt(input);
 }
 
 /// The server then responds with the following.
@@ -428,7 +432,7 @@ class MSG_KEX_DH_GEX_REPLY extends MSG_KEXDH_REPLY {
 
 class MSG_KEX_ECDH_INIT extends SSHMessage {
   static const int ID = 30;
-  String qC;
+  Uint8List qC;
   MSG_KEX_ECDH_INIT(this.qC) : super(ID);
 
   @override
@@ -441,12 +445,13 @@ class MSG_KEX_ECDH_INIT extends SSHMessage {
   void serialize(SerializableOutput output) => serializeString(output, qC);
 
   @override
-  void deserialize(SerializableInput input) => qC = deserializeString(input);
+  void deserialize(SerializableInput input) =>
+      qC = deserializeStringBytes(input);
 }
 
 class MSG_KEX_ECDH_REPLY extends SSHMessage {
   static const int ID = 31;
-  String kS, qS, hSig;
+  Uint8List kS, qS, hSig;
   MSG_KEX_ECDH_REPLY() : super(ID);
 
   @override
@@ -465,9 +470,9 @@ class MSG_KEX_ECDH_REPLY extends SSHMessage {
 
   @override
   void deserialize(SerializableInput input) {
-    kS = deserializeString(input);
-    qS = deserializeString(input);
-    hSig = deserializeString(input);
+    kS = deserializeStringBytes(input);
+    qS = deserializeStringBytes(input);
+    hSig = deserializeStringBytes(input);
   }
 }
 

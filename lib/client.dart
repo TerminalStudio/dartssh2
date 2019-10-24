@@ -5,6 +5,9 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:convert/convert.dart';
+import "package:pointycastle/api.dart";
+import "package:pointycastle/digests/sha256.dart";
+import 'package:pointycastle/macs/hmac.dart';
 import 'package:validators/sanitizers.dart';
 
 import 'package:dartssh/protocol.dart';
@@ -45,8 +48,8 @@ class SSHClient {
   sharedPtr<Identity> identity;*/
 
   String verC = 'SSH-2.0-dartssh_1.0', verS;
-  Uint8List kexInitC, kexInitS, decryptBuf;
-  String hText, sessionId, integrityC2s, integrityS2c, login, pw;
+  Uint8List kexInitC, kexInitS, decryptBuf, hText, sessionId;
+  String integrityC2s, integrityS2c, login, pw;
   num serverVersion = 0;
   int state = 0,
       packetLen = 0,
@@ -74,17 +77,18 @@ class SSHClient {
   QueueBuffer readBuffer = QueueBuffer(Uint8List(0));
   SerializableInput packetS;
 
+  DiffieHellman dh = DiffieHellman();
+  EllipticCurveDiffieHellman ecdh = EllipticCurveDiffieHellman();
+  X25519DiffieHellman x25519dh = X25519DiffieHellman();
+  Digest kexHash;
+  BlockCipher cipherAlgoC2s, cipherAlgoS2c;
+  HMac macAlgoC2s, macAlgoS2c;
+  BigInt K;
+
   /*unorderedMap<int, SSHClient::Channel> channels;
   SSHClient::Channel *sessionChannel=0;
   BigNumContext ctx;
-  BigNum K;
-  Crypto::DiffieHellman dh;
-  Crypto::EllipticCurveDiffieHellman ecdh;
-  Crypto::X25519DiffieHellman x25519dh;
-  Crypto::DigestAlgo kexHash;
   Crypto::Cipher encrypt, decrypt;
-  Crypto::CipherAlgo cipherAlgoC2s, cipherAlgoS2c; 
-  Crypto::MACAlgo macAlgoC2s, macAlgoS2c;
   ECDef curveId;*/
   int nextChannelId = 1, compressIdC2s, compressIdS2c;
   int kexMethod = 0, hostkeyType = 0, macPrefixC2s = 0, macPrefixS2c = 0;
@@ -151,7 +155,7 @@ class SSHClient {
     sequenceNumberC2s++;
     kexInitC = MSG_KEXINIT
         .create(randBytes(random, 16), kexPref, keyPref, cipherPref, cipherPref,
-            macPref, macPref, compressPref, compressPref, '', '', guess ? 1 : 0)
+            macPref, macPref, compressPref, compressPref, '', '', guess)
         .toBytes(null, random, 8);
 
     if (debugPrint != null) {
@@ -176,15 +180,15 @@ class SSHClient {
       if (packetLen == 0) {
         packetMacLen =
             macLenS != 0 ? (macPrefixS2c != 0 ? macPrefixS2c : macLenS) : 0;
-        if (readBuffer.data.length < binaryPacketHeaderSize ||
+        if (readBuffer.data.length < BinaryPacket.headerSize ||
             (encrypted && readBuffer.data.length < decryptBlockSize)) {
           return;
         }
         //if (encrypted) decryptBuf = ReadCipher(c, StringPiece(c->rb.begin(), decryptBlockSize));
-        SerializableInput packet =
-            SerializableInput(encrypted ? decryptBuf : readBuffer.data);
-        packetLen = 4 + packet.getUint32() + packetMacLen;
-        padding = packet.getUint8();
+        BinaryPacket binaryPacket =
+            BinaryPacket(encrypted ? decryptBuf : readBuffer.data);
+        packetLen = 4 + binaryPacket.length + packetMacLen;
+        padding = binaryPacket.padding;
       }
       if (readBuffer.data.length < packetLen) return;
       /*if (encrypted) decryptBuf +=
@@ -209,11 +213,11 @@ class SSHClient {
       if (true) {
         packetS = SerializableInput(Uint8List.view(
             packet.buffer,
-            packet.offsetInBytes + binaryPacketHeaderSize,
-            packetLen - binaryPacketHeaderSize - packetMacLen - padding));
+            packet.offsetInBytes + BinaryPacket.headerSize,
+            packetLen - BinaryPacket.headerSize - packetMacLen - padding));
       }
 
-      handlePacket();
+      handlePacket(packet);
       readBuffer.flush(packetLen);
       packetLen = 0;
     }
@@ -242,18 +246,45 @@ class SSHClient {
     readBuffer.flush(processed);
   }
 
-  void handlePacket() {
-    int v;
+  void handlePacket(Uint8List packet) {
     packetId = packetS.getUint8();
     switch (packetId) {
       case MSG_KEXINIT.ID:
         state = state == SSHClientState.FIRST_KEXINIT
             ? SSHClientState.FIRST_KEXREPLY
             : SSHClientState.KEXREPLY;
-        MSG_KEXINIT msg = MSG_KEXINIT();
-        msg.deserialize(packetS);
-        assert(packetS.done);
-        tracePrint('$hostport: MSG_KEXINIT $msg');
+        handleMSG_KEXINIT(MSG_KEXINIT()..deserialize(packetS), packet);
+        break;
+
+      case MSG_KEXDH_REPLY.ID:
+      case MSG_KEX_DH_GEX_REPLY.ID:
+        if (state != SSHClientState.FIRST_KEXREPLY &&
+            state != SSHClientState.KEXREPLY) {
+          throw FormatException('$hostport: unexpected state $state');
+        }
+        if (guessedS && !guessedRightS) {
+          guessedS = false;
+          print('$hostport: server guessed wrong, ignoring packet');
+          break;
+        }
+
+        Uint8List fingerprint;
+        if (packetId == MSG_KEX_ECDH_REPLY.ID &&
+            KEX.x25519DiffieHellman(kexMethod)) {
+          fingerprint = handleX25519MSG_KEX_ECDH_REPLY(
+                  MSG_KEX_ECDH_REPLY()..deserialize(packetS)) ??
+              fingerprint;
+          // fall thru
+        } else {
+          throw FormatException('$hostport: unsupported $packetId, $kexMethod');
+        }
+
+        /*if (!WriteClearOrEncrypted(c, SSH::MSG_NEWKEYS())) return ERRORv(-1, c->Name(), ": write");
+        if (state == FIRST_KEXREPLY) {
+          state = FIRST_NEWKEYS;
+          if (host_fingerprint_cb) accepted_hostkey = host_fingerprint_cb(hostkey_type, fingerprint);
+          else                     accepted_hostkey = true;
+        } else state = NEWKEYS;*/
         break;
 
       default:
@@ -261,4 +292,105 @@ class SSHClient {
         break;
     }
   }
+
+  void handleMSG_KEXINIT(MSG_KEXINIT msg, Uint8List packet) {
+    tracePrint('$hostport: MSG_KEXINIT $msg');
+
+    int cipherIdC2s = 0, cipherIdS2c = 0, macIdC2s = 0, macIdS2c = 0;
+    guessedS = msg.firstKexPacketFollows;
+    kexInitS = packet.sublist(0, packetLen - packetMacLen);
+
+    if (0 == (kexMethod = KEX.preferenceIntersect(msg.kexAlgorithms))) {
+      throw FormatException('$hostport: negotiate kex');
+    } else if (0 ==
+        (hostkeyType = Key.preferenceIntersect(msg.serverHostKeyAlgorithms))) {
+      throw FormatException('$hostport: negotiate hostkey');
+    } else if (0 ==
+        (cipherIdC2s = Cipher.preferenceIntersect(
+            msg.encryptionAlgorithmsClientToServer))) {
+      throw FormatException('$hostport: negotiate c2s cipher');
+    } else if (0 ==
+        (cipherIdS2c = Cipher.preferenceIntersect(
+            msg.encryptionAlgorithmsServerToClient))) {
+      throw FormatException('$hostport: negotiate s2c cipher');
+    } else if (0 ==
+        (macIdC2s = MAC.preferenceIntersect(msg.macAlgorithmsClientToServer))) {
+      throw FormatException('$hostport: negotiate c2s mac');
+    } else if (0 ==
+        (macIdS2c = MAC.preferenceIntersect(msg.macAlgorithmsServerToClient))) {
+      throw FormatException('$hostport: negotiate s2c mac');
+    } else if (0 ==
+        (compressIdC2s = Compression.preferenceIntersect(
+            msg.compressionAlgorithmsClientToServer, compress ? 0 : 1))) {
+      throw FormatException('$hostport: negotiate c2s compression');
+    } else if (0 ==
+        (compressIdS2c = Compression.preferenceIntersect(
+            msg.compressionAlgorithmsServerToClient, compress ? 0 : 1))) {
+      throw FormatException('$hostport: negotiate s2c compression');
+    }
+
+    guessedRightS = kexMethod == KEX.id(msg.kexAlgorithms.split(',')[0]) &&
+        hostkeyType == Key.id(msg.serverHostKeyAlgorithms.split(',')[0]);
+    guessedRightC = kexMethod == 1 && hostkeyType == 1;
+    cipherAlgoC2s = Cipher.cipher(cipherIdC2s);
+    encryptBlockSize = Cipher.blockSize(cipherIdC2s);
+    cipherAlgoS2c = Cipher.cipher(cipherIdS2c);
+    decryptBlockSize = Cipher.blockSize(cipherIdS2c);
+    macAlgoC2s = MAC.mac(macIdC2s, encryptBlockSize);
+    macPrefixC2s = MAC.prefixBytes(macIdC2s);
+    macAlgoS2c = MAC.mac(macIdS2c, decryptBlockSize);
+    macPrefixS2c = MAC.prefixBytes(macIdS2c);
+
+    print('$hostport: ssh negotiated { kex=${KEX.name(kexMethod)}, hostkey=${Key.name(hostkeyType)}' +
+        (cipherIdC2s == cipherIdS2c
+            ? ', cipher=${Cipher.name(cipherIdC2s)}'
+            : ', cipherC2s=${Cipher.name(cipherIdC2s)}, cipherS2c=${Cipher.name(cipherIdS2c)}') +
+        (macIdC2s == macIdS2c
+            ? ', mac=${MAC.name(macIdC2s)}'
+            : ', macC2s=${MAC.name(macIdC2s)},  macS2c=${MAC.name(macIdS2c)}') +
+        (compressIdC2s == compressIdS2c
+            ? ', compress=${Compression.name(compressIdC2s)}'
+            : ', compressC2s=${Compression.name(compressIdC2s)}, compressS2c=${Compression.name(compressIdS2c)}') +
+        " }");
+    tracePrint(
+        '$hostport: blockSize=$encryptBlockSize,$decryptBlockSize, macLen=$macLenC,$macLenS');
+
+    if (KEX.x25519DiffieHellman(kexMethod)) {
+      kexHash = SHA256Digest();
+      x25519dh.GeneratePair(random);
+      writeClearOrEncrypted(MSG_KEX_ECDH_INIT(x25519dh.myPubKey));
+    }
+  }
+
+  Uint8List handleX25519MSG_KEX_ECDH_REPLY(MSG_KEX_ECDH_REPLY msg) {
+    Uint8List fingerprint;
+    tracePrint('$hostport: MSG_KEX_ECDH_REPLY for X25519DH');
+    if (!acceptedHostkey) fingerprint = msg.kS;
+
+    x25519dh.remotePubKey = msg.qS;
+    K = x25519dh.computeSecret();
+    if (!computeExchangeHashAndVerifyHostKey(msg.kS, msg.hSig)) {
+      throw FormatException('$hostport: verify hostkey failed');
+    }
+
+    return fingerprint;
+  }
+
+  bool computeExchangeHashAndVerifyHostKey(Uint8List kS, Uint8List hSig) {
+    hText = computeExchangeHash(kexMethod, kexHash, verC, verS, kexInitC,
+        kexInitS, kS, K, dh, ecdh, x25519dh);
+    if (state == SSHClientState.FIRST_KEXREPLY) sessionId = hText;
+    if (tracePrint != null) {
+      tracePrint('$hostport: H = "${hex.encode(hText)}"');
+    }
+    return verifyHostKey(hText, hostkeyType, kS, hSig);
+  }
+
+  void writeClearOrEncrypted(SSHMessage m) {
+    if (state > SSHClientState.FIRST_NEWKEYS) return writeCipher(m);
+    sequenceNumberC2s++;
+    socket.sendRaw(m.toBytes(null, random, encryptBlockSize));
+  }
+
+  void writeCipher(SSHMessage m) {}
 }

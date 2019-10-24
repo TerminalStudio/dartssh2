@@ -1,9 +1,18 @@
 // Copyright 2019 dartssh developers
 // Use of this source code is governed by a MIT-style license that can be found in the LICENSE file.
 
+import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:pointycastle/api.dart' hide Signature;
+import 'package:pointycastle/block/aes_fast.dart';
+import 'package:pointycastle/digests/md5.dart';
+import 'package:pointycastle/digests/sha1.dart';
+import 'package:pointycastle/digests/sha256.dart';
+import 'package:pointycastle/digests/sha512.dart';
+import 'package:pointycastle/macs/hmac.dart';
 import 'package:pointycastle/src/utils.dart';
+import 'package:tweetnacl/tweetnacl.dart';
 
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/serializable.dart';
@@ -149,17 +158,17 @@ class KEX {
 
   static bool supported(int id) => true;
 
-  static bool X25519DiffieHellman(int id) => id == ECDH_SHA2_X25519;
+  static bool x25519DiffieHellman(int id) => id == ECDH_SHA2_X25519;
 
-  static bool EllipticCurveDiffieHellman(int id) =>
+  static bool ellipticCurveDiffieHellman(int id) =>
       id == ECDH_SHA2_NISTP256 ||
       id == ECDH_SHA2_NISTP384 ||
       id == ECDH_SHA2_NISTP521;
 
-  static bool DiffieHellmanGroupExchange(int id) =>
+  static bool diffieHellmanGroupExchange(int id) =>
       id == DHGEX_SHA256 || id == DHGEX_SHA1;
 
-  static bool DiffieHellman(int id) =>
+  static bool diffieHellman(int id) =>
       id == DHGEX_SHA256 ||
       id == DHGEX_SHA1 ||
       id == DH14_SHA1 ||
@@ -173,12 +182,7 @@ class KEX {
 }
 
 class Cipher {
-  static const int AES128_CTR = 1,
-      AES128_CBC = 2,
-      TripDES_CBC = 3,
-      Blowfish_CBC = 4,
-      RC4 = 5,
-      End = 5;
+  static const int AES128_CTR = 1, AES128_CBC = 2, End = 2;
 
   static int id(String name) {
     switch (name) {
@@ -186,12 +190,6 @@ class Cipher {
         return AES128_CTR;
       case 'aes128-cbc':
         return AES128_CBC;
-      case '3des-cbc':
-        return TripDES_CBC;
-      case 'blowfish-cbc':
-        return Blowfish_CBC;
-      case 'arcfour':
-        return RC4;
       default:
         return 0;
     }
@@ -203,12 +201,6 @@ class Cipher {
         return 'aes128-ctr';
       case AES128_CBC:
         return 'aes128-cbc';
-      case TripDES_CBC:
-        return '3des-cbc';
-      case Blowfish_CBC:
-        return 'blowfish-cbc';
-      case RC4:
-        return 'arcfour';
       default:
         return '';
     }
@@ -222,7 +214,27 @@ class Cipher {
   static int preferenceIntersect(String intersectCsv, [int startAfter = 0]) =>
       id(preferenceIntersection(preferenceCsv(startAfter), intersectCsv));
 
-  //static Crypto::CipherAlgo Algo(int id, int *blocksize=0);
+  static int blockSize(int id) {
+    switch (id) {
+      case AES128_CTR:
+        return 16;
+      case AES128_CBC:
+        return 16;
+      default:
+        throw FormatException('$id');
+    }
+  }
+
+  static BlockCipher cipher(int id) {
+    switch (id) {
+      case AES128_CTR:
+        return AESFastEngine(); // CTR
+      case AES128_CBC:
+        return AESFastEngine(); // CBC
+      default:
+        throw FormatException('$id');
+    }
+  }
 }
 
 class MAC {
@@ -290,7 +302,51 @@ class MAC {
   static int preferenceIntersect(String intersectCsv, [int startAfter = 0]) =>
       id(preferenceIntersection(preferenceCsv(startAfter), intersectCsv));
 
-  //static Crypto::MACAlgo Algo(int id, int *prefix_bytes=0);
+  static int prefixBytes(int id) {
+    switch (id) {
+      case MD5:
+        return 0;
+      case MD5_96:
+        return 12;
+      case SHA1:
+        return 0;
+      case SHA1_96:
+        return 12;
+      case SHA256:
+        return 0;
+      case SHA256_96:
+        return 12;
+      case SHA512:
+        return 0;
+      case SHA512_96:
+        return 12;
+      default:
+        throw FormatException('$id');
+    }
+  }
+
+  static HMac mac(int id, int blockLength) {
+    switch (id) {
+      case MD5:
+        return HMac(MD5Digest(), blockLength);
+      case MD5_96:
+        return HMac(MD5Digest(), blockLength);
+      case SHA1:
+        return HMac(SHA1Digest(), blockLength);
+      case SHA1_96:
+        return HMac(SHA1Digest(), blockLength);
+      case SHA256:
+        return HMac(SHA256Digest(), blockLength);
+      case SHA256_96:
+        return HMac(SHA256Digest(), blockLength);
+      case SHA512:
+        return HMac(SHA512Digest(), blockLength);
+      case SHA512_96:
+        return HMac(SHA512Digest(), blockLength);
+      default:
+        throw FormatException('$id');
+    }
+  }
 }
 
 class Compression {
@@ -516,7 +572,7 @@ class ECDSASignature with Serializable {
 class Ed25519Key with Serializable {
   String formatId = 'ssh-ed25519';
   Uint8List key;
-  Ed25519Key(this.key);
+  Ed25519Key([this.key]);
 
   @override
   int get serializedHeaderSize => 4 * 2 + 11;
@@ -541,7 +597,7 @@ class Ed25519Key with Serializable {
 class Ed25519Signature with Serializable {
   String formatId = 'ssh-ed25519';
   Uint8List sig;
-  Ed25519Signature(this.sig);
+  Ed25519Signature([this.sig]);
 
   @override
   int get serializedHeaderSize => 4 * 2 + 11;
@@ -560,5 +616,131 @@ class Ed25519Signature with Serializable {
   void serialize(SerializableOutput output) {
     serializeString(output, formatId);
     serializeString(output, sig);
+  }
+}
+
+class DiffieHellman {
+  int gexMin = 1024, gexMax = 8192, gexPref = 2048;
+  BigInt g, p, x, e, f;
+  /*bool GeneratePair(int secret_bits, BigNumContext ctx);
+  bool ComputeSecret(BigNum *K, BigNumContext ctx) { BigNumModExp(*K, f, x, p, ctx); return true; }
+  static string GenerateModulus(int generator, int bits);
+  static BigNum Group1Modulus (BigNum g, BigNum p, int *rand_num_bits);
+  static BigNum Group14Modulus(BigNum g, BigNum p, int *rand_num_bits);*/
+}
+
+class EllipticCurveDiffieHellman {
+  /*ECPair pair=0;
+  ECGroup g=0;
+  ECPoint c=0, s=0;*/
+  String cText, sText;
+  /*bool GeneratePair(ECDef curve, BigNumContext ctx);
+  bool ComputeSecret(BigNum *K, BigNumContext ctx);*/
+}
+
+class X25519DiffieHellman {
+  Uint8List myPrivKey, myPubKey, remotePubKey;
+
+  void GeneratePair(Random random) {
+    myPrivKey = randBytes(random, 32);
+    myPubKey = ScalarMult.scalseMult_base(myPrivKey);
+  }
+
+  BigInt computeSecret() =>
+      decodeBigInt(ScalarMult.scalseMult(myPrivKey, remotePubKey));
+}
+
+class Digester {
+  Digest digest;
+  Digester(this.digest) {
+    digest.reset();
+  }
+
+  void updateString(String x) => update(Uint8List.fromList(x.codeUnits));
+
+  void update(Uint8List x) => updateOffset(x, 0, x.length);
+
+  void updateOffset(Uint8List x, int offset, int length) {
+    updateInt(length);
+    digest.update(x, offset, length);
+  }
+
+  void updateInt(int x) {
+    Uint8List buf = Uint8List(4);
+    ByteData data = ByteData.view(buf.buffer);
+    data.setUint32(0, x, Endian.big);
+    digest.update(buf, 0, buf.length);
+  }
+
+  void updateBigInt(BigInt x) {
+    Uint8List xBytes = encodeBigInt(x);
+    bool padX = x.bitLength > 0 && x.bitLength % 8 == 0;
+    updateInt(xBytes.length + (padX ? 1 : 0));
+    if (padX) digest.updateByte(0);
+    digest.update(xBytes, 0, xBytes.length);
+  }
+
+  Uint8List finish() {
+    Uint8List ret = Uint8List(digest.digestSize);
+    int finalLength = digest.doFinal(ret, 0);
+    assert(finalLength == ret.length);
+    return ret;
+  }
+}
+
+Uint8List computeExchangeHash(
+    int kexMethod,
+    Digest algo,
+    String verC,
+    String verS,
+    Uint8List kexInitC,
+    Uint8List kexInitS,
+    Uint8List kS,
+    BigInt K,
+    DiffieHellman dh,
+    EllipticCurveDiffieHellman ecdh,
+    X25519DiffieHellman x25519dh) {
+  BinaryPacket kexCPacket = BinaryPacket(kexInitC),
+      kexSPacket = BinaryPacket(kexInitS);
+  int kexCPacketLen = 4 + kexCPacket.length,
+      kexSPacketLen = 4 + kexSPacket.length;
+
+  Digester H = Digester(algo);
+  H.updateString(verC);
+  H.updateString(verS);
+  H.updateOffset(kexInitC, 5, kexCPacketLen - 5 - kexCPacket.padding);
+  H.updateOffset(kexInitS, 5, kexSPacketLen - 5 - kexSPacket.padding);
+  H.update(kS);
+
+  if (KEX.diffieHellmanGroupExchange(kexMethod)) {
+    H.updateInt(dh.gexMin);
+    H.updateInt(dh.gexPref);
+    H.updateInt(dh.gexMax);
+    H.updateBigInt(dh.p);
+    H.updateBigInt(dh.g);
+  }
+  if (KEX.x25519DiffieHellman(kexMethod)) {
+    H.update(x25519dh.myPubKey);
+    H.update(x25519dh.remotePubKey);
+  } else if (KEX.ellipticCurveDiffieHellman(kexMethod)) {
+    H.updateString(ecdh.cText);
+    H.updateString(ecdh.sText);
+  } else {
+    H.updateBigInt(dh.e);
+    H.updateBigInt(dh.f);
+  }
+  H.updateBigInt(K);
+  return H.finish();
+}
+
+bool verifyHostKey(
+    Uint8List hText, int hostkeyType, Uint8List key, Uint8List sig) {
+  if (hostkeyType == Key.ED25519) {
+    Ed25519Key keyMsg = Ed25519Key()..deserialize(SerializableInput(key));
+    Ed25519Signature sigMsg = Ed25519Signature()
+      ..deserialize(SerializableInput(sig));
+    return Signature(keyMsg.key, null).detached_verify(hText, sigMsg.sig);
+  } else {
+    return false;
   }
 }

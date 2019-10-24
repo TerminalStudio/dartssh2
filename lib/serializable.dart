@@ -32,8 +32,10 @@ abstract class SerializableBuffer {
 }
 
 class SerializableInput extends SerializableBuffer {
-  SerializableInput(Uint8List buffer, {Endian endian = Endian.little})
+  SerializableInput(Uint8List buffer, {Endian endian = Endian.big})
       : super(buffer, endian: endian);
+
+  bool getBool() => getUint8() == 0 ? false : true;
 
   int getUint8() {
     offset++;
@@ -62,7 +64,7 @@ class SerializableInput extends SerializableBuffer {
 }
 
 class SerializableOutput extends SerializableBuffer {
-  SerializableOutput(Uint8List buffer, {Endian endian = Endian.little})
+  SerializableOutput(Uint8List buffer, {Endian endian = Endian.big})
       : super(buffer, endian: endian);
 
   void addUint8(int x) {
@@ -109,5 +111,10 @@ abstract class Serializable {
     serialize(ret);
     assert(ret.done);
     return ret.buffer;
+  }
+
+  void fromRaw(SerializableInput input) {
+    deserialize(input);
+    assert(input.done);
   }
 }

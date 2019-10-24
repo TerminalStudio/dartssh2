@@ -1,6 +1,7 @@
 // Copyright 2019 dartssh developers
 // Use of this source code is governed by a MIT-style license that can be found in the LICENSE file.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/args.dart';
@@ -30,6 +31,11 @@ void main(List<String> arguments) async {
         hostport: 'ssh://' + host + (port != null ? ':$port' : ''),
         debugPrint: print,
         tracePrint: print);
+
+    await for (String input in stdin.transform(utf8.decoder)) {
+      print('read $input');
+    }
+
   } catch (error, stacktrace) {
     print('ssh: exception: $error: $stacktrace');
     exitCode = -1;
