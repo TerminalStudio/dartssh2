@@ -41,7 +41,7 @@ class SSHClient {
   String hostport, user, termvar, startupCommand;
   bool compress, agentForwarding, closeOnDisconnect, backgroundServices;
   List<Forward> forwardLocal, forwardRemote;
-  StringCallback response, debugPrint, tracePrint;
+  StringCallback response, print, debugPrint, tracePrint;
   VoidCallback success;
   FingerprintCallback hostFingerprint;
 
@@ -122,6 +122,7 @@ class SSHClient {
       this.forwardRemote,
       this.response,
       this.success,
+      this.print,
       this.debugPrint,
       this.tracePrint,
       this.socket,
@@ -193,36 +194,49 @@ class SSHClient {
             (encrypted && readBuffer.data.length < decryptBlockSize)) {
           return;
         }
-        //if (encrypted) decryptBuf = ReadCipher(c, StringPiece(c->rb.begin(), decryptBlockSize));
+        if (encrypted) {
+          decryptBuf =
+              readCipher(viewUint8List(readBuffer.data, 0, decryptBlockSize));
+        }
         BinaryPacket binaryPacket =
             BinaryPacket(encrypted ? decryptBuf : readBuffer.data);
         packetLen = 4 + binaryPacket.length + packetMacLen;
         padding = binaryPacket.padding;
       }
       if (readBuffer.data.length < packetLen) return;
-      /*if (encrypted) decryptBuf +=
-				ReadCipher(c, StringPiece(c->rb.begin() + decryptBlockSize, packetLen - decryptBlockSize - packetMacLen));*/
-
+      if (encrypted) {
+        decryptBuf = appendUint8List(
+            decryptBuf,
+            readCipher(viewUint8List(readBuffer.data, decryptBlockSize,
+                packetLen - decryptBlockSize - packetMacLen)));
+      }
       sequenceNumberS2c++;
-      /*if (encrypted && packetMacLen) {
-				string mac = SSH::MAC(macAlgoS2c, MACLenS, StringPiece(decryptBuf.data(), packetLen - packetMacLen),
-															sequenceNumberS2c-1, integrityS2c, macPrefixS2c);
-				if (mac != string(c->rb.begin() + packetLen - packetMacLen, packetMacLen))
-					return ERRORv(-1, c->Name(), ": verify MAC failed");
-			}*/
+      if (encrypted && packetMacLen != 0) {
+        Uint8List mac = computeMAC(
+            MAC.mac(macIdS2c),
+            macLenS,
+            viewUint8List(decryptBuf, 0, packetLen - packetMacLen),
+            sequenceNumberS2c - 1,
+            integrityS2c,
+            macPrefixS2c);
+        if (!equalUint8List(
+            mac,
+            viewUint8List(
+                readBuffer.data, packetLen - packetMacLen, packetMacLen))) {
+          throw FormatException('$hostport: verify MAC failed');
+        }
+      }
 
       Uint8List packet = encrypted ? decryptBuf : readBuffer.data;
-      /*if (zreader) {
-        zreader->out.clear();
-        if (!zreader->Add(StringPiece(packet    + SSH::BinaryPacketHeaderSize,
-                                      packetLen - SSH::BinaryPacketHeaderSize - packetMacLen - padding),
-                          true)) ERRORv(-1, c->Name(), ": decompress failed");
-        packetS = Serializable::ConstStream((packet = zreader->out.data()), zreader->out.size());
-      } else*/
-      if (true) {
-        packetS = SerializableInput(Uint8List.view(
-            packet.buffer,
-            packet.offsetInBytes + BinaryPacket.headerSize,
+      if (zreader != null) {
+        packetS = SerializableInput(zreader.convert(viewUint8List(
+            packet,
+            BinaryPacket.headerSize,
+            BinaryPacket.headerSize - packetMacLen - padding)));
+      } else {
+        packetS = SerializableInput(viewUint8List(
+            packet,
+            BinaryPacket.headerSize,
             packetLen - BinaryPacket.headerSize - packetMacLen - padding));
       }
 
@@ -238,10 +252,8 @@ class SSHClient {
     while ((newlineIndex =
             readBuffer.data.indexOf('\n'.codeUnits[0], processed)) !=
         -1) {
-      String line = String.fromCharCodes(Uint8List.view(
-              readBuffer.data.buffer,
-              readBuffer.data.offsetInBytes + processed,
-              newlineIndex - processed))
+      String line = String.fromCharCodes(viewUint8List(
+              readBuffer.data, processed, newlineIndex - processed))
           .trim();
       if (tracePrint != null) tracePrint('$hostport: SSH_INIT: $line');
       processed = newlineIndex + 1;
@@ -274,14 +286,20 @@ class SSHClient {
         handleMSG_NEWKEYS();
         break;
 
+      case MSG_SERVICE_ACCEPT.ID:
+        handleMSG_SERVICE_ACCEPT();
+        break;
+
       default:
-        print('$hostport: unknown packet number: $packetId, len $packetLen');
+        if (print != null) {
+          print('$hostport: unknown packet number: $packetId, len $packetLen');
+        }
         break;
     }
   }
 
   void handleMSG_KEXINIT(MSG_KEXINIT msg, Uint8List packet) {
-    tracePrint('$hostport: MSG_KEXINIT $msg');
+    if (tracePrint != null) tracePrint('$hostport: MSG_KEXINIT $msg');
 
     guessedS = msg.firstKexPacketFollows;
     kexInitS = packet.sublist(0, packetLen - packetMacLen);
@@ -325,19 +343,23 @@ class SSHClient {
     macAlgoS2c = MAC.mac(macIdS2c);
     macPrefixS2c = MAC.prefixBytes(macIdS2c);
 
-    print('$hostport: ssh negotiated { kex=${KEX.name(kexMethod)}, hostkey=${Key.name(hostkeyType)}' +
-        (cipherIdC2s == cipherIdS2c
-            ? ', cipher=${Cipher.name(cipherIdC2s)}'
-            : ', cipherC2s=${Cipher.name(cipherIdC2s)}, cipherS2c=${Cipher.name(cipherIdS2c)}') +
-        (macIdC2s == macIdS2c
-            ? ', mac=${MAC.name(macIdC2s)}'
-            : ', macC2s=${MAC.name(macIdC2s)},  macS2c=${MAC.name(macIdS2c)}') +
-        (compressIdC2s == compressIdS2c
-            ? ', compress=${Compression.name(compressIdC2s)}'
-            : ', compressC2s=${Compression.name(compressIdC2s)}, compressS2c=${Compression.name(compressIdS2c)}') +
-        " }");
-    tracePrint(
-        '$hostport: blockSize=$encryptBlockSize,$decryptBlockSize, macLen=$macLenC,$macLenS');
+    if (print != null) {
+      print('$hostport: ssh negotiated { kex=${KEX.name(kexMethod)}, hostkey=${Key.name(hostkeyType)}' +
+          (cipherIdC2s == cipherIdS2c
+              ? ', cipher=${Cipher.name(cipherIdC2s)}'
+              : ', cipherC2s=${Cipher.name(cipherIdC2s)}, cipherS2c=${Cipher.name(cipherIdS2c)}') +
+          (macIdC2s == macIdS2c
+              ? ', mac=${MAC.name(macIdC2s)}'
+              : ', macC2s=${MAC.name(macIdC2s)},  macS2c=${MAC.name(macIdS2c)}') +
+          (compressIdC2s == compressIdS2c
+              ? ', compress=${Compression.name(compressIdC2s)}'
+              : ', compressC2s=${Compression.name(compressIdC2s)}, compressS2c=${Compression.name(compressIdS2c)}') +
+          " }");
+    }
+    if (tracePrint != null) {
+      tracePrint(
+          '$hostport: blockSize=$encryptBlockSize,$decryptBlockSize, macLen=$macLenC,$macLenS');
+    }
 
     if (KEX.x25519DiffieHellman(kexMethod)) {
       kexHash = SHA256Digest();
@@ -353,7 +375,9 @@ class SSHClient {
     }
     if (guessedS && !guessedRightS) {
       guessedS = false;
-      print('$hostport: server guessed wrong, ignoring packet');
+      if (print != null) {
+        print('$hostport: server guessed wrong, ignoring packet');
+      }
       return;
     }
 
@@ -383,7 +407,9 @@ class SSHClient {
 
   Uint8List handleX25519MSG_KEX_ECDH_REPLY(MSG_KEX_ECDH_REPLY msg) {
     Uint8List fingerprint;
-    tracePrint('$hostport: MSG_KEX_ECDH_REPLY for X25519DH');
+    if (tracePrint != null) {
+      tracePrint('$hostport: MSG_KEX_ECDH_REPLY for X25519DH');
+    }
     if (!acceptedHostkey) fingerprint = msg.kS;
 
     x25519dh.remotePubKey = msg.qS;
@@ -428,6 +454,14 @@ class SSHClient {
     writeCipher(MSG_SERVICE_REQUEST('ssh-userauth'));
   }
 
+  void handleMSG_SERVICE_ACCEPT() {
+    if (tracePrint != null) tracePrint('$hostport: MSG_SERVICE_ACCEPT');
+    /*login = params.user;
+    if ((login_prompts = login.empty())) cb(c, "login: ");
+    if (load_identity_cb) { if (!load_identity_cb(&identity)) break; }
+    if (int ret = SendAuthenticationRequest(c)) return ret;*/
+  }
+
   bool computeExchangeHashAndVerifyHostKey(Uint8List kS, Uint8List hSig) {
     hText = computeExchangeHash(kexMethod, kexHash, verC, verS, kexInitC,
         kexInitS, kS, K, dh, ecdh, x25519dh);
@@ -448,13 +482,26 @@ class SSHClient {
           (dir ? 'C->S' : 'S->C') +
           ' key = "${hex.encode(key)}"');
     }
-    cipher.init(dir, ParametersWithIV(KeyParameter(key), Uint8List.view(IV.buffer, 0, cipher.blockSize)));
+    cipher.init(
+        dir,
+        ParametersWithIV(
+            KeyParameter(key), viewUint8List(IV, 0, cipher.blockSize)));
     return cipher;
+  }
+
+  Uint8List readCipher(Uint8List m) {
+    Uint8List decM = Uint8List(m.length);
+    assert(m.length % decryptBlockSize == 0);
+    for (int offset = 0; offset < m.length; offset += encryptBlockSize) {
+      decrypt.processBlock(m, offset, decM, offset);
+    }
+    return decM;
   }
 
   void writeCipher(SSHMessage msg) {
     sequenceNumberC2s++;
-    Uint8List m = msg.toBytes(zwriter, random, encryptBlockSize), encM = Uint8List(m.length);
+    Uint8List m = msg.toBytes(zwriter, random, encryptBlockSize),
+        encM = Uint8List(m.length);
     assert(m.length % encryptBlockSize == 0);
     for (int offset = 0; offset < m.length; offset += encryptBlockSize) {
       encrypt.processBlock(m, offset, encM, offset);

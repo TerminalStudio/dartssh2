@@ -709,7 +709,7 @@ class Digester {
   }
 
   void updateRawOffset(Uint8List x, int offset, int length) =>
-    digest.update(x, offset, length);
+      digest.update(x, offset, length);
 
   void updateInt(int x) {
     Uint8List buf = Uint8List(4);
@@ -805,7 +805,7 @@ Uint8List deriveKey(Digest algo, Uint8List sessionId, Uint8List hText, BigInt K,
     }
     ret = Uint8List.fromList(ret + digest.finish());
   }
-  return Uint8List.view(ret.buffer, 0, bytes);
+  return viewUint8List(ret, 0, bytes);
 }
 
 Uint8List computeMAC(

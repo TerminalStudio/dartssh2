@@ -3,6 +3,22 @@
 
 import 'dart:typed_data';
 
+Uint8List appendUint8List(Uint8List x, Uint8List y) =>
+    Uint8List.fromList(x + y);
+
+/// Returns view of [x], accounting for when [x] is another view.
+Uint8List viewUint8List(Uint8List x, [int offset = 0, int length]) =>
+    Uint8List.view(x.buffer, x.offsetInBytes + offset, length ?? x.length);
+
+/// Returns true if [x] and [y] are equivalent.
+bool equalUint8List(Uint8List x, Uint8List y) {
+  if (x.length != y.length) return false;
+  for (int i = 0; i < x.length; ++i) {
+    if (x[i] != y[i]) return false;
+  }
+  return true;
+}
+
 int nextMultipleOfN(int input, int n) =>
     (input % n != 0) ? (input ~/ n + 1) * n : input;
 
@@ -28,7 +44,7 @@ abstract class SerializableBuffer {
 
   Uint8List view() => viewOffset(0, offset);
   Uint8List viewOffset(int start, int end) =>
-      Uint8List.view(buffer.buffer, buffer.offsetInBytes + start, end - start);
+      viewUint8List(buffer, start, end - start);
 }
 
 class SerializableInput extends SerializableBuffer {
