@@ -4,6 +4,7 @@
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:convert/convert.dart';
 import 'package:pointycastle/api.dart' hide Signature;
 import 'package:pointycastle/block/aes_fast.dart';
 import 'package:pointycastle/block/modes/cbc.dart';
@@ -363,24 +364,24 @@ class MAC {
     }
   }
 
-  static HMac mac(int id, int blockLength) {
+  static HMac mac(int id) {
     switch (id) {
       case MD5:
-        return HMac(MD5Digest(), blockLength);
+        return HMac(MD5Digest(), 64);
       case MD5_96:
-        return HMac(MD5Digest(), blockLength);
+        return HMac(MD5Digest(), 64);
       case SHA1:
-        return HMac(SHA1Digest(), blockLength);
+        return HMac(SHA1Digest(), 64);
       case SHA1_96:
-        return HMac(SHA1Digest(), blockLength);
+        return HMac(SHA1Digest(), 64);
       case SHA256:
-        return HMac(SHA256Digest(), blockLength);
+        return HMac(SHA256Digest(), 64);
       case SHA256_96:
-        return HMac(SHA256Digest(), blockLength);
+        return HMac(SHA256Digest(), 64);
       case SHA512:
-        return HMac(SHA512Digest(), blockLength);
+        return HMac(SHA512Digest(), 128);
       case SHA512_96:
-        return HMac(SHA512Digest(), blockLength);
+        return HMac(SHA512Digest(), 128);
       default:
         throw FormatException('$id');
     }
@@ -700,10 +701,15 @@ class Digester {
 
   void update(Uint8List x) => updateOffset(x, 0, x.length);
 
+  void updateRaw(Uint8List x) => updateRawOffset(x, 0, x.length);
+
   void updateOffset(Uint8List x, int offset, int length) {
     updateInt(length);
-    digest.update(x, offset, length);
+    updateRawOffset(x, offset, length);
   }
+
+  void updateRawOffset(Uint8List x, int offset, int length) =>
+    digest.update(x, offset, length);
 
   void updateInt(int x) {
     Uint8List buf = Uint8List(4);
@@ -790,12 +796,12 @@ Uint8List deriveKey(Digest algo, Uint8List sessionId, Uint8List hText, BigInt K,
   while (ret.length < bytes) {
     Digester digest = Digester(algo);
     digest.updateBigInt(K);
-    digest.update(hText);
+    digest.updateRaw(hText);
     if (ret.isEmpty) {
       digest.updateByte(id);
-      digest.update(sessionId);
+      digest.updateRaw(sessionId);
     } else {
-      digest.update(ret);
+      digest.updateRaw(ret);
     }
     ret = Uint8List.fromList(ret + digest.finish());
   }

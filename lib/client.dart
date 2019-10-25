@@ -320,9 +320,9 @@ class SSHClient {
     guessedRightC = kexMethod == 1 && hostkeyType == 1;
     encryptBlockSize = Cipher.blockSize(cipherIdC2s);
     decryptBlockSize = Cipher.blockSize(cipherIdS2c);
-    macAlgoC2s = MAC.mac(macIdC2s, encryptBlockSize);
+    macAlgoC2s = MAC.mac(macIdC2s);
     macPrefixC2s = MAC.prefixBytes(macIdC2s);
-    macAlgoS2c = MAC.mac(macIdS2c, decryptBlockSize);
+    macAlgoS2c = MAC.mac(macIdS2c);
     macPrefixS2c = MAC.prefixBytes(macIdS2c);
 
     print('$hostport: ssh negotiated { kex=${KEX.name(kexMethod)}, hostkey=${Key.name(hostkeyType)}' +
@@ -448,15 +448,18 @@ class SSHClient {
           (dir ? 'C->S' : 'S->C') +
           ' key = "${hex.encode(key)}"');
     }
-    cipher.init(dir, ParametersWithIV(KeyParameter(key), IV));
+    cipher.init(dir, ParametersWithIV(KeyParameter(key), Uint8List.view(IV.buffer, 0, cipher.blockSize)));
     return cipher;
   }
 
   void writeCipher(SSHMessage msg) {
     sequenceNumberC2s++;
-    Uint8List m = msg.toBytes(zwriter, random, encryptBlockSize);
-    Uint8List encM = encrypt.process(m);
-    Uint8List mac = computeMAC(MAC.mac(macIdC2s, encryptBlockSize), macLenC, m,
+    Uint8List m = msg.toBytes(zwriter, random, encryptBlockSize), encM = Uint8List(m.length);
+    assert(m.length % encryptBlockSize == 0);
+    for (int offset = 0; offset < m.length; offset += encryptBlockSize) {
+      encrypt.processBlock(m, offset, encM, offset);
+    }
+    Uint8List mac = computeMAC(MAC.mac(macIdC2s), macLenC, m,
         sequenceNumberC2s - 1, integrityC2s, macPrefixC2s);
     socket.sendRaw(Uint8List.fromList(encM + mac));
   }
