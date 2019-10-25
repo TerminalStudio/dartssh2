@@ -1,6 +1,7 @@
 // Copyright 2019 dartssh developers
 // Use of this source code is governed by a MIT-style license that can be found in the LICENSE file.
 
+import 'dart:collection';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
@@ -20,11 +21,31 @@ import 'package:dartssh/ssh.dart';
 
 typedef VoidCallback = void Function();
 typedef StringCallback = void Function(String);
+typedef StringFunction = String Function();
+typedef Uint8ListFunction = Uint8List Function();
+typedef IdentityFunction = Identity Function();
 typedef FingerprintCallback = bool Function(int, Uint8List);
+typedef ChannelCallback = void Function(Channel, Uint8List);
+typedef RemoteForwardCallback = void Function(
+    Channel, String, int, String, int);
 
 class Forward {
   int port, targetPort;
   String targetHost;
+}
+
+class Identity {
+  RSAKey rsa;
+  /*ECPair ec;
+  Ed25519Pair ed25519;*/
+}
+
+class Channel {
+  int localId, remoteId, windowC = 0, windowS = 0;
+  bool opened = true, agentChannel = false, sentEof = false, sentClose = false;
+  Uint8List buf;
+  ChannelCallback cb;
+  Channel([this.localId = 0, this.remoteId = 0]);
 }
 
 class SSHClientState {
@@ -42,36 +63,43 @@ class SSHClient {
   bool compress, agentForwarding, closeOnDisconnect, backgroundServices;
   List<Forward> forwardLocal, forwardRemote;
   StringCallback response, print, debugPrint, tracePrint;
-  VoidCallback success;
   FingerprintCallback hostFingerprint;
+  RemoteForwardCallback remoteForward;
+  Uint8ListFunction getPassword;
+  IdentityFunction loadIdentity;
+  VoidCallback success;
+  Random random;
 
-  /*LoadIdentityCB loadIdentityCb;
-  LoadPasswordCB loadPasswordCb;
-  RemoteForwardCB remoteForwardCb;
-  sharedPtr<Identity> identity;*/
-
-  String verC = 'SSH-2.0-dartssh_1.0', verS, login, pw;
-  Uint8List kexInitC,
-      kexInitS,
-      decryptBuf,
-      hText,
-      sessionId,
-      integrityC2s,
-      integrityS2c;
+  String verC = 'SSH-2.0-dartssh_1.0', verS, login;
 
   num serverVersion = 0;
+
   int state = 0,
+      padding = 0,
+      packetId = 0,
       packetLen = 0,
       packetMacLen = 0,
+      hostkeyType = 0,
+      kexMethod = 0,
+      macPrefixC2s = 0,
+      macPrefixS2c = 0,
       macLenC = 0,
       macLenS = 0,
+      macIdC2s = 0,
+      macIdS2c = 0,
+      cipherIdC2s = 0,
+      cipherIdS2c = 0,
+      compressIdC2s = 0,
+      compressIdS2c = 0,
       encryptBlockSize = 0,
-      decryptBlockSize = 0;
-  int sequenceNumberC2s = 0,
+      decryptBlockSize = 0,
+      sequenceNumberC2s = 0,
       sequenceNumberS2c = 0,
+      nextChannelId = 1,
       loginPrompts = 0,
       passwordPrompts = 0,
       userauthFail = 0;
+
   bool guessedC = false,
       guessedS = false,
       guessedRightC = false,
@@ -79,35 +107,37 @@ class SSHClient {
       acceptedHostkey = false,
       loadedPw = false,
       wrotePw = false;
-  int padding = 0, packetId = 0;
-  int cipherIdC2s = 0, cipherIdS2c = 0, macIdC2s = 0, macIdS2c = 0;
 
   SocketInterface socket;
-  Random random;
   QueueBuffer readBuffer = QueueBuffer(Uint8List(0));
   SerializableInput packetS;
+  Uint8List kexInitC,
+      kexInitS,
+      decryptBuf,
+      hText,
+      sessionId,
+      integrityC2s,
+      integrityS2c,
+      pw;
 
   DiffieHellman dh = DiffieHellman();
   EllipticCurveDiffieHellman ecdh = EllipticCurveDiffieHellman();
   X25519DiffieHellman x25519dh = X25519DiffieHellman();
   Digest kexHash;
+  BigInt K;
   BlockCipher encrypt, decrypt;
   HMac macAlgoC2s, macAlgoS2c;
-  BigInt K;
+  Identity identity;
+  Channel sessionChannel;
+  HashMap<int, Channel> channels = HashMap<int, Channel>();
 
-  /*unorderedMap<int, SSHClient::Channel> channels;
-  SSHClient::Channel *sessionChannel=0;
-  BigNumContext ctx;
-  ECDef curveId;*/
-  int nextChannelId = 1, compressIdC2s, compressIdS2c;
-  int kexMethod = 0, hostkeyType = 0, macPrefixC2s = 0, macPrefixS2c = 0;
   int initialWindowSize = 1048576,
       maxPacketSize = 32768,
       termWidth = 80,
       termHeight = 25;
   ZLibDecoder zreader;
   ZLibEncoder zwriter;
-  //unorderedMap<int, const SSHClient::Params::Forward*> forwardRemote;
+  HashMap<int, Forward> forwardingRemote;
 
   SSHClient(
       {this.hostport,
@@ -121,10 +151,13 @@ class SSHClient {
       this.forwardLocal,
       this.forwardRemote,
       this.response,
-      this.success,
       this.print,
       this.debugPrint,
       this.tracePrint,
+      this.success,
+      this.hostFingerprint,
+      this.loadIdentity,
+      this.getPassword,
       this.socket,
       this.random}) {
     socket ??= SocketImpl();
@@ -183,7 +216,6 @@ class SSHClient {
       if (state == SSHClientState.INIT) return;
     }
 
-    // SSHClient::Channel *chan;
     while (true) {
       bool encrypted = state > SSHClientState.FIRST_NEWKEYS;
 
@@ -290,6 +322,19 @@ class SSHClient {
         handleMSG_SERVICE_ACCEPT();
         break;
 
+      case MSG_USERAUTH_FAILURE.ID:
+        handleMSG_USERAUTH_FAILURE(
+            MSG_USERAUTH_FAILURE()..deserialize(packetS));
+        break;
+
+      case MSG_USERAUTH_SUCCESS.ID:
+        handleMSG_USERAUTH_SUCCESS();
+        break;
+
+      case MSG_GLOBAL_REQUEST.ID:
+        handleMSG_GLOBAL_REQUEST(MSG_GLOBAL_REQUEST()..deserialize(packetS));
+        break;
+
       default:
         if (print != null) {
           print('$hostport: unknown packet number: $packetId, len $packetLen');
@@ -365,6 +410,14 @@ class SSHClient {
       kexHash = SHA256Digest();
       x25519dh.GeneratePair(random);
       writeClearOrEncrypted(MSG_KEX_ECDH_INIT(x25519dh.myPubKey));
+    } else if (KEX.ellipticCurveDiffieHellman(kexMethod)) {
+      /* */
+    } else if (KEX.diffieHellmanGroupExchange(kexMethod)) {
+      /* */
+    } else if (KEX.diffieHellman(kexMethod)) {
+      /* */
+    } else {
+      throw FormatException('$hostport: unkown kex method: $kexMethod');
     }
   }
 
@@ -388,7 +441,14 @@ class SSHClient {
               MSG_KEX_ECDH_REPLY()..deserialize(packetS)) ??
           fingerprint;
       // fall thru
+    } else if (packetId == MSG_KEXDH_REPLY.ID &&
+        KEX.ellipticCurveDiffieHellman(kexMethod)) {
+      /**/
+    } else if (packetId == MSG_KEXDH_REPLY.ID &&
+        KEX.diffieHellmanGroupExchange(kexMethod)) {
+      /**/
     } else {
+      /**/
       throw FormatException('$hostport: unsupported $packetId, $kexMethod');
     }
 
@@ -456,10 +516,52 @@ class SSHClient {
 
   void handleMSG_SERVICE_ACCEPT() {
     if (tracePrint != null) tracePrint('$hostport: MSG_SERVICE_ACCEPT');
-    /*login = params.user;
-    if ((login_prompts = login.empty())) cb(c, "login: ");
-    if (load_identity_cb) { if (!load_identity_cb(&identity)) break; }
-    if (int ret = SendAuthenticationRequest(c)) return ret;*/
+    login = user;
+    if (login == null || login.isEmpty) {
+      loginPrompts = 1;
+      response('login: ');
+    }
+    if (loadIdentity != null) {
+      if ((identity = loadIdentity()) != null) return;
+    }
+    sendAuthenticationRequest();
+  }
+
+  void handleMSG_USERAUTH_FAILURE(MSG_USERAUTH_FAILURE msg) {
+    if (tracePrint != null) {
+      tracePrint(
+          '$hostport: MSG_USERAUTH_FAILURE: auth_left="${msg.authLeft}" loadedPw=$loadedPw useauthFail=$userauthFail');
+    }
+    if (!loadedPw) clearPassword();
+    userauthFail++;
+    if (userauthFail == 1 && !wrotePw) {
+      response('Password:');
+      passwordPrompts = 1;
+      loadPassword();
+    } else {
+      throw FormatException('$hostport: authorization failed');
+    }
+  }
+
+  void handleMSG_USERAUTH_SUCCESS() {
+    if (tracePrint != null) {
+      tracePrint('$hostport: MSG_USERAUTH_SUCCESS');
+    }
+    /*session_channel = &channels[next_channel_id];
+    session_channel->local_id = next_channel_id++;
+    session_channel->window_s = initial_window_size;
+    if (compress_id_c2s == SSH::Compression::OpenSSHZLib) zreader = make_unique<ZLibReader>(4096);
+    if (compress_id_s2c == SSH::Compression::OpenSSHZLib) zwriter = make_unique<ZLibWriter>(4096);
+    if (success_cb) success_cb();
+    if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN("session", session_channel->local_id,
+                                              initial_window_size, max_packet_size)))
+      return ERRORv(-1, c->Name(), ": write");*/
+  }
+
+  void handleMSG_GLOBAL_REQUEST(MSG_GLOBAL_REQUEST msg) {
+    if (tracePrint != null) {
+      tracePrint('$hostport: MSG_GLOBAL_REQUEST request=${msg.request}');
+    }
   }
 
   bool computeExchangeHashAndVerifyHostKey(Uint8List kS, Uint8List hSig) {
@@ -515,5 +617,51 @@ class SSHClient {
     if (state > SSHClientState.FIRST_NEWKEYS) return writeCipher(m);
     sequenceNumberC2s++;
     socket.sendRaw(m.toBytes(null, random, encryptBlockSize));
+  }
+
+  void loadPassword() {
+    if (getPassword != null && (pw = getPassword()) != null) sendPassword();
+  }
+
+  void clearPassword() {
+    if (pw == null) return;
+    for (int i = 0; i < pw.length; i++) {
+      pw[i] ^= random.nextInt(255);
+    }
+    pw = null;
+  }
+
+  void sendPassword() {
+    response('\r\n');
+    wrotePw = true;
+    if (userauthFail != 0) {
+      writeCipher(MSG_USERAUTH_REQUEST(
+          login, 'ssh-connection', 'password', '', pw, Uint8List(0)));
+    } else {
+      List<Uint8List> prompt =
+          List<Uint8List>.filled(passwordPrompts, Uint8List(0));
+      prompt.last = pw;
+      writeCipher(MSG_USERAUTH_INFO_RESPONSE(prompt));
+    }
+    passwordPrompts = 0;
+    clearPassword();
+  }
+
+  void sendAuthenticationRequest() {
+    if (identity == null) {
+      // do nothing
+    }
+    /*else if (identity->ed25519.privkey.size()) {
+      string pubkey = SSH::Ed25519Key(identity->ed25519.pubkey).ToString();
+      string challenge = SSH::DeriveChallengeText(session_id, login, "ssh-connection", "publickey", "ssh-ed25519", pubkey);
+      string sig = SSH::Ed25519Signature(Ed25519Sign(challenge, identity->ed25519.privkey)).ToString();
+      if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(login, "ssh-connection", "publickey", "ssh-ed25519", pubkey, sig)))
+        return ERRORv(-1, c->Name(), ": write");
+      return 0;
+    } else if (identity->ec) {
+    } else if (identity->rsa) {
+    }*/
+    writeCipher(MSG_USERAUTH_REQUEST(login, 'ssh-connection',
+        'keyboard-interactive', '', Uint8List(0), Uint8List(0)));
   }
 }

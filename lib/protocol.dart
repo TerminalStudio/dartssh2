@@ -478,7 +478,8 @@ class MSG_KEX_ECDH_REPLY extends SSHMessage {
 
 class MSG_USERAUTH_REQUEST extends SSHMessage {
   static const int ID = 50;
-  String userName, serviceName, methodName, algoName, secret, sig;
+  String userName, serviceName, methodName, algoName;
+  Uint8List secret, sig;
   MSG_USERAUTH_REQUEST(this.userName, this.serviceName, this.methodName,
       this.algoName, this.secret, this.sig)
       : super(ID);
@@ -598,7 +599,7 @@ class MSG_USERAUTH_INFO_REQUEST extends SSHMessage {
 
 class MSG_USERAUTH_INFO_RESPONSE extends SSHMessage {
   static const int ID = 61;
-  List<String> response;
+  List<Uint8List> response;
   MSG_USERAUTH_INFO_RESPONSE([this.response]) : super(ID);
 
   @override
@@ -611,7 +612,7 @@ class MSG_USERAUTH_INFO_RESPONSE extends SSHMessage {
   @override
   void serialize(SerializableOutput output) {
     output.addUint32(response.length);
-    for (String r in response) {
+    for (Uint8List r in response) {
       serializeString(output, r);
     }
   }

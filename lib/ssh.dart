@@ -48,15 +48,12 @@ class Key {
       ECDSA_SHA2_NISTP384 = 3,
       ECDSA_SHA2_NISTP521 = 4,
       RSA = 5,
-      DSS = 6,
-      End = 6;
+      End = 5;
 
   static int id(String name) {
     switch (name) {
       case 'ssh-rsa':
         return RSA;
-      case 'ssh-dss':
-        return DSS;
       case 'ecdsa-sha2-nistp256':
         return ECDSA_SHA2_NISTP256;
       case 'ecdsa-sha2-nistp384':
@@ -74,8 +71,6 @@ class Key {
     switch (id) {
       case RSA:
         return 'ssh-rsa';
-      case DSS:
-        return 'ssh-dss';
       case ECDSA_SHA2_NISTP256:
         return 'ecdsa-sha2-nistp256';
       case ECDSA_SHA2_NISTP384:
@@ -422,76 +417,6 @@ class Compression {
       id(preferenceIntersection(preferenceCsv(startAfter), intersectCsv));
 }
 
-class DSSKey with Serializable {
-  String formatId = 'ssh-dss';
-  BigInt p, q, g, y;
-  DSSKey(this.p, this.q, this.g, this.y);
-
-  @override
-  int get serializedHeaderSize => 5 * 4;
-
-  @override
-  int get serializedSize =>
-      serializedHeaderSize +
-      formatId.length +
-      mpIntLength(p) +
-      mpIntLength(q) +
-      mpIntLength(g) +
-      mpIntLength(y);
-
-  @override
-  void deserialize(SerializableInput input) {
-    formatId = deserializeString(input);
-    if (formatId != 'ssh-dss') throw FormatException(formatId);
-    p = deserializeMpInt(input);
-    q = deserializeMpInt(input);
-    g = deserializeMpInt(input);
-    y = deserializeMpInt(input);
-  }
-
-  @override
-  void serialize(SerializableOutput output) {
-    serializeString(output, formatId);
-    serializeMpInt(output, p);
-    serializeMpInt(output, q);
-    serializeMpInt(output, g);
-    serializeMpInt(output, y);
-  }
-}
-
-class DSSSignature with Serializable {
-  String formatId = 'ssh-dss';
-  BigInt r, s;
-  DSSSignature(this.r, this.s);
-
-  @override
-  int get serializedHeaderSize => 4 * 2 + 7 + 20 * 2;
-
-  @override
-  int get serializedSize => serializedHeaderSize;
-
-  @override
-  void deserialize(SerializableInput input) {
-    formatId = deserializeString(input);
-    Uint8List blob = deserializeStringBytes(input);
-    if (formatId != 'ssh-dss' || blob.length != 40) {
-      throw FormatException('$formatId ${blob.length}');
-    }
-    r = decodeBigInt(Uint8List.view(blob.buffer, 0, 20));
-    s = decodeBigInt(Uint8List.view(blob.buffer, 20, 20));
-  }
-
-  @override
-  void serialize(SerializableOutput output) {
-    serializeString(output, formatId);
-    Uint8List rBytes = encodeBigInt(r);
-    Uint8List sBytes = encodeBigInt(s);
-    assert(rBytes.length == 20);
-    assert(sBytes.length == 20);
-    serializeString(output, Uint8List.fromList(rBytes + sBytes));
-  }
-}
-
 class RSAKey with Serializable {
   String formatId = 'ssh-rsa';
   BigInt e, n;
@@ -669,6 +594,7 @@ class DiffieHellman {
 }
 
 class EllipticCurveDiffieHellman {
+  /*ECDef curveId;*/
   /*ECPair pair=0;
   ECGroup g=0;
   ECPoint c=0, s=0;*/
@@ -780,7 +706,11 @@ Uint8List computeExchangeHash(
 
 bool verifyHostKey(
     Uint8List hText, int hostkeyType, Uint8List key, Uint8List sig) {
-  if (hostkeyType == Key.ED25519) {
+  if (hostkeyType == Key.RSA) {
+    throw FormatException('not yet ported');
+  } else if (Key.ellipticCurveDSA(hostkeyType)) {
+    throw FormatException('not yet ported');
+  } else if (hostkeyType == Key.ED25519) {
     Ed25519Key keyMsg = Ed25519Key()..deserialize(SerializableInput(key));
     Ed25519Signature sigMsg = Ed25519Signature()
       ..deserialize(SerializableInput(sig));
