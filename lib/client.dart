@@ -1,9 +1,10 @@
 // Copyright 2019 dartssh developers
 // Use of this source code is governed by a MIT-style license that can be found in the LICENSE file.
 
-import 'dart:collection';
-import 'dart:io';
 import 'dart:math';
+import 'dart:collection';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:convert/convert.dart';
@@ -60,7 +61,7 @@ class SSHClientState {
 
 class SSHClient {
   String hostport, user, termvar, startupCommand;
-  bool compress, agentForwarding, closeOnDisconnect, backgroundServices;
+  bool compress, agentForwarding, closeOnDisconnect, startShell;
   List<Forward> forwardLocal, forwardRemote;
   StringCallback response, print, debugPrint, tracePrint;
   FingerprintCallback hostFingerprint;
@@ -142,12 +143,12 @@ class SSHClient {
   SSHClient(
       {this.hostport,
       this.user,
-      this.termvar,
+      this.termvar = '',
       this.startupCommand,
       this.compress = false,
       this.agentForwarding = false,
       this.closeOnDisconnect,
-      this.backgroundServices,
+      this.startShell = true,
       this.forwardLocal,
       this.forwardRemote,
       this.response,
@@ -333,6 +334,34 @@ class SSHClient {
 
       case MSG_GLOBAL_REQUEST.ID:
         handleMSG_GLOBAL_REQUEST(MSG_GLOBAL_REQUEST()..deserialize(packetS));
+        break;
+
+      case MSG_CHANNEL_OPEN_CONFIRMATION.ID:
+        handleMSG_CHANNEL_OPEN_CONFIRMATION(
+            MSG_CHANNEL_OPEN_CONFIRMATION()..deserialize(packetS));
+        break;
+
+      case MSG_CHANNEL_SUCCESS.ID:
+        if (tracePrint != null) {
+          tracePrint('$hostport: MSG_CHANNEL_SUCCESS');
+        }
+        break;
+
+      case MSG_CHANNEL_WINDOW_ADJUST.ID:
+        handleMSG_CHANNEL_WINDOW_ADJUST(
+            MSG_CHANNEL_WINDOW_ADJUST()..deserialize(packetS));
+        break;
+
+      case MSG_CHANNEL_DATA.ID:
+        handleMSG_CHANNEL_DATA(MSG_CHANNEL_DATA()..deserialize(packetS));
+        break;
+
+      case MSG_CHANNEL_EOF.ID:
+        handleMSG_CHANNEL_EOF(MSG_CHANNEL_EOF()..deserialize(packetS));
+        break;
+
+      case MSG_CHANNEL_CLOSE.ID:
+        handleMSG_CHANNEL_CLOSE(MSG_CHANNEL_CLOSE()..deserialize(packetS));
         break;
 
       default:
@@ -547,21 +576,144 @@ class SSHClient {
     if (tracePrint != null) {
       tracePrint('$hostport: MSG_USERAUTH_SUCCESS');
     }
-    /*session_channel = &channels[next_channel_id];
-    session_channel->local_id = next_channel_id++;
-    session_channel->window_s = initial_window_size;
-    if (compress_id_c2s == SSH::Compression::OpenSSHZLib) zreader = make_unique<ZLibReader>(4096);
-    if (compress_id_s2c == SSH::Compression::OpenSSHZLib) zwriter = make_unique<ZLibWriter>(4096);
-    if (success_cb) success_cb();
-    if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN("session", session_channel->local_id,
-                                              initial_window_size, max_packet_size)))
-      return ERRORv(-1, c->Name(), ": write");*/
+    sessionChannel = Channel(nextChannelId);
+    sessionChannel.windowS = initialWindowSize;
+    channels[nextChannelId] = sessionChannel;
+    nextChannelId++;
+
+    if (compressIdC2s == Compression.OpenSSHZLib) zreader = ZLibDecoder();
+    if (compressIdS2c == Compression.OpenSSHZLib) zwriter = ZLibEncoder();
+    if (success != null) success();
+    writeCipher(MSG_CHANNEL_OPEN.create(
+        'session', sessionChannel.localId, initialWindowSize, maxPacketSize));
   }
 
   void handleMSG_GLOBAL_REQUEST(MSG_GLOBAL_REQUEST msg) {
     if (tracePrint != null) {
       tracePrint('$hostport: MSG_GLOBAL_REQUEST request=${msg.request}');
     }
+  }
+
+  void handleMSG_CHANNEL_OPEN_CONFIRMATION(MSG_CHANNEL_OPEN_CONFIRMATION msg) {
+    if (tracePrint != null) {
+      tracePrint(
+          '$hostport: MSG_CHANNEL_OPEN_CONFIRMATION local_id=${msg.recipientChannel} remote_id=${msg.senderChannel}');
+    }
+
+    Channel chan = channels[msg.recipientChannel];
+    if (chan == null || chan.remoteId == null) {
+      throw FormatException('$hostport: open invalid channel');
+    }
+    chan.remoteId = msg.senderChannel;
+    chan.windowC = msg.initialWinSize;
+    chan.opened = true;
+    if (chan == sessionChannel) {
+      if (agentForwarding) {
+        writeCipher(MSG_CHANNEL_REQUEST.exec(
+            chan.remoteId, 'auth-agent-req@openssh.com', '', true));
+      }
+
+      if (forwardRemote != null) {
+        for (Forward forward in forwardRemote) {
+          writeCipher(MSG_GLOBAL_REQUEST_TCPIP('', forward.port));
+          forwardingRemote[forward.port] = forward;
+        }
+      }
+
+      if (startShell) {
+        writeCipher(MSG_CHANNEL_REQUEST.ptyReq(
+            chan.remoteId,
+            'pty-req',
+            Point(termWidth, termHeight),
+            Point(termWidth * 8, termHeight * 12),
+            termvar,
+            '',
+            true));
+
+        writeCipher(MSG_CHANNEL_REQUEST.exec(chan.remoteId, 'shell', '', true));
+
+        if ((startupCommand ?? '').isNotEmpty) {
+          sendToChannel(sessionChannel, utf8.encode(startupCommand));
+        }
+      }
+    } else if (chan.cb != null) {
+      chan.cb(chan, Uint8List(0));
+    }
+  }
+
+  void handleMSG_CHANNEL_WINDOW_ADJUST(MSG_CHANNEL_WINDOW_ADJUST msg) {
+    if (tracePrint != null) {
+      tracePrint(
+          '$hostport: MSG_CHANNEL_WINDOW_ADJUST add ${msg.bytesToAdd} to channel ${msg.recipientChannel}');
+    }
+    Channel chan = channels[msg.recipientChannel];
+    if (chan == null) {
+      throw FormatException('$hostport: window adjust invalid channel');
+    }
+    chan.windowC += msg.bytesToAdd;
+  }
+
+  void handleMSG_CHANNEL_DATA(MSG_CHANNEL_DATA msg) {
+    if (tracePrint != null) {
+      tracePrint(
+          '$hostport: MSG_CHANNEL_DATA: channel ${msg.recipientChannel} : ${msg.data.length} bytes');
+    }
+    Channel chan = channels[msg.recipientChannel];
+    if (chan == null) {
+      throw FormatException('$hostport: data for invalid channel');
+    }
+    chan.windowS -= (packetLen - packetMacLen - 4);
+    if (chan.windowS < initialWindowSize ~/ 2) {
+      writeClearOrEncrypted(
+          MSG_CHANNEL_WINDOW_ADJUST(chan.remoteId, initialWindowSize));
+      chan.windowS += initialWindowSize;
+    }
+
+    if (chan == sessionChannel) {
+      response(utf8.decode(msg.data));
+    } else if (chan.cb != null) {
+      chan.cb(chan, msg.data);
+    } else if (chan.agentChannel) {
+      /**/
+    }
+  }
+
+  void handleMSG_CHANNEL_EOF(MSG_CHANNEL_EOF msg) {
+    if (tracePrint != null) {
+      tracePrint('$hostport: MSG_CHANNEL_EOF ${msg.recipientChannel}');
+    }
+    Channel chan = channels[msg.recipientChannel];
+    if (chan == null) {
+      throw FormatException('$hostport: close invalid channel');
+    }
+    if (!chan.sentEof) {
+      chan.sentEof = true;
+      writeCipher(MSG_CHANNEL_EOF(chan.remoteId));
+    }
+  }
+
+  void handleMSG_CHANNEL_CLOSE(MSG_CHANNEL_CLOSE msg) {
+    if (tracePrint != null) {
+      tracePrint('$hostport: MSG_CHANNEL_CLOSE ${msg.recipientChannel}');
+    }
+    Channel chan = channels[msg.recipientChannel];
+    if (chan == null) {
+      throw FormatException('$hostport: EOF invalid channel');
+    }
+
+    bool alreadySentClose = chan.sentClose;
+    if (!alreadySentClose) {
+      chan.sentClose = true;
+      writeCipher(MSG_CHANNEL_CLOSE(chan.remoteId));
+    }
+    if (chan == sessionChannel) {
+      writeCipher(MSG_DISCONNECT());
+      sessionChannel = null;
+    } else if (!alreadySentClose && chan.cb != null) {
+      chan.opened = false;
+      chan.cb(chan, Uint8List(0));
+    }
+    channels.remove(msg.recipientChannel);
   }
 
   bool computeExchangeHashAndVerifyHostKey(Uint8List kS, Uint8List hSig) {
@@ -663,5 +815,32 @@ class SSHClient {
     }*/
     writeCipher(MSG_USERAUTH_REQUEST(login, 'ssh-connection',
         'keyboard-interactive', '', Uint8List(0), Uint8List(0)));
+  }
+
+  void sendToChannel(Channel chan, Uint8List b) {
+    writeCipher(MSG_CHANNEL_DATA(chan.remoteId, b));
+    chan.windowC -= (b.length - 4);
+  }
+
+  void sendChannelData(Uint8List b) {
+    if (loginPrompts != 0) {
+      response(utf8.decode(b));
+      bool cr = b.isNotEmpty && b.last == '\n'.codeUnits[0];
+      login += String.fromCharCodes(b, 0, b.length - (cr ? 1 : 0));
+      if (cr) {
+        response('\n');
+        loginPrompts = 0;
+        sendAuthenticationRequest();
+      }
+    } else if (passwordPrompts != 0) {
+      bool cr = b.isNotEmpty && b.last == '\n'.codeUnits[0];
+      pw = appendUint8List(
+          pw ?? Uint8List(0), viewUint8List(b, 0, b.length - (cr ? 1 : 0)));
+      if (cr) sendPassword();
+    } else {
+      if (sessionChannel != null) {
+        sendToChannel(sessionChannel, b);
+      }
+    }
   }
 }

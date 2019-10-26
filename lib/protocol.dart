@@ -676,9 +676,9 @@ class MSG_CHANNEL_OPEN extends SSHMessage {
   static const int ID = 90;
   String channelType;
   int senderChannel = 0, initialWinSize = 0, maximumPacketSize = 0;
-  MSG_CHANNEL_OPEN.empty() : super(ID);
-  MSG_CHANNEL_OPEN(this.channelType, this.senderChannel, this.initialWinSize,
-      this.maximumPacketSize)
+  MSG_CHANNEL_OPEN() : super(ID);
+  MSG_CHANNEL_OPEN.create(this.channelType, this.senderChannel,
+      this.initialWinSize, this.maximumPacketSize)
       : super(ID);
 
   @override
@@ -712,8 +712,8 @@ class MSG_CHANNEL_OPEN_TCPIP extends SSHMessage {
       maximumPacketSize = 0,
       srcPort = 0,
       dstPort = 0;
-  MSG_CHANNEL_OPEN_TCPIP.empty() : super(ID);
-  MSG_CHANNEL_OPEN_TCPIP(
+  MSG_CHANNEL_OPEN_TCPIP() : super(ID);
+  MSG_CHANNEL_OPEN_TCPIP.create(
       this.channelType,
       this.senderChannel,
       this.initialWinSize,
@@ -759,9 +759,9 @@ class MSG_CHANNEL_OPEN_TCPIP extends SSHMessage {
 class MSG_CHANNEL_OPEN_CONFIRMATION extends SSHMessage {
   static const int ID = 91;
   int recipientChannel, senderChannel, initialWinSize, maximumPacketSize;
-  MSG_CHANNEL_OPEN_CONFIRMATION.empty() : super(ID);
-  MSG_CHANNEL_OPEN_CONFIRMATION(this.recipientChannel, this.senderChannel,
-      this.initialWinSize, this.maximumPacketSize)
+  MSG_CHANNEL_OPEN_CONFIRMATION() : super(ID);
+  MSG_CHANNEL_OPEN_CONFIRMATION.create(this.recipientChannel,
+      this.senderChannel, this.initialWinSize, this.maximumPacketSize)
       : super(ID);
 
   @override
@@ -848,9 +848,8 @@ class MSG_CHANNEL_WINDOW_ADJUST extends SSHMessage {
 class MSG_CHANNEL_DATA extends SSHMessage {
   static const int ID = 94;
   int recipientChannel;
-  String data;
-  MSG_CHANNEL_DATA() : super(ID);
-  MSG_CHANNEL_DATA.create(this.recipientChannel, this.data) : super(ID);
+  Uint8List data;
+  MSG_CHANNEL_DATA([this.recipientChannel, this.data]) : super(ID);
 
   @override
   int get serializedHeaderSize => 4 * 2;
@@ -867,7 +866,7 @@ class MSG_CHANNEL_DATA extends SSHMessage {
   @override
   void deserialize(SerializableInput input) {
     recipientChannel = input.getUint32();
-    data = deserializeString(input);
+    data = deserializeStringBytes(input);
   }
 }
 
@@ -917,8 +916,8 @@ class MSG_CHANNEL_REQUEST extends SSHMessage {
       width = 0,
       height = 0,
       pixelWidth = 0,
-      pixelHeight = 0,
-      wantReply = 0;
+      pixelHeight = 0;
+  bool wantReply = false;
   String requestType, term, termMode;
   MSG_CHANNEL_REQUEST() : super(ID);
   MSG_CHANNEL_REQUEST.exec(
@@ -955,14 +954,14 @@ class MSG_CHANNEL_REQUEST extends SSHMessage {
   void deserialize(SerializableInput input) {
     recipientChannel = input.getUint32();
     requestType = deserializeString(input);
-    wantReply = input.getUint8();
+    wantReply = input.getUint8() != 0;
   }
 
   @override
   void serialize(SerializableOutput output) {
     output.addUint32(recipientChannel);
     serializeString(output, requestType);
-    output.addUint8(wantReply);
+    output.addUint8(wantReply ? 1 : 0);
     if (requestType == 'pty-req') {
       serializeString(output, term);
       output.addUint32(width);
