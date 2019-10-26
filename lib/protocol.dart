@@ -94,7 +94,7 @@ abstract class SSHMessage extends Serializable {
 class MSG_DISCONNECT extends SSHMessage {
   static const int ID = 1;
   int reasonCode = 0;
-  String description, language;
+  String description = '', language = '';
   MSG_DISCONNECT() : super(ID);
 
   @override
@@ -346,7 +346,7 @@ class MSG_KEXDH_INIT extends SSHMessage {
 /// The server then responds with the following.
 class MSG_KEXDH_REPLY extends SSHMessage {
   static const int ID = 31;
-  String kS, hSig;
+  Uint8List kS, hSig;
   BigInt f;
   MSG_KEXDH_REPLY([this.f]) : super(ID);
 
@@ -362,9 +362,9 @@ class MSG_KEXDH_REPLY extends SSHMessage {
 
   @override
   void deserialize(SerializableInput input) {
-    kS = deserializeString(input);
+    kS = deserializeStringBytes(input);
     f = deserializeMpInt(input);
-    hSig = deserializeString(input);
+    hSig = deserializeStringBytes(input);
   }
 }
 

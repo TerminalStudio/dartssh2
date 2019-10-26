@@ -9,6 +9,7 @@ import 'dart:typed_data';
 
 import 'package:convert/convert.dart';
 import "package:pointycastle/api.dart";
+import 'package:pointycastle/digests/sha1.dart';
 import "package:pointycastle/digests/sha256.dart";
 import 'package:pointycastle/macs/hmac.dart';
 import 'package:validators/sanitizers.dart';
@@ -364,6 +365,10 @@ class SSHClient {
         handleMSG_CHANNEL_CLOSE(MSG_CHANNEL_CLOSE()..deserialize(packetS));
         break;
 
+      case MSG_CHANNEL_REQUEST.ID:
+        handleMSG_CHANNEL_REQUEST(MSG_CHANNEL_REQUEST()..deserialize(packetS));
+        break;
+
       default:
         if (print != null) {
           print('$hostport: unknown packet number: $packetId, len $packetLen');
@@ -444,9 +449,16 @@ class SSHClient {
     } else if (KEX.diffieHellmanGroupExchange(kexMethod)) {
       /* */
     } else if (KEX.diffieHellman(kexMethod)) {
-      /* */
+      if (kexMethod == KEX.DH14_SHA1) {
+        dh = DiffieHellman.group14();
+      } else if (kexMethod == KEX.DH1_SHA1) {
+        dh = DiffieHellman.group1();
+      }
+      kexHash = SHA1Digest();
+      dh.generatePair(random);
+      writeClearOrEncrypted(MSG_KEXDH_INIT(dh.e));
     } else {
-      throw FormatException('$hostport: unkown kex method: $kexMethod');
+      throw FormatException('$hostport: unknown kex method: $kexMethod');
     }
   }
 
@@ -473,12 +485,16 @@ class SSHClient {
     } else if (packetId == MSG_KEXDH_REPLY.ID &&
         KEX.ellipticCurveDiffieHellman(kexMethod)) {
       /**/
+      // fall thru
     } else if (packetId == MSG_KEXDH_REPLY.ID &&
         KEX.diffieHellmanGroupExchange(kexMethod)) {
       /**/
+      return;
     } else {
-      /**/
-      throw FormatException('$hostport: unsupported $packetId, $kexMethod');
+      fingerprint =
+          handleDhMSG_KEXDH_REPLY(MSG_KEXDH_REPLY()..deserialize(packetS)) ??
+              fingerprint;
+      // fall thru
     }
 
     writeClearOrEncrypted(MSG_NEWKEYS());
@@ -503,6 +519,21 @@ class SSHClient {
 
     x25519dh.remotePubKey = msg.qS;
     K = x25519dh.computeSecret();
+    if (!computeExchangeHashAndVerifyHostKey(msg.kS, msg.hSig)) {
+      throw FormatException('$hostport: verify hostkey failed');
+    }
+
+    return fingerprint;
+  }
+
+  Uint8List handleDhMSG_KEXDH_REPLY(MSG_KEXDH_REPLY msg) {
+    Uint8List fingerprint;
+    if (tracePrint != null) {
+      tracePrint('$hostport: MSG_KEXDH_REPLY');
+    }
+    if (!acceptedHostkey) fingerprint = msg.kS;
+
+    K = dh.computeSecret(msg.f);
     if (!computeExchangeHashAndVerifyHostKey(msg.kS, msg.hSig)) {
       throw FormatException('$hostport: verify hostkey failed');
     }
@@ -714,6 +745,13 @@ class SSHClient {
       chan.cb(chan, Uint8List(0));
     }
     channels.remove(msg.recipientChannel);
+  }
+
+  void handleMSG_CHANNEL_REQUEST(MSG_CHANNEL_REQUEST msg) {
+    if (tracePrint != null) {
+      tracePrint(
+          '$hostport: MSG_CHANNEL_REQUEST ${msg.requestType} wantReply=${msg.wantReply}');
+    }
   }
 
   bool computeExchangeHashAndVerifyHostKey(Uint8List kS, Uint8List hSig) {
