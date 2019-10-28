@@ -333,19 +333,22 @@ class SSHClient {
         handleMSG_USERAUTH_SUCCESS();
         break;
 
+      case MSG_USERAUTH_INFO_REQUEST.ID:
+        handleMSG_USERAUTH_INFO_REQUEST(
+            MSG_USERAUTH_INFO_REQUEST()..deserialize(packetS));
+        break;
+
       case MSG_GLOBAL_REQUEST.ID:
         handleMSG_GLOBAL_REQUEST(MSG_GLOBAL_REQUEST()..deserialize(packetS));
+        break;
+
+      case MSG_CHANNEL_OPEN.ID:
+        handleMSG_CHANNEL_OPEN(MSG_CHANNEL_OPEN()..deserialize(packetS));
         break;
 
       case MSG_CHANNEL_OPEN_CONFIRMATION.ID:
         handleMSG_CHANNEL_OPEN_CONFIRMATION(
             MSG_CHANNEL_OPEN_CONFIRMATION()..deserialize(packetS));
-        break;
-
-      case MSG_CHANNEL_SUCCESS.ID:
-        if (tracePrint != null) {
-          tracePrint('$hostport: MSG_CHANNEL_SUCCESS');
-        }
         break;
 
       case MSG_CHANNEL_WINDOW_ADJUST.ID:
@@ -367,6 +370,30 @@ class SSHClient {
 
       case MSG_CHANNEL_REQUEST.ID:
         handleMSG_CHANNEL_REQUEST(MSG_CHANNEL_REQUEST()..deserialize(packetS));
+        break;
+
+      case MSG_CHANNEL_SUCCESS.ID:
+        if (tracePrint != null) {
+          tracePrint('$hostport: MSG_CHANNEL_SUCCESS');
+        }
+        break;
+
+      case MSG_CHANNEL_FAILURE.ID:
+        if (tracePrint != null) {
+          tracePrint('$hostport: MSG_CHANNEL_FAILURE');
+        }
+        break;
+
+      case MSG_DISCONNECT.ID:
+        handleMSG_DISCONNECT(MSG_DISCONNECT()..deserialize(packetS));
+        break;
+
+      case MSG_IGNORE.ID:
+        handleMSG_IGNORE(MSG_IGNORE()..deserialize(packetS));
+        break;
+
+      case MSG_DEBUG.ID:
+        handleMSG_DEBUG(MSG_DEBUG()..deserialize(packetS));
         break;
 
       default:
@@ -445,9 +472,19 @@ class SSHClient {
       x25519dh.GeneratePair(random);
       writeClearOrEncrypted(MSG_KEX_ECDH_INIT(x25519dh.myPubKey));
     } else if (KEX.ellipticCurveDiffieHellman(kexMethod)) {
-      /* */
+      kexHash = KEX.ellipticCurveHash(kexMethod);
+      ecdh = EllipticCurveDiffieHellman(
+          KEX.ellipticCurve(kexMethod), KEX.ellipticCurveSecretBits(kexMethod));
+      ecdh.generatePair(random);
+      writeClearOrEncrypted(MSG_KEX_ECDH_INIT(ecdh.cText));
     } else if (KEX.diffieHellmanGroupExchange(kexMethod)) {
-      /* */
+      if (kexMethod == KEX.DHGEX_SHA1) {
+        kexHash = SHA1Digest();
+      } else if (kexMethod == KEX.DHGEX_SHA256) {
+        kexHash = SHA256Digest();
+      }
+      writeClearOrEncrypted(
+          MSG_KEX_DH_GEX_REQUEST(dh.gexMin, dh.gexMax, dh.gexPref));
     } else if (KEX.diffieHellman(kexMethod)) {
       if (kexMethod == KEX.DH14_SHA1) {
         dh = DiffieHellman.group14();
@@ -481,20 +518,20 @@ class SSHClient {
       fingerprint = handleX25519MSG_KEX_ECDH_REPLY(
               MSG_KEX_ECDH_REPLY()..deserialize(packetS)) ??
           fingerprint;
-      // fall thru
     } else if (packetId == MSG_KEXDH_REPLY.ID &&
         KEX.ellipticCurveDiffieHellman(kexMethod)) {
-      /**/
-      // fall thru
+      fingerprint = handleEcDhMSG_KEX_ECDH_REPLY(
+              MSG_KEX_ECDH_REPLY()..deserialize(packetS)) ??
+          fingerprint;
     } else if (packetId == MSG_KEXDH_REPLY.ID &&
         KEX.diffieHellmanGroupExchange(kexMethod)) {
-      /**/
+      handleDhGroupMSG_KEX_DH_GEX_GROUP(
+          MSG_KEX_DH_GEX_GROUP()..deserialize(packetS));
       return;
     } else {
       fingerprint =
           handleDhMSG_KEXDH_REPLY(MSG_KEXDH_REPLY()..deserialize(packetS)) ??
               fingerprint;
-      // fall thru
     }
 
     writeClearOrEncrypted(MSG_NEWKEYS());
@@ -524,6 +561,30 @@ class SSHClient {
     }
 
     return fingerprint;
+  }
+
+  Uint8List handleEcDhMSG_KEX_ECDH_REPLY(MSG_KEX_ECDH_REPLY msg) {
+    Uint8List fingerprint;
+    if (tracePrint != null) {
+      tracePrint('$hostport: MSG_KEX_ECDH_REPLY for ECDH');
+    }
+    if (!acceptedHostkey) fingerprint = msg.kS;
+
+    K = ecdh.computeSecret(msg.qS);
+    if (!computeExchangeHashAndVerifyHostKey(msg.kS, msg.hSig)) {
+      throw FormatException('$hostport: verify hostkey failed');
+    }
+
+    return fingerprint;
+  }
+
+  void handleDhGroupMSG_KEX_DH_GEX_GROUP(MSG_KEX_DH_GEX_GROUP msg) {
+    if (tracePrint != null) {
+      tracePrint('$hostport: MSG_KEX_DH_GEX_GROUP');
+    }
+    dh = DiffieHellman(msg.p, msg.g, 256);
+    dh.generatePair(random);
+    writeClearOrEncrypted(MSG_KEX_DH_GEX_INIT(dh.e));
   }
 
   Uint8List handleDhMSG_KEXDH_REPLY(MSG_KEXDH_REPLY msg) {
@@ -619,10 +680,41 @@ class SSHClient {
         'session', sessionChannel.localId, initialWindowSize, maxPacketSize));
   }
 
+  void handleMSG_USERAUTH_INFO_REQUEST(MSG_USERAUTH_INFO_REQUEST msg) {
+    if (tracePrint != null) {
+      tracePrint(
+          '$hostport: MSG_USERAUTH_INFO_REQUEST prompts=${msg.prompts.length}');
+    }
+    if (msg.instruction.isNotEmpty) {
+      if (tracePrint != null) {
+        tracePrint('$hostport: instruction: ${msg.instruction}');
+      }
+      response(msg.instruction);
+    }
+
+    for (MapEntry<String, int> prompt in msg.prompts) {
+      if (tracePrint != null) {
+        tracePrint('$hostport: prompt: ${prompt.key}');
+      }
+      response(prompt.key);
+    }
+
+    if (msg.prompts.isNotEmpty) {
+      passwordPrompts = msg.prompts.length;
+      loadPassword();
+    } else {
+      writeCipher(MSG_USERAUTH_INFO_RESPONSE(List<Uint8List>()));
+    }
+  }
+
   void handleMSG_GLOBAL_REQUEST(MSG_GLOBAL_REQUEST msg) {
     if (tracePrint != null) {
       tracePrint('$hostport: MSG_GLOBAL_REQUEST request=${msg.request}');
     }
+  }
+
+  void handleMSG_CHANNEL_OPEN(MSG_CHANNEL_OPEN msg) {
+    /**/
   }
 
   void handleMSG_CHANNEL_OPEN_CONFIRMATION(MSG_CHANNEL_OPEN_CONFIRMATION msg) {
@@ -751,6 +843,25 @@ class SSHClient {
     if (tracePrint != null) {
       tracePrint(
           '$hostport: MSG_CHANNEL_REQUEST ${msg.requestType} wantReply=${msg.wantReply}');
+    }
+  }
+
+  void handleMSG_DISCONNECT(MSG_DISCONNECT msg) {
+    if (tracePrint != null) {
+      tracePrint(
+          '$hostport: MSG_DISCONNECT ${msg.reasonCode} ${msg.description}');
+    }
+  }
+
+  void handleMSG_IGNORE(MSG_IGNORE msg) {
+    if (tracePrint != null) {
+      tracePrint('$hostport: MSG_IGNORE');
+    }
+  }
+
+  void handleMSG_DEBUG(MSG_DEBUG msg) {
+    if (tracePrint != null) {
+      tracePrint('$hostport: MSG_DEBUG ${msg.message}');
     }
   }
 

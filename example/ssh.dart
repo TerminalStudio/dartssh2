@@ -41,8 +41,8 @@ void main(List<String> arguments) async {
         hostport: 'ssh://' + host + (port != null ? ':$port' : ':22'),
         user: login,
         print: print,
-        debugPrint: ((args['debug'] ?? false) ? print : null),
-        tracePrint: ((args['trace'] ?? false) ? print : null),
+        debugPrint: ((args['debug'] != null) ? print : null),
+        tracePrint: ((args['trace'] != null) ? print : null),
         response: (String v) => stdout.write(v),
         );
 

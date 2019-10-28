@@ -6,14 +6,22 @@ import 'dart:typed_data';
 
 import 'package:convert/convert.dart';
 import 'package:pointycastle/api.dart' hide Signature;
+import 'package:pointycastle/asymmetric/api.dart' as asymmetric;
 import 'package:pointycastle/block/aes_fast.dart';
 import 'package:pointycastle/block/modes/cbc.dart';
 import 'package:pointycastle/block/modes/ctr.dart';
 import 'package:pointycastle/digests/md5.dart';
 import 'package:pointycastle/digests/sha1.dart';
 import 'package:pointycastle/digests/sha256.dart';
+import 'package:pointycastle/digests/sha384.dart';
 import 'package:pointycastle/digests/sha512.dart';
+import 'package:pointycastle/ecc/api.dart';
+import 'package:pointycastle/ecc/curves/secp256r1.dart';
+import 'package:pointycastle/ecc/curves/secp384r1.dart';
+import 'package:pointycastle/ecc/curves/secp521r1.dart';
 import 'package:pointycastle/macs/hmac.dart';
+import 'package:pointycastle/signers/ecdsa_signer.dart';
+import 'package:pointycastle/signers/rsa_signer.dart';
 import 'package:pointycastle/src/utils.dart';
 import 'package:pointycastle/stream/ctr.dart';
 import 'package:tweetnacl/tweetnacl.dart';
@@ -163,6 +171,45 @@ class KEX {
       id == ECDH_SHA2_NISTP256 ||
       id == ECDH_SHA2_NISTP384 ||
       id == ECDH_SHA2_NISTP521;
+
+  static ECDomainParameters ellipticCurve(int id) {
+    switch (id) {
+      case ECDH_SHA2_NISTP256:
+        return ECCurve_secp256r1();
+      case ECDH_SHA2_NISTP384:
+        return ECCurve_secp384r1();
+      case ECDH_SHA2_NISTP521:
+        return ECCurve_secp521r1();
+      default:
+        return null;
+    }
+  }
+
+  static int ellipticCurveSecretBits(int id) {
+    switch (id) {
+      case ECDH_SHA2_NISTP256:
+        return 256;
+      case ECDH_SHA2_NISTP384:
+        return 384;
+      case ECDH_SHA2_NISTP521:
+        return 521;
+      default:
+        return null;
+    }
+  }
+
+  static Digest ellipticCurveHash(int id) {
+    switch (id) {
+      case ECDH_SHA2_NISTP256:
+        return SHA256Digest();
+      case ECDH_SHA2_NISTP384:
+        return SHA384Digest();
+      case ECDH_SHA2_NISTP521:
+        return SHA512Digest();
+      default:
+        return null;
+    }
+  }
 
   static bool diffieHellmanGroupExchange(int id) =>
       id == DHGEX_SHA256 || id == DHGEX_SHA1;
@@ -420,7 +467,7 @@ class Compression {
 class RSAKey with Serializable {
   String formatId = 'ssh-rsa';
   BigInt e, n;
-  RSAKey(this.e, this.n);
+  RSAKey([this.e, this.n]);
 
   @override
   int get serializedHeaderSize => 3 * 4;
@@ -448,7 +495,7 @@ class RSAKey with Serializable {
 class RSASignature with Serializable {
   String formatId = 'ssh-rsa';
   Uint8List sig;
-  RSASignature(this.sig);
+  RSASignature([this.sig]);
 
   @override
   int get serializedHeaderSize => 4 * 2 + 7;
@@ -473,7 +520,7 @@ class RSASignature with Serializable {
 class ECDSAKey with Serializable {
   String formatId, curveId;
   Uint8List q;
-  ECDSAKey(this.formatId, this.curveId, this.q);
+  ECDSAKey([this.formatId, this.curveId, this.q]);
 
   @override
   int get serializedHeaderSize => 3 * 4;
@@ -501,7 +548,7 @@ class ECDSAKey with Serializable {
 class ECDSASignature with Serializable {
   String formatId;
   BigInt r, s;
-  ECDSASignature(this.formatId, this.r, this.s);
+  ECDSASignature([this.formatId, this.r, this.s]);
 
   @override
   int get serializedHeaderSize => 4 * 4;
@@ -586,7 +633,7 @@ class Ed25519Signature with Serializable {
 class DiffieHellman {
   int gexMin = 1024, gexMax = 8192, gexPref = 2048, secretBits;
   BigInt g, p, x, e, f;
-  DiffieHellman();
+  DiffieHellman([this.p, this.g, this.secretBits]);
 
   /// https://tools.ietf.org/html/rfc2409 Second Oakley Group
   DiffieHellman.group1()
@@ -996,13 +1043,32 @@ class DiffieHellman {
 }
 
 class EllipticCurveDiffieHellman {
-  /*ECDef curveId;*/
-  /*ECPair pair=0;
-  ECGroup g=0;
-  ECPoint c=0, s=0;*/
-  String cText, sText;
-  /*bool GeneratePair(ECDef curve, BigNumContext ctx);
-  bool ComputeSecret(BigNum *K, BigNumContext ctx);*/
+  ECDomainParameters curve;
+  int secretBits;
+  BigInt x;
+  ECPoint c, s;
+  Uint8List cText, sText;
+  EllipticCurveDiffieHellman([this.curve, this.secretBits]);
+
+  void generatePair(Random random) {
+    x = decodeBigInt(randBits(random, secretBits)) % curve.n;
+    assert(x != BigInt.zero);
+    c = curve.G * x;
+    cText = c.getEncoded();
+    /*BigInt xx = c.x.toBigInteger();
+    cText = Uint8List(4 + mpIntLength(xx));
+    serializeMpInt(SerializableOutput(cText), xx);*/
+    cText = viewUint8List(cText, 1, cText.length - 1);
+    print(
+        'hello hmm ${cText.length} ${hex.encode(encodeBigInt(x))} and ${hex.encode(cText)}');
+  }
+
+  BigInt computeSecret(Uint8List sText) {
+    print('here we compute');
+    this.sText = sText;
+    s = curve.curve.decodePoint(sText);
+    return (s * x).x.toBigInteger();
+  }
 }
 
 class X25519DiffieHellman {
@@ -1096,8 +1162,8 @@ Uint8List computeExchangeHash(
     H.update(x25519dh.myPubKey);
     H.update(x25519dh.remotePubKey);
   } else if (KEX.ellipticCurveDiffieHellman(kexMethod)) {
-    H.updateString(ecdh.cText);
-    H.updateString(ecdh.sText);
+    H.update(ecdh.cText);
+    H.update(ecdh.sText);
   } else {
     H.updateBigInt(dh.e);
     H.updateBigInt(dh.f);
@@ -1109,9 +1175,23 @@ Uint8List computeExchangeHash(
 bool verifyHostKey(
     Uint8List hText, int hostkeyType, Uint8List key, Uint8List sig) {
   if (hostkeyType == Key.RSA) {
-    throw FormatException('not yet ported');
+    RSAKey keyMsg = RSAKey()..deserialize(SerializableInput(key));
+    RSASignature sigMsg = RSASignature()..deserialize(SerializableInput(sig));
+    RSASigner rsa = RSASigner(SHA1Digest(), '06052b0e03021a');
+    rsa.init(
+        false, PublicKeyParameter(asymmetric.RSAPublicKey(keyMsg.n, keyMsg.e)));
+    return rsa.verifySignature(hText, asymmetric.RSASignature(sigMsg.sig));
   } else if (Key.ellipticCurveDSA(hostkeyType)) {
-    throw FormatException('not yet ported');
+    ECDSAKey keyMsg = ECDSAKey()..deserialize(SerializableInput(key));
+    ECDSASignature sigMsg = ECDSASignature()
+      ..deserialize(SerializableInput(sig));
+    ECDSASigner ecdsa = ECDSASigner(KEX.ellipticCurveHash(hostkeyType));
+    ECDomainParameters curve = KEX.ellipticCurve(hostkeyType);
+    ecdsa.init(
+        false,
+        PublicKeyParameter(
+            ECPublicKey(curve.curve.decodePoint(keyMsg.q), curve)));
+    return ecdsa.verifySignature(hText, ECSignature(sigMsg.r, sigMsg.s));
   } else if (hostkeyType == Key.ED25519) {
     Ed25519Key keyMsg = Ed25519Key()..deserialize(SerializableInput(key));
     Ed25519Signature sigMsg = Ed25519Signature()

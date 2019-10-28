@@ -52,6 +52,10 @@ Uint8List randBytes(Random generator, int n) {
   return random;
 }
 
+/// Returns at least [n] random bits.
+Uint8List randBits(Random generator, int n) =>
+    randBytes(generator, (n + 7) ~/ 8);
+
 class BinaryPacket {
   static const int headerSize = 5;
   final int length, padding;
@@ -397,7 +401,7 @@ class MSG_KEX_DH_GEX_REQUEST extends SSHMessage {
 class MSG_KEX_DH_GEX_GROUP extends SSHMessage {
   static const int ID = 31;
   BigInt p, g;
-  MSG_KEX_DH_GEX_GROUP(this.p, this.g) : super(ID);
+  MSG_KEX_DH_GEX_GROUP([this.p, this.g]) : super(ID);
 
   @override
   int get serializedHeaderSize => 4 * 2;
