@@ -1179,7 +1179,11 @@ bool verifyHostKey(
     RSASignature sigMsg = RSASignature()..deserialize(SerializableInput(sig));
     RSASigner rsa = RSASigner(SHA1Digest(), '06052b0e03021a');
     rsa.init(
-        false, PublicKeyParameter(asymmetric.RSAPublicKey(keyMsg.n, keyMsg.e)));
+        false,
+        ParametersWithRandom(
+            PublicKeyParameter<asymmetric.RSAPublicKey>(
+                asymmetric.RSAPublicKey(keyMsg.n, keyMsg.e)),
+            null));
     return rsa.verifySignature(hText, asymmetric.RSASignature(sigMsg.sig));
   } else if (Key.ellipticCurveDSA(hostkeyType)) {
     ECDSAKey keyMsg = ECDSAKey()..deserialize(SerializableInput(key));

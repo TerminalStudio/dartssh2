@@ -1,16 +1,97 @@
 // Copyright 2019 dartssh developers
 // Use of this source code is governed by a MIT-style license that can be found in the LICENSE file.
 
+import 'dart:convert';
 import 'dart:typed_data';
+
+import 'package:asn1lib/asn1lib.dart';
+import 'package:convert/convert.dart';
 
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/serializable.dart';
 
 class PEM {
-  String text;
-  PEM(this.text);
+  String type;
+  OpenSSHKey key;
+  RSAPrivateKey rsaPrivateKey;
 
-  String parseHeader() {}
+  PEM(String text) {
+    const String beginText = '-----BEGIN ',
+        endText = '-----END ',
+        termText = '-----';
+    int beginBegin, beginEnd, endBegin, endEnd;
+    if ((beginBegin = text.indexOf(beginText)) == -1) {
+      throw FormatException('missing $beginText');
+    }
+    if ((beginEnd = text.indexOf(termText, beginBegin + beginText.length)) ==
+        -1) {
+      throw FormatException('missing $termText');
+    }
+    if ((endBegin = text.indexOf(endText, beginEnd + termText.length)) == -1) {
+      throw FormatException('missing $endText');
+    }
+    if ((endEnd = text.indexOf(termText, endBegin + endText.length)) == -1) {
+      throw FormatException('missing $termText');
+    }
+
+    type = text.substring(beginBegin + beginText.length, beginEnd);
+    if (type != text.substring(endBegin + endText.length, endEnd)) {
+      throw FormatException('type disagreement: $type');
+    }
+
+    int start = beginEnd + termText.length, end = endBegin;
+    if (start < text.length && text[start] == '\r') start++;
+    if (start < text.length && text[start] == '\n') start++;
+
+    int headersEnd = text.indexOf('\n\n', start);
+    if (headersEnd == -1 || headersEnd >= end) {
+      headersEnd = text.indexOf('\r\n\r\n', start);
+    }
+    if (headersEnd != -1 && headersEnd < end) {
+      throw FormatException('headers not supported');
+    }
+
+    String base64text = '';
+    for (String line in LineSplitter().convert(text.substring(start, end))) {
+      base64text += line.trim();
+    }
+    Uint8List payload = base64.decode(base64text);
+
+    if (type == 'OPENSSH PRIVATE KEY') {
+      key = OpenSSHKey()..deserialize(SerializableInput(payload));
+    } else if (type == 'RSA PRIVATE KEY') {
+      rsaPrivateKey = RSAPrivateKey()..deserialize(SerializableInput(payload));
+    } else {
+      throw FormatException('type not supported: $type');
+    }
+  }
+}
+
+/// https://tools.ietf.org/html/rfc3447#appendix-A.1.2
+class RSAPrivateKey extends Serializable {
+  BigInt version, n, e, d, p, q, exponent1, exponent2, coefficient;
+
+  @override
+  int get serializedSize => null;
+
+  /// https://gist.github.com/proteye/982d9991922276ccfb011dfc55443d74
+  @override
+  void deserialize(SerializableInput input) {
+    ASN1Parser asn1Parser = ASN1Parser(input.viewRemaining());
+    ASN1Sequence pkSeq = asn1Parser.nextObject();
+    version = (pkSeq.elements[0] as ASN1Integer).valueAsBigInteger;
+    n = (pkSeq.elements[1] as ASN1Integer).valueAsBigInteger;
+    e = (pkSeq.elements[2] as ASN1Integer).valueAsBigInteger;
+    d = (pkSeq.elements[3] as ASN1Integer).valueAsBigInteger;
+    p = (pkSeq.elements[4] as ASN1Integer).valueAsBigInteger;
+    q = (pkSeq.elements[5] as ASN1Integer).valueAsBigInteger;
+    exponent1 = (pkSeq.elements[6] as ASN1Integer).valueAsBigInteger;
+    exponent2 = (pkSeq.elements[7] as ASN1Integer).valueAsBigInteger;
+    coefficient = (pkSeq.elements[8] as ASN1Integer).valueAsBigInteger;
+  }
+
+  @override
+  void serialize(SerializableOutput output) {}
 }
 
 class OpenSSHKey extends Serializable {

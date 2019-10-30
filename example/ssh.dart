@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:args/args.dart';
 
 import 'package:dartssh/client.dart';
+import 'package:dartssh/pem.dart';
 
 void main(List<String> arguments) async {
   exitCode = 0;
@@ -14,6 +15,7 @@ void main(List<String> arguments) async {
   final argParser = ArgParser()
     ..addOption('login', abbr: 'l')
     ..addOption('port', abbr: 'p')
+    ..addOption('identity', abbr: 'i')
     ..addOption('debug')
     ..addOption('trace');
 
@@ -29,11 +31,16 @@ void main(List<String> arguments) async {
   final String host = args.rest.first;
   final String port = args['port'];
   final String login = args['login'];
+  final String identity = args['identity'];
 
   if (login == null || login.isEmpty) {
     print('no login specified');
     exitCode = 1;
     return;
+  }
+
+  if (identity != null) {
+    PEM pem = PEM(File(identity).readAsStringSync());
   }
 
   try {

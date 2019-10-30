@@ -3,6 +3,11 @@
 
 import 'dart:typed_data';
 
+/// Rounds [input] up to the nearest [n]th.
+int nextMultipleOfN(int input, int n) =>
+    (input % n != 0) ? (input ~/ n + 1) * n : input;
+
+/// Returns concatenation of [x] and [y].
 Uint8List appendUint8List(Uint8List x, Uint8List y) =>
     Uint8List.fromList(x + y);
 
@@ -19,9 +24,7 @@ bool equalUint8List(Uint8List x, Uint8List y) {
   return true;
 }
 
-int nextMultipleOfN(int input, int n) =>
-    (input % n != 0) ? (input ~/ n + 1) * n : input;
-
+/// A [Uint8List] deque for consuming binary protocol.
 class QueueBuffer {
   Uint8List data;
   QueueBuffer(this.data);
@@ -30,6 +33,7 @@ class QueueBuffer {
   void flush(int x) => data = data.sublist(x);
 }
 
+/// Base class for advancing [offset] view of Uint8List [data].
 abstract class SerializableBuffer {
   int offset = 0;
   final Uint8List buffer;
@@ -43,6 +47,7 @@ abstract class SerializableBuffer {
   int get remaining => buffer.length - offset;
 
   Uint8List view() => viewOffset(0, offset);
+  Uint8List viewRemaining() => viewOffset(offset, buffer.length);
   Uint8List viewOffset(int start, int end) =>
       viewUint8List(buffer, start, end - start);
 }
@@ -109,6 +114,7 @@ class SerializableOutput extends SerializableBuffer {
   }
 }
 
+// Interface implemented by serializable objects.
 abstract class Serializable {
   /// Minimum size for this serialized object.
   int get serializedHeaderSize => null;

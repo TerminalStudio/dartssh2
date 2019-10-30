@@ -8,6 +8,7 @@ environment:
   sdk: ">=2.1.0 <3.0.0"
 
 dependencies:
+  asn1lib: ^0.5.11
   meta: ^1.1.6
   pedantic: ^1.8.0
   pointycastle: ^1.0.1

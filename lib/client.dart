@@ -20,6 +20,7 @@ import 'package:dartssh/socket.dart';
 import 'package:dartssh/socket_html.dart'
     if (dart.library.io) 'package:dartssh/socket_io.dart';
 import 'package:dartssh/ssh.dart';
+import 'package:dartssh/zlib.dart';
 
 typedef VoidCallback = void Function();
 typedef StringCallback = void Function(String);
@@ -137,8 +138,8 @@ class SSHClient {
       maxPacketSize = 32768,
       termWidth = 80,
       termHeight = 25;
-  ZLibDecoder zreader;
-  ZLibEncoder zwriter;
+  dynamic zreader;
+  dynamic zwriter;
   HashMap<int, Forward> forwardingRemote;
 
   SSHClient(
@@ -262,18 +263,11 @@ class SSHClient {
       }
 
       Uint8List packet = encrypted ? decryptBuf : readBuffer.data;
+      packetS = SerializableInput(viewUint8List(packet, BinaryPacket.headerSize,
+          packetLen - BinaryPacket.headerSize - packetMacLen - padding));
       if (zreader != null) {
-        packetS = SerializableInput(zreader.convert(viewUint8List(
-            packet,
-            BinaryPacket.headerSize,
-            BinaryPacket.headerSize - packetMacLen - padding)));
-      } else {
-        packetS = SerializableInput(viewUint8List(
-            packet,
-            BinaryPacket.headerSize,
-            packetLen - BinaryPacket.headerSize - packetMacLen - padding));
+        packetS = SerializableInput(zreader.convert(packetS.buffer));
       }
-
       handlePacket(packet);
       readBuffer.flush(packetLen);
       packetLen = 0;
@@ -673,8 +667,14 @@ class SSHClient {
     channels[nextChannelId] = sessionChannel;
     nextChannelId++;
 
-    if (compressIdC2s == Compression.OpenSSHZLib) zreader = ZLibDecoder();
-    if (compressIdS2c == Compression.OpenSSHZLib) zwriter = ZLibEncoder();
+    if (compressIdC2s == Compression.OpenSSHZLib) {
+      // zwriter = ArchiveDeflateWriter();
+      throw FormatException('compression not supported');
+    }
+    if (compressIdS2c == Compression.OpenSSHZLib) {
+      // zreader = ArchiveInflateReader();
+      throw FormatException('compression not supported');
+    }
     if (success != null) success();
     writeCipher(MSG_CHANNEL_OPEN.create(
         'session', sessionChannel.localId, initialWindowSize, maxPacketSize));

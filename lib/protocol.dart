@@ -70,7 +70,7 @@ abstract class SSHMessage extends Serializable {
   int id;
   SSHMessage(this.id);
 
-  Uint8List toBytes(ZLibEncoder zlib, Random random, int blockSize) {
+  Uint8List toBytes(dynamic zlib, Random random, int blockSize) {
     Uint8List payload = Uint8List(serializedSize + 1);
     SerializableOutput output = SerializableOutput(payload);
     output.addUint8(id);
