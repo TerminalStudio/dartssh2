@@ -1,7 +1,6 @@
 // Copyright 2019 dartssh developers
 // Use of this source code is governed by a MIT-style license that can be found in the LICENSE file.
 
-import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -65,7 +64,7 @@ class BinaryPacket {
         padding = input.getUint8();
 }
 
-/// Binary Packet Protocol.
+/// Binary Packet Protocol. https://tools.ietf.org/html/rfc4253#section-6
 abstract class SSHMessage extends Serializable {
   int id;
   SSHMessage(this.id);
@@ -213,6 +212,7 @@ class MSG_SERVICE_ACCEPT extends SSHMessage {
 }
 
 /// Key exchange begins by each side sending the following packet.
+/// https://tools.ietf.org/html/rfc4253#section-7.1
 class MSG_KEXINIT extends SSHMessage {
   static const int ID = 20;
   Uint8List cookie;
@@ -311,6 +311,7 @@ class MSG_KEXINIT extends SSHMessage {
 /// Key exchange ends by each side sending an SSH_MSG_NEWKEYS message.
 /// This message is sent with the old keys and algorithms.  All messages
 /// sent after this message MUST use the new keys and algorithms.
+/// https://tools.ietf.org/html/rfc4253#section-7.3
 class MSG_NEWKEYS extends SSHMessage {
   static const int ID = 21;
   MSG_NEWKEYS() : super(ID);
@@ -328,7 +329,8 @@ class MSG_NEWKEYS extends SSHMessage {
   void deserialize(SerializableInput input) {}
 }
 
-/// First, the client sends the following.
+/// Diffie-Hellman Key Exchange.
+/// https://tools.ietf.org/html/rfc4253#section-8
 class MSG_KEXDH_INIT extends SSHMessage {
   static const int ID = 30;
   BigInt e;

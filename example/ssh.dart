@@ -31,16 +31,13 @@ void main(List<String> arguments) async {
   final String host = args.rest.first;
   final String port = args['port'];
   final String login = args['login'];
-  final String identity = args['identity'];
+  final String identityFile = args['identity'];
+  Identity identity;
 
   if (login == null || login.isEmpty) {
     print('no login specified');
     exitCode = 1;
     return;
-  }
-
-  if (identity != null) {
-    PEM pem = PEM(File(identity).readAsStringSync());
   }
 
   try {
@@ -51,14 +48,18 @@ void main(List<String> arguments) async {
         debugPrint: ((args['debug'] != null) ? print : null),
         tracePrint: ((args['trace'] != null) ? print : null),
         response: (String v) => stdout.write(v),
-        );
+        loadIdentity: () {
+          if (identity == null && identityFile != null) {
+            identity = parsePem(File(identityFile).readAsStringSync());
+          }
+          return identity;
+        });
 
     stdin.lineMode = false;
     stdin.echoMode = false;
     await for (String input in stdin.transform(utf8.decoder)) {
       ssh.sendChannelData(utf8.encode(input));
     }
-
   } catch (error, stacktrace) {
     print('ssh: exception: $error: $stacktrace');
     exitCode = -1;

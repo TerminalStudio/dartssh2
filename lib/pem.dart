@@ -5,65 +5,106 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:asn1lib/asn1lib.dart';
-import 'package:convert/convert.dart';
+import 'package:pointycastle/api.dart' hide Signature;
+import 'package:pointycastle/asymmetric/api.dart' as asymmetric;
+import 'package:tweetnacl/tweetnacl.dart' as tweetnacl;
 
+import 'package:dartssh/client.dart';
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/serializable.dart';
+import 'package:dartssh/ssh.dart';
 
-class PEM {
-  String type;
-  OpenSSHKey key;
-  RSAPrivateKey rsaPrivateKey;
+Identity parsePem(String text, {StringFunction getPassword}) {
+  const String beginText = '-----BEGIN ',
+      endText = '-----END ',
+      termText = '-----';
+  int beginBegin, beginEnd, endBegin, endEnd;
+  if ((beginBegin = text.indexOf(beginText)) == -1) {
+    throw FormatException('missing $beginText');
+  }
+  if ((beginEnd = text.indexOf(termText, beginBegin + beginText.length)) ==
+      -1) {
+    throw FormatException('missing $termText');
+  }
+  if ((endBegin = text.indexOf(endText, beginEnd + termText.length)) == -1) {
+    throw FormatException('missing $endText');
+  }
+  if ((endEnd = text.indexOf(termText, endBegin + endText.length)) == -1) {
+    throw FormatException('missing $termText');
+  }
 
-  PEM(String text) {
-    const String beginText = '-----BEGIN ',
-        endText = '-----END ',
-        termText = '-----';
-    int beginBegin, beginEnd, endBegin, endEnd;
-    if ((beginBegin = text.indexOf(beginText)) == -1) {
-      throw FormatException('missing $beginText');
-    }
-    if ((beginEnd = text.indexOf(termText, beginBegin + beginText.length)) ==
-        -1) {
-      throw FormatException('missing $termText');
-    }
-    if ((endBegin = text.indexOf(endText, beginEnd + termText.length)) == -1) {
-      throw FormatException('missing $endText');
-    }
-    if ((endEnd = text.indexOf(termText, endBegin + endText.length)) == -1) {
-      throw FormatException('missing $termText');
-    }
+  String type = text.substring(beginBegin + beginText.length, beginEnd);
+  if (type != text.substring(endBegin + endText.length, endEnd)) {
+    throw FormatException('type disagreement: $type');
+  }
 
-    type = text.substring(beginBegin + beginText.length, beginEnd);
-    if (type != text.substring(endBegin + endText.length, endEnd)) {
-      throw FormatException('type disagreement: $type');
-    }
+  int start = beginEnd + termText.length, end = endBegin;
+  if (start < text.length && text[start] == '\r') start++;
+  if (start < text.length && text[start] == '\n') start++;
 
-    int start = beginEnd + termText.length, end = endBegin;
-    if (start < text.length && text[start] == '\r') start++;
-    if (start < text.length && text[start] == '\n') start++;
+  int headersEnd = text.indexOf('\n\n', start);
+  if (headersEnd == -1 || headersEnd >= end) {
+    headersEnd = text.indexOf('\r\n\r\n', start);
+  }
+  if (headersEnd != -1 && headersEnd < end) {
+    throw FormatException('headers not supported');
+  }
 
-    int headersEnd = text.indexOf('\n\n', start);
-    if (headersEnd == -1 || headersEnd >= end) {
-      headersEnd = text.indexOf('\r\n\r\n', start);
-    }
-    if (headersEnd != -1 && headersEnd < end) {
-      throw FormatException('headers not supported');
-    }
+  String base64text = '';
+  for (String line in LineSplitter().convert(text.substring(start, end))) {
+    base64text += line.trim();
+  }
+  Uint8List payload = base64.decode(base64text);
 
-    String base64text = '';
-    for (String line in LineSplitter().convert(text.substring(start, end))) {
-      base64text += line.trim();
-    }
-    Uint8List payload = base64.decode(base64text);
+  switch (type) {
+    case 'OPENSSH PRIVATE KEY':
+      OpenSSHKey openssh = OpenSSHKey()
+        ..deserialize(SerializableInput(payload));
+      Uint8List privateKey;
+      switch (openssh.kdfname) {
+        case 'bcrypt':
+          OpenSSHBCryptKDFOptions kdfoptions = OpenSSHBCryptKDFOptions()
+            ..deserialize(SerializableInput(openssh.kdfoptions));
+          int cipherAlgo;
+          if (openssh.ciphername == 'aes256-cbc') {
+            cipherAlgo = Cipher.AES256_CBC;
+          } else {
+            throw FormatException('cipher ${openssh.ciphername}');
+          }
+          privateKey = opensshKeyCrypt(
+              false,
+              (getPassword != null ? getPassword() : '').codeUnits,
+              kdfoptions.salt,
+              kdfoptions.rounds,
+              openssh.privatekey,
+              cipherAlgo);
+          break;
 
-    if (type == 'OPENSSH PRIVATE KEY') {
-      key = OpenSSHKey()..deserialize(SerializableInput(payload));
-    } else if (type == 'RSA PRIVATE KEY') {
-      rsaPrivateKey = RSAPrivateKey()..deserialize(SerializableInput(payload));
-    } else {
+        case 'none':
+          privateKey = openssh.privatekey;
+          break;
+
+        default:
+          throw FormatException('kdf ${openssh.kdfname}');
+      }
+      SerializableInput input = SerializableInput(privateKey);
+      OpenSSHPrivateKeyHeader().deserialize(input);
+      OpenSSHEd25519PrivateKey ed25519 = OpenSSHEd25519PrivateKey()
+        ..deserialize(input);
+      Identity ret = Identity()
+        ..ed25519 = tweetnacl.Signature.keyPair_fromSecretKey(ed25519.privkey);
+      assert(equalUint8List(ret.ed25519.publicKey, ed25519.pubkey));
+      return ret;
+
+    case 'RSA PRIVATE KEY':
+      RSAPrivateKey rsaPrivateKey = RSAPrivateKey()
+        ..deserialize(SerializableInput(payload));
+      return Identity()
+        ..rsa = asymmetric.RSAPrivateKey(
+            rsaPrivateKey.n, rsaPrivateKey.e, rsaPrivateKey.p, rsaPrivateKey.q);
+
+    default:
       throw FormatException('type not supported: $type');
-    }
   }
 }
 
@@ -95,8 +136,9 @@ class RSAPrivateKey extends Serializable {
 }
 
 class OpenSSHKey extends Serializable {
-  String magic = 'openssh-key-v1', ciphername, kdfname, kdfoptions, privatekey;
-  List<String> publickeys;
+  String magic = 'openssh-key-v1', ciphername, kdfname;
+  Uint8List kdfoptions, privatekey;
+  List<Uint8List> publickeys;
   OpenSSHKey([this.ciphername, this.kdfname, this.kdfoptions, this.privatekey]);
 
   @override
@@ -119,12 +161,12 @@ class OpenSSHKey extends Serializable {
 
     ciphername = deserializeString(input);
     kdfname = deserializeString(input);
-    kdfoptions = deserializeString(input);
-    publickeys = List<String>(input.getUint32());
+    kdfoptions = deserializeStringBytes(input);
+    publickeys = List<Uint8List>(input.getUint32());
     for (int i = 0; i < publickeys.length; i++) {
-      publickeys[i] = deserializeString(input);
+      publickeys[i] = deserializeStringBytes(input);
     }
-    privatekey = deserializeString(input);
+    privatekey = deserializeStringBytes(input);
   }
 
   @override
@@ -136,7 +178,7 @@ class OpenSSHKey extends Serializable {
     serializeString(output, kdfname);
     serializeString(output, kdfoptions);
     output.addUint32(publickeys.length);
-    for (String publickey in publickeys) {
+    for (Uint8List publickey in publickeys) {
       serializeString(output, publickey);
     }
     serializeString(output, privatekey);
@@ -170,7 +212,8 @@ class OpenSSHPrivateKeyHeader extends Serializable {
 }
 
 class OpenSSHEd25519PrivateKey extends Serializable {
-  String keytype = 'ssh-ed25519', pubkey, privkey, comment;
+  String keytype = 'ssh-ed25519', comment;
+  Uint8List pubkey, privkey;
   OpenSSHEd25519PrivateKey([this.pubkey, this.privkey, this.comment]);
 
   @override
@@ -188,9 +231,9 @@ class OpenSSHEd25519PrivateKey extends Serializable {
   void deserialize(SerializableInput input) {
     keytype = deserializeString(input);
     if (keytype != 'ssh-ed25519') throw FormatException('$keytype');
-    pubkey = deserializeString(input);
+    pubkey = deserializeStringBytes(input);
     if (pubkey.length != 32) throw FormatException('${pubkey.length}');
-    privkey = deserializeString(input);
+    privkey = deserializeStringBytes(input);
     if (privkey.length != 64) throw FormatException('${privkey.length}');
     comment = deserializeString(input);
   }
@@ -205,7 +248,7 @@ class OpenSSHEd25519PrivateKey extends Serializable {
 }
 
 class OpenSSHBCryptKDFOptions extends Serializable {
-  String salt;
+  Uint8List salt;
   int rounds;
   OpenSSHBCryptKDFOptions([this.salt, this.rounds]);
 
@@ -217,7 +260,7 @@ class OpenSSHBCryptKDFOptions extends Serializable {
 
   @override
   void deserialize(SerializableInput input) {
-    salt = deserializeString(input);
+    salt = deserializeStringBytes(input);
     rounds = input.getUint32();
   }
 
@@ -226,4 +269,26 @@ class OpenSSHBCryptKDFOptions extends Serializable {
     serializeString(output, salt);
     output.addUint32(rounds);
   }
+}
+
+Uint8List opensshKeyCrypt(bool forEncryption, Uint8List password,
+    Uint8List salt, int rounds, Uint8List input, int cipherAlgo) {
+  int keySize = Cipher.keySize(cipherAlgo),
+      blockSize = Cipher.blockSize(cipherAlgo);
+  Uint8List key = bcryptPbkdf(password, salt, keySize + blockSize, rounds);
+  BlockCipher cipher = Cipher.cipher(cipherAlgo);
+  cipher.init(
+      forEncryption,
+      ParametersWithIV(KeyParameter(viewUint8List(key, 0, keySize)),
+          viewUint8List(key, keySize, blockSize)));
+  return applyBlockCipher(cipher, input);
+}
+
+Uint8List bcryptHash(Uint8List pass, Uint8List salt) {
+  throw FormatException('bcryptHash not implemented');
+}
+
+Uint8List bcryptPbkdf(
+    Uint8List password, Uint8List salt, int length, int rounds) {
+  throw FormatException('bcryptPbkdf not implemented');
 }

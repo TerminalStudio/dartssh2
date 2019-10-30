@@ -4,15 +4,17 @@
 import 'dart:math';
 import 'dart:collection';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:convert/convert.dart';
 import "package:pointycastle/api.dart";
+import 'package:pointycastle/asymmetric/api.dart';
 import 'package:pointycastle/digests/sha1.dart';
 import "package:pointycastle/digests/sha256.dart";
+import 'package:pointycastle/ecc/api.dart';
 import 'package:pointycastle/macs/hmac.dart';
 import 'package:validators/sanitizers.dart';
+import 'package:tweetnacl/tweetnacl.dart' as tweetnacl;
 
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/serializable.dart';
@@ -20,7 +22,6 @@ import 'package:dartssh/socket.dart';
 import 'package:dartssh/socket_html.dart'
     if (dart.library.io) 'package:dartssh/socket_io.dart';
 import 'package:dartssh/ssh.dart';
-import 'package:dartssh/zlib.dart';
 
 typedef VoidCallback = void Function();
 typedef StringCallback = void Function(String);
@@ -38,9 +39,9 @@ class Forward {
 }
 
 class Identity {
-  RSAKey rsa;
-  /*ECPair ec;
-  Ed25519Pair ed25519;*/
+  RSAPrivateKey rsa;
+  ECPrivateKey ecdsa;
+  tweetnacl.KeyPair ed25519;
 }
 
 class Channel {
@@ -61,6 +62,8 @@ class SSHClientState {
       NEWKEYS = 6;
 }
 
+/// The Secure Shell (SSH) is a protocol for secure remote login and
+/// other secure network services over an insecure network.
 class SSHClient {
   String hostport, user, termvar, startupCommand;
   bool compress, agentForwarding, closeOnDisconnect, startShell;
@@ -172,11 +175,13 @@ class SSHClient {
         hostport, onConnected, (error) => disconnect('connect error'));
   }
 
+  /// If anything goes wrong, disconnect with [reason].
   void disconnect(String reason) {
     socket.close();
     if (debugPrint != null) debugPrint('disconnected: ' + reason);
   }
 
+  /// Callback supplied to [socket.connect].
   void onConnected(dynamic x) {
     socket.handleError((error) => disconnect('socket error'));
     socket.handleDone((v) => disconnect('socket done'));
@@ -184,6 +189,8 @@ class SSHClient {
     handleConnected();
   }
 
+  /// When the connection has been established, both sides MUST send an identification string.
+  /// https://tools.ietf.org/html/rfc4253#section-4.2
   void handleConnected() {
     if (debugPrint != null) debugPrint('handleConnected');
     if (state != SSHClientState.INIT) throw FormatException('$state');
@@ -191,6 +198,7 @@ class SSHClient {
     sendKeyExchangeInit(false);
   }
 
+  /// Key exchange begins by each side sending SSH_MSG_KEXINIT.
   void sendKeyExchangeInit(bool guess) {
     String keyPref = Key.preferenceCsv(),
         kexPref = KEX.preferenceCsv(),
@@ -211,6 +219,7 @@ class SSHClient {
     socket.sendRaw(kexInitC);
   }
 
+  /// Callback supplied to [socket.listen].
   void handleRead(Uint8List dataChunk) {
     readBuffer.add(dataChunk);
 
@@ -266,6 +275,9 @@ class SSHClient {
       packetS = SerializableInput(viewUint8List(packet, BinaryPacket.headerSize,
           packetLen - BinaryPacket.headerSize - packetMacLen - padding));
       if (zreader != null) {
+        /// If compression has been negotiated, the 'payload' field (and only it)
+        /// will be compressed using the negotiated algorithm.
+        /// https://tools.ietf.org/html/rfc4253#section-6.2
         packetS = SerializableInput(zreader.convert(packetS.buffer));
       }
       handlePacket(packet);
@@ -274,7 +286,8 @@ class SSHClient {
     }
   }
 
-  /// Protocol Version Exchange
+  /// Consumes the initial Protocol Version Exchange.
+  /// https://tools.ietf.org/html/rfc4253#section-4.2
   void handleInitialState() {
     int processed = 0, newlineIndex;
     while ((newlineIndex =
@@ -295,6 +308,7 @@ class SSHClient {
     readBuffer.flush(processed);
   }
 
+  /// https://tools.ietf.org/html/rfc4253#section-6
   void handlePacket(Uint8List packet) {
     packetId = packetS.getUint8();
     switch (packetId) {
@@ -398,6 +412,7 @@ class SSHClient {
     }
   }
 
+  /// https://tools.ietf.org/html/rfc4253#section-7.1
   void handleMSG_KEXINIT(MSG_KEXINIT msg, Uint8List packet) {
     if (tracePrint != null) tracePrint('$hostport: MSG_KEXINIT $msg');
 
@@ -493,6 +508,7 @@ class SSHClient {
     }
   }
 
+  /// https://tools.ietf.org/html/rfc4253#section-8
   void handleMSG_KEXDH_REPLY(int packetId, Uint8List packet) {
     if (state != SSHClientState.FIRST_KEXREPLY &&
         state != SSHClientState.KEXREPLY) {
@@ -636,8 +652,8 @@ class SSHClient {
       loginPrompts = 1;
       response('login: ');
     }
-    if (loadIdentity != null) {
-      if ((identity = loadIdentity()) != null) return;
+    if (identity == null && loadIdentity != null) {
+      identity = loadIdentity();
     }
     sendAuthenticationRequest();
   }
@@ -903,12 +919,8 @@ class SSHClient {
 
   void writeCipher(SSHMessage msg) {
     sequenceNumberC2s++;
-    Uint8List m = msg.toBytes(zwriter, random, encryptBlockSize),
-        encM = Uint8List(m.length);
-    assert(m.length % encryptBlockSize == 0);
-    for (int offset = 0; offset < m.length; offset += encryptBlockSize) {
-      encrypt.processBlock(m, offset, encM, offset);
-    }
+    Uint8List m = msg.toBytes(zwriter, random, encryptBlockSize);
+    Uint8List encM = applyBlockCipher(encrypt, m);
     Uint8List mac = computeMAC(MAC.mac(macIdC2s), macLenC, m,
         sequenceNumberC2s - 1, integrityC2s, macPrefixC2s);
     socket.sendRaw(Uint8List.fromList(encM + mac));
@@ -951,17 +963,20 @@ class SSHClient {
   void sendAuthenticationRequest() {
     if (identity == null) {
       // do nothing
-    }
-    /*else if (identity->ed25519.privkey.size()) {
-      string pubkey = SSH::Ed25519Key(identity->ed25519.pubkey).ToString();
-      string challenge = SSH::DeriveChallengeText(session_id, login, "ssh-connection", "publickey", "ssh-ed25519", pubkey);
-      string sig = SSH::Ed25519Signature(Ed25519Sign(challenge, identity->ed25519.privkey)).ToString();
-      if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(login, "ssh-connection", "publickey", "ssh-ed25519", pubkey, sig)))
-        return ERRORv(-1, c->Name(), ": write");
-      return 0;
-    } else if (identity->ec) {
-    } else if (identity->rsa) {
-    }*/
+    } else if (identity.ed25519 != null) {
+      Uint8List pubkey = Ed25519Key(identity.ed25519.publicKey).toRaw();
+      Uint8List challenge = deriveChallengeText(sessionId, login,
+          'ssh-connection', 'publickey', 'ssh-ed25519', pubkey);
+      Ed25519Signature sig = Ed25519Signature(
+          tweetnacl.Signature(null, identity.ed25519.secretKey)
+              .sign(challenge)
+              .buffer
+              .asUint8List(0, 64));
+      writeCipher(MSG_USERAUTH_REQUEST(login, 'ssh-connection', 'publickey',
+          'ssh-ed25519', pubkey, sig.toRaw()));
+      return;
+    } else if (identity.ecdsa != null) {
+    } else if (identity.rsa != null) {}
     writeCipher(MSG_USERAUTH_REQUEST(login, 'ssh-connection',
         'keyboard-interactive', '', Uint8List(0), Uint8List(0)));
   }

@@ -32,6 +32,9 @@ import 'package:dartssh/serializable.dart';
 typedef NameFunction = String Function(int);
 typedef SupportedFunction = bool Function(int);
 
+/// Each of the algorithm name-lists MUST be a comma-separated list of algorithm names.
+/// Each supported (allowed) algorithm MUST be listed in order of preference, from most to least.
+/// https://tools.ietf.org/html/rfc4253#section-7.1
 String buildPreferenceCsv(
     NameFunction name, SupportedFunction supported, int end,
     [int startAfter = 0]) {
@@ -228,7 +231,11 @@ class KEX {
 }
 
 class Cipher {
-  static const int AES128_CTR = 1, AES128_CBC = 2, End = 2;
+  static const int AES128_CTR = 1,
+      AES128_CBC = 2,
+      AES256_CTR = 3,
+      AES256_CBC = 4,
+      End = 4;
 
   static int id(String name) {
     switch (name) {
@@ -236,6 +243,10 @@ class Cipher {
         return AES128_CTR;
       case 'aes128-cbc':
         return AES128_CBC;
+      case 'aes256-ctr':
+        return AES256_CTR;
+      case 'aes256-cbc':
+        return AES256_CBC;
       default:
         return 0;
     }
@@ -247,6 +258,10 @@ class Cipher {
         return 'aes128-ctr';
       case AES128_CBC:
         return 'aes128-cbc';
+      case AES256_CTR:
+        return 'aes256-ctr';
+      case AES256_CBC:
+        return 'aes256-cbc';
       default:
         return '';
     }
@@ -266,6 +281,10 @@ class Cipher {
         return 16;
       case AES128_CBC:
         return 16;
+      case AES256_CTR:
+        return 32;
+      case AES256_CBC:
+        return 32;
       default:
         throw FormatException('$id');
     }
@@ -276,6 +295,10 @@ class Cipher {
       case AES128_CTR:
         return 16;
       case AES128_CBC:
+        return 16;
+      case AES256_CTR:
+        return 16;
+      case AES256_CBC:
         return 16;
       default:
         throw FormatException('$id');
@@ -288,6 +311,11 @@ class Cipher {
         AESFastEngine aes = AESFastEngine();
         return CTRBlockCipher(aes.blockSize, CTRStreamCipher(aes));
       case AES128_CBC:
+        return CBCBlockCipher(AESFastEngine());
+      case AES256_CTR:
+        AESFastEngine aes = AESFastEngine();
+        return CTRBlockCipher(aes.blockSize, CTRStreamCipher(aes));
+      case AES256_CBC:
         return CBCBlockCipher(AESFastEngine());
       default:
         throw FormatException('$id');
@@ -630,6 +658,9 @@ class Ed25519Signature with Serializable {
   }
 }
 
+/// The Diffie-Hellman (DH) key exchange provides a shared secret that
+/// cannot be determined by either party alone.
+/// https://tools.ietf.org/html/rfc4253#section-8
 class DiffieHellman {
   int gexMin = 1024, gexMax = 8192, gexPref = 2048, secretBits;
   BigInt g, p, x, e, f;
@@ -1222,6 +1253,37 @@ Uint8List deriveKey(Digest algo, Uint8List sessionId, Uint8List hText, BigInt K,
     ret = Uint8List.fromList(ret + digest.finish());
   }
   return viewUint8List(ret, 0, bytes);
+}
+
+Uint8List deriveChallengeText(Uint8List sessionId, String userName,
+    String serviceName, String methodName, String algoName, Uint8List secret) {
+  SerializableOutput output = SerializableOutput(Uint8List(2 +
+      4 * 6 +
+      sessionId.length +
+      userName.length +
+      serviceName.length +
+      methodName.length +
+      algoName.length +
+      secret.length));
+  serializeString(output, sessionId);
+  output.addUint8(MSG_USERAUTH_REQUEST.ID);
+  serializeString(output, userName);
+  serializeString(output, serviceName);
+  serializeString(output, methodName);
+  output.addUint8(1);
+  serializeString(output, algoName);
+  serializeString(output, secret);
+  assert(output.done);
+  return output.buffer;
+}
+
+Uint8List applyBlockCipher(BlockCipher cipher, Uint8List m) {
+  Uint8List out = Uint8List(m.length);
+  assert(m.length % cipher.blockSize == 0);
+  for (int offset = 0; offset < m.length; offset += cipher.blockSize) {
+    cipher.processBlock(m, offset, out, offset);
+  }
+  return out;
 }
 
 Uint8List computeMAC(
