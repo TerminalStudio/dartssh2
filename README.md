@@ -4,12 +4,12 @@ Library providing a pure Dart SSH implementation.
 
 ## Feature support
 
-Keys: Ed25519, ECDSA, RSA.
-KEX: X25519DH, ECDH, DHGEX, DH.
-Cipher: AES-CTR, AES-CBC.
-MAC: MD5, SHA.
-Compression: not yet supported.
-Forwarding: TCP/IP, Agent.
+Keys: Ed25519, ECDSA, RSA.  
+KEX: X25519DH, ECDH, DHGEX, DH.  
+Cipher: AES-CTR, AES-CBC.  
+MAC: MD5, SHA.  
+Compression: not yet supported.  
+Forwarding: TCP/IP, Agent.  
 
 ## Example
 

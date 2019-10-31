@@ -8,6 +8,7 @@ import 'package:pointycastle/src/utils.dart';
 
 import 'package:dartssh/serializable.dart';
 
+/// Rounds [input] up to the next [n]th, if necessary.
 int nextMultipleOfN(int input, int n) =>
     (input % n != 0) ? (input ~/ n + 1) * n : input;
 
@@ -55,6 +56,7 @@ Uint8List randBytes(Random generator, int n) {
 Uint8List randBits(Random generator, int n) =>
     randBytes(generator, (n + 7) ~/ 8);
 
+/// SSH protocol frame.
 class BinaryPacket {
   static const int headerSize = 5;
   final int length, padding;
@@ -329,7 +331,7 @@ class MSG_NEWKEYS extends SSHMessage {
   void deserialize(SerializableInput input) {}
 }
 
-/// Diffie-Hellman Key Exchange.
+/// C generates a random number x (1 < x < q) and computes e = g^x mod p.  C sends e to S.
 /// https://tools.ietf.org/html/rfc4253#section-8
 class MSG_KEXDH_INIT extends SSHMessage {
   static const int ID = 30;
@@ -349,7 +351,8 @@ class MSG_KEXDH_INIT extends SSHMessage {
   void deserialize(SerializableInput input) => e = deserializeMpInt(input);
 }
 
-/// The server then responds with the following.
+/// S generates a random number y (0 < y < q) and computes f = g^y mod p.
+/// S receives e.  It computes K = e^y mod p and H.
 class MSG_KEXDH_REPLY extends SSHMessage {
   static const int ID = 31;
   Uint8List kS, hSig;
@@ -374,6 +377,9 @@ class MSG_KEXDH_REPLY extends SSHMessage {
   }
 }
 
+/// C sends "min || n || max" to S, indicating the minimal acceptable group size, the
+/// preferred size of the group, and the maximal group size in bits the client will accept.
+/// https://tools.ietf.org/html/rfc4419
 class MSG_KEX_DH_GEX_REQUEST extends SSHMessage {
   static const int ID = 34;
   int minN, maxN, n;
@@ -400,6 +406,7 @@ class MSG_KEX_DH_GEX_REQUEST extends SSHMessage {
   }
 }
 
+/// S finds a group that best matches the client's request, and sends "p || g" to C.
 class MSG_KEX_DH_GEX_GROUP extends SSHMessage {
   static const int ID = 31;
   BigInt p, g;
@@ -422,6 +429,8 @@ class MSG_KEX_DH_GEX_GROUP extends SSHMessage {
   }
 }
 
+/// C generates a random number x, where 1 < x < (p-1)/2.
+/// It computes e = g^x mod p, and sends "e" to S.
 class MSG_KEX_DH_GEX_INIT extends MSG_KEXDH_INIT {
   static const int ID = 32;
   MSG_KEX_DH_GEX_INIT([BigInt e]) : super(e) {
@@ -429,6 +438,8 @@ class MSG_KEX_DH_GEX_INIT extends MSG_KEXDH_INIT {
   }
 }
 
+/// S generates a random number y, where 0 < y < (p-1)/2, and computes
+/// f = g^y mod p.  S receives "e".  It computes K = e^y mod p, and H.
 class MSG_KEX_DH_GEX_REPLY extends MSG_KEXDH_REPLY {
   static const int ID = 33;
   MSG_KEX_DH_GEX_REPLY([BigInt f]) : super(f) {
@@ -436,6 +447,8 @@ class MSG_KEX_DH_GEX_REPLY extends MSG_KEXDH_REPLY {
   }
 }
 
+/// Client generates ephemeral key pair.
+/// https://tools.ietf.org/html/rfc5656#section-4
 class MSG_KEX_ECDH_INIT extends SSHMessage {
   static const int ID = 30;
   Uint8List qC;
@@ -455,6 +468,8 @@ class MSG_KEX_ECDH_INIT extends SSHMessage {
       qC = deserializeStringBytes(input);
 }
 
+/// Server generates ephemeral key pair, computes shared secret, and
+/// generate and signs exchange hash.
 class MSG_KEX_ECDH_REPLY extends SSHMessage {
   static const int ID = 31;
   Uint8List kS, qS, hSig;
@@ -482,6 +497,7 @@ class MSG_KEX_ECDH_REPLY extends SSHMessage {
   }
 }
 
+/// https://tools.ietf.org/html/rfc4252#section-5
 class MSG_USERAUTH_REQUEST extends SSHMessage {
   static const int ID = 50;
   String userName, serviceName, methodName, algoName;
@@ -532,6 +548,8 @@ class MSG_USERAUTH_REQUEST extends SSHMessage {
   void deserialize(SerializableInput input) {}
 }
 
+/// If the server rejects the authentication request, it MUST respond with the following:
+/// https://tools.ietf.org/html/rfc4252#section-5.1
 class MSG_USERAUTH_FAILURE extends SSHMessage {
   static const int ID = 51;
   String authLeft;
@@ -554,6 +572,7 @@ class MSG_USERAUTH_FAILURE extends SSHMessage {
   }
 }
 
+/// When the server accepts authentication, it MUST respond with the following:
 class MSG_USERAUTH_SUCCESS extends SSHMessage {
   static const int ID = 52;
   MSG_USERAUTH_SUCCESS() : super(ID);
@@ -571,6 +590,7 @@ class MSG_USERAUTH_SUCCESS extends SSHMessage {
   void deserialize(SerializableInput input) {}
 }
 
+/// https://tools.ietf.org/html/rfc4256#section-3.1
 class MSG_USERAUTH_INFO_REQUEST extends SSHMessage {
   static const int ID = 60;
   String name, instruction, language;
@@ -603,6 +623,7 @@ class MSG_USERAUTH_INFO_REQUEST extends SSHMessage {
   }
 }
 
+/// https://tools.ietf.org/html/rfc4256#section-3.4
 class MSG_USERAUTH_INFO_RESPONSE extends SSHMessage {
   static const int ID = 61;
   List<Uint8List> response;
@@ -627,6 +648,7 @@ class MSG_USERAUTH_INFO_RESPONSE extends SSHMessage {
   void deserialize(SerializableInput input) {}
 }
 
+/// https://tools.ietf.org/html/rfc4254#section-4
 class MSG_GLOBAL_REQUEST extends SSHMessage {
   static const int ID = 80;
   String request;
@@ -649,6 +671,7 @@ class MSG_GLOBAL_REQUEST extends SSHMessage {
   }
 }
 
+/// https://tools.ietf.org/html/rfc4254#section-7.1
 class MSG_GLOBAL_REQUEST_TCPIP extends SSHMessage {
   static const int ID = 80;
   String request = 'tcpip-forward', addr;
@@ -678,6 +701,7 @@ class MSG_GLOBAL_REQUEST_TCPIP extends SSHMessage {
   }
 }
 
+/// https://tools.ietf.org/html/rfc4254#section-5.1
 class MSG_CHANNEL_OPEN extends SSHMessage {
   static const int ID = 90;
   String channelType;
@@ -710,6 +734,7 @@ class MSG_CHANNEL_OPEN extends SSHMessage {
   }
 }
 
+/// https://tools.ietf.org/html/rfc4254#section-7.2
 class MSG_CHANNEL_OPEN_TCPIP extends SSHMessage {
   static const int ID = 90;
   String channelType, srcHost, dstHost;
@@ -762,6 +787,8 @@ class MSG_CHANNEL_OPEN_TCPIP extends SSHMessage {
   }
 }
 
+/// The remote side then decides whether it can open the channel, and
+/// responds with either SSH_MSG_CHANNEL_OPEN_CONFIRMATION or SSH_MSG_CHANNEL_OPEN_FAILURE.
 class MSG_CHANNEL_OPEN_CONFIRMATION extends SSHMessage {
   static const int ID = 91;
   int recipientChannel, senderChannel, initialWinSize, maximumPacketSize;
@@ -793,6 +820,7 @@ class MSG_CHANNEL_OPEN_CONFIRMATION extends SSHMessage {
   }
 }
 
+/// The client MAY show the 'description' string to the user.
 class MSG_CHANNEL_OPEN_FAILURE extends SSHMessage {
   static const int ID = 91;
   int recipientChannel = 0, reason = 0;
@@ -826,6 +854,8 @@ class MSG_CHANNEL_OPEN_FAILURE extends SSHMessage {
   }
 }
 
+/// The window size specifies how many bytes the other party can send
+/// before it must wait for the window to be adjusted.
 class MSG_CHANNEL_WINDOW_ADJUST extends SSHMessage {
   static const int ID = 93;
   int recipientChannel, bytesToAdd;
@@ -851,6 +881,7 @@ class MSG_CHANNEL_WINDOW_ADJUST extends SSHMessage {
   }
 }
 
+/// https://tools.ietf.org/html/rfc4254#section-5.2
 class MSG_CHANNEL_DATA extends SSHMessage {
   static const int ID = 94;
   int recipientChannel;
@@ -876,6 +907,7 @@ class MSG_CHANNEL_DATA extends SSHMessage {
   }
 }
 
+/// When a party will no longer send more data to a channel, it SHOULD send SSH_MSG_CHANNEL_EOF.
 class MSG_CHANNEL_EOF extends SSHMessage {
   static const int ID = 96;
   int recipientChannel;
@@ -896,6 +928,7 @@ class MSG_CHANNEL_EOF extends SSHMessage {
       recipientChannel = input.getUint32();
 }
 
+/// https://tools.ietf.org/html/rfc4254#section-5.3
 class MSG_CHANNEL_CLOSE extends SSHMessage {
   static const int ID = 97;
   int recipientChannel;
@@ -916,6 +949,7 @@ class MSG_CHANNEL_CLOSE extends SSHMessage {
       recipientChannel = input.getUint32();
 }
 
+/// Channel-Specific Requests https://tools.ietf.org/html/rfc4254#section-5.4
 class MSG_CHANNEL_REQUEST extends SSHMessage {
   static const int ID = 98;
   int recipientChannel = 0,
@@ -988,6 +1022,8 @@ class MSG_CHANNEL_REQUEST extends SSHMessage {
   }
 }
 
+/// If 'want reply' is FALSE, no response will be sent to the request. Otherwise,
+/// the recipient responds with either SSH_MSG_CHANNEL_SUCCESS, or SSH_MSG_CHANNEL_FAILURE.
 class MSG_CHANNEL_SUCCESS extends SSHMessage {
   static const int ID = 99;
   MSG_CHANNEL_SUCCESS() : super(ID);
@@ -1005,6 +1041,7 @@ class MSG_CHANNEL_SUCCESS extends SSHMessage {
   void deserialize(SerializableInput input) {}
 }
 
+/// These messages do not consume window space and can be sent even if no window space is available.
 class MSG_CHANNEL_FAILURE extends SSHMessage {
   static const int ID = 100;
   MSG_CHANNEL_FAILURE() : super(ID);
