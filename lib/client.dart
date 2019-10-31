@@ -8,14 +8,17 @@ import 'dart:typed_data';
 
 import 'package:convert/convert.dart';
 import "package:pointycastle/api.dart";
-import 'package:pointycastle/asymmetric/api.dart';
+import 'package:pointycastle/asymmetric/api.dart' as asymmetric;
 import 'package:pointycastle/digests/sha1.dart';
 import "package:pointycastle/digests/sha256.dart";
 import 'package:pointycastle/ecc/api.dart';
 import 'package:pointycastle/macs/hmac.dart';
+import 'package:pointycastle/signers/ecdsa_signer.dart';
+import 'package:pointycastle/signers/rsa_signer.dart';
 import 'package:validators/sanitizers.dart';
 import 'package:tweetnacl/tweetnacl.dart' as tweetnacl;
 
+import 'package:dartssh/agent.dart';
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/serializable.dart';
 import 'package:dartssh/socket.dart';
@@ -39,7 +42,8 @@ class Forward {
 }
 
 class Identity {
-  RSAPrivateKey rsa;
+  asymmetric.RSAPublicKey rsaPublic;
+  asymmetric.RSAPrivateKey rsaPrivate;
   ECPrivateKey ecdsa;
   tweetnacl.KeyPair ed25519;
 }
@@ -47,7 +51,7 @@ class Identity {
 class Channel {
   int localId, remoteId, windowC = 0, windowS = 0;
   bool opened = true, agentChannel = false, sentEof = false, sentClose = false;
-  Uint8List buf;
+  QueueBuffer buf = QueueBuffer(Uint8List(0));
   ChannelCallback cb;
   Channel([this.localId = 0, this.remoteId = 0]);
 }
@@ -68,6 +72,7 @@ class SSHClient {
   String hostport, user, termvar, startupCommand;
   bool compress, agentForwarding, closeOnDisconnect, startShell;
   List<Forward> forwardLocal, forwardRemote;
+  VoidCallback disconnected;
   StringCallback response, print, debugPrint, tracePrint;
   FingerprintCallback hostFingerprint;
   RemoteForwardCallback remoteForward;
@@ -156,6 +161,7 @@ class SSHClient {
       this.startShell = true,
       this.forwardLocal,
       this.forwardRemote,
+      this.disconnected,
       this.response,
       this.print,
       this.debugPrint,
@@ -179,6 +185,7 @@ class SSHClient {
   void disconnect(String reason) {
     socket.close();
     if (debugPrint != null) debugPrint('disconnected: ' + reason);
+    if (disconnected != null) disconnected();
   }
 
   /// Callback supplied to [socket.connect].
@@ -283,6 +290,18 @@ class SSHClient {
       handlePacket(packet);
       readBuffer.flush(packetLen);
       packetLen = 0;
+    }
+  }
+
+  void handleAgentRead(Channel chan, Uint8List msg) {
+    chan.buf.add(msg);
+    while (chan.buf.data.length > 4) {
+      SerializableInput input = SerializableInput(chan.buf.data);
+      int agentPacketLen = input.getUint32();
+      if (input.remaining < agentPacketLen) break;
+      handleAgentPacket(
+          SerializableInput(input.viewOffset(input.offset, agentPacketLen)));
+      chan.buf.flush(agentPacketLen + 4);
     }
   }
 
@@ -407,6 +426,26 @@ class SSHClient {
       default:
         if (print != null) {
           print('$hostport: unknown packet number: $packetId, len $packetLen');
+        }
+        break;
+    }
+  }
+
+  void handleAgentPacket(SerializableInput agentPacketS) {
+    int agentPacketId = agentPacketS.getUint8();
+    switch (agentPacketId) {
+      case AGENTC_REQUEST_IDENTITIES.ID:
+        handleAGENTC_REQUEST_IDENTITIES();
+        break;
+
+      case AGENTC_SIGN_REQUEST.ID:
+        handleAGENTC_SIGN_REQUEST(
+            AGENTC_SIGN_REQUEST()..deserialize(agentPacketS));
+        break;
+
+      default:
+        if (print != null) {
+          print('$hostport: unknown agent packet number: $agentPacketId');
         }
         break;
     }
@@ -813,7 +852,7 @@ class SSHClient {
     } else if (chan.cb != null) {
       chan.cb(chan, msg.data);
     } else if (chan.agentChannel) {
-      /**/
+      handleAgentRead(chan, msg.data);
     }
   }
 
@@ -881,6 +920,10 @@ class SSHClient {
     }
   }
 
+  void handleAGENTC_REQUEST_IDENTITIES() {}
+
+  void handleAGENTC_SIGN_REQUEST(AGENTC_SIGN_REQUEST msg) {}
+
   bool computeExchangeHashAndVerifyHostKey(Uint8List kS, Uint8List hSig) {
     hText = computeExchangeHash(kexMethod, kexHash, verC, verS, kexInitC,
         kexInitS, kS, K, dh, ecdh, x25519dh);
@@ -908,14 +951,7 @@ class SSHClient {
     return cipher;
   }
 
-  Uint8List readCipher(Uint8List m) {
-    Uint8List decM = Uint8List(m.length);
-    assert(m.length % decryptBlockSize == 0);
-    for (int offset = 0; offset < m.length; offset += encryptBlockSize) {
-      decrypt.processBlock(m, offset, decM, offset);
-    }
-    return decM;
-  }
+  Uint8List readCipher(Uint8List m) => applyBlockCipher(decrypt, m);
 
   void writeCipher(SSHMessage msg) {
     sequenceNumberC2s++;
@@ -976,7 +1012,20 @@ class SSHClient {
           'ssh-ed25519', pubkey, sig.toRaw()));
       return;
     } else if (identity.ecdsa != null) {
-    } else if (identity.rsa != null) {}
+    } else if (identity.rsaPrivate != null) {
+      Uint8List pubkey =
+          RSAKey(identity.rsaPublic.exponent, identity.rsaPublic.modulus)
+              .toRaw();
+      Uint8List challenge = deriveChallengeText(
+          sessionId, login, 'ssh-connection', 'publickey', 'ssh-rsa', pubkey);
+      RSASigner rsa = RSASigner(SHA1Digest(), '06052b0e03021a');
+      rsa.init(true,
+          PrivateKeyParameter<asymmetric.RSAPrivateKey>(identity.rsaPrivate));
+      RSASignature sig = RSASignature(rsa.generateSignature(challenge).bytes);
+      writeCipher(MSG_USERAUTH_REQUEST(login, 'ssh-connection', 'publickey',
+          'ssh-rsa', pubkey, sig.toRaw()));
+      return;
+    }
     writeCipher(MSG_USERAUTH_REQUEST(login, 'ssh-connection',
         'keyboard-interactive', '', Uint8List(0), Uint8List(0)));
   }

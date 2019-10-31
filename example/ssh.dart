@@ -53,7 +53,8 @@ void main(List<String> arguments) async {
             identity = parsePem(File(identityFile).readAsStringSync());
           }
           return identity;
-        });
+        },
+        disconnected: () => exit(0));
 
     stdin.lineMode = false;
     stdin.echoMode = false;

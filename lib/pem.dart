@@ -42,12 +42,23 @@ Identity parsePem(String text, {StringFunction getPassword}) {
   if (start < text.length && text[start] == '\r') start++;
   if (start < text.length && text[start] == '\n') start++;
 
-  int headersEnd = text.indexOf('\n\n', start);
+  String headersEndText = '\n\n', procType;
+  int headersStart = -1, headersEnd = text.indexOf(headersEndText, start);
   if (headersEnd == -1 || headersEnd >= end) {
-    headersEnd = text.indexOf('\r\n\r\n', start);
+    headersEndText = '\r\n\r\n';
+    headersEnd = text.indexOf(headersEndText, start);
   }
   if (headersEnd != -1 && headersEnd < end) {
-    throw FormatException('headers not supported');
+    headersStart = start;
+    start = headersEnd + headersEndText.length;
+    for (String header
+        in LineSplitter().convert(text.substring(headersStart, headersEnd))) {
+      if (header.startsWith('Proc-Type: ')) {
+        procType = header.substring(11);
+      } else if (header.startsWith('DEK-Info: ')) {
+        throw FormatException('not supported');
+      }
+    }
   }
 
   String base64text = '';
@@ -89,19 +100,38 @@ Identity parsePem(String text, {StringFunction getPassword}) {
       }
       SerializableInput input = SerializableInput(privateKey);
       OpenSSHPrivateKeyHeader().deserialize(input);
-      OpenSSHEd25519PrivateKey ed25519 = OpenSSHEd25519PrivateKey()
-        ..deserialize(input);
-      Identity ret = Identity()
-        ..ed25519 = tweetnacl.Signature.keyPair_fromSecretKey(ed25519.privkey);
-      assert(equalUint8List(ret.ed25519.publicKey, ed25519.pubkey));
-      return ret;
+      String type = deserializeString(SerializableInput(input.viewRemaining()));
+      switch (type) {
+        case 'ssh-ed25519':
+          OpenSSHEd25519PrivateKey ed25519 = OpenSSHEd25519PrivateKey()
+            ..deserialize(input);
+          Identity ret = Identity()
+            ..ed25519 =
+                tweetnacl.Signature.keyPair_fromSecretKey(ed25519.privkey);
+          assert(equalUint8List(ret.ed25519.publicKey, ed25519.pubkey));
+          return ret;
+
+        case 'ssh-rsa':
+          OpenSSHRSAPrivateKey rsaPrivateKey = OpenSSHRSAPrivateKey()
+            ..deserialize(input);
+          return Identity()
+            ..rsaPublic =
+                asymmetric.RSAPublicKey(rsaPrivateKey.n, rsaPrivateKey.e)
+            ..rsaPrivate = asymmetric.RSAPrivateKey(rsaPrivateKey.n,
+                rsaPrivateKey.d, rsaPrivateKey.p, rsaPrivateKey.q);
+
+        default:
+          throw FormatException('type $type');
+      }
+      break;
 
     case 'RSA PRIVATE KEY':
       RSAPrivateKey rsaPrivateKey = RSAPrivateKey()
         ..deserialize(SerializableInput(payload));
       return Identity()
-        ..rsa = asymmetric.RSAPrivateKey(
-            rsaPrivateKey.n, rsaPrivateKey.e, rsaPrivateKey.p, rsaPrivateKey.q);
+        ..rsaPublic = asymmetric.RSAPublicKey(rsaPrivateKey.n, rsaPrivateKey.e)
+        ..rsaPrivate = asymmetric.RSAPrivateKey(
+            rsaPrivateKey.n, rsaPrivateKey.d, rsaPrivateKey.p, rsaPrivateKey.q);
 
     default:
       throw FormatException('type not supported: $type');
@@ -133,8 +163,11 @@ class RSAPrivateKey extends Serializable {
 
   @override
   void serialize(SerializableOutput output) {}
+
+  String toString() => 'version: $version, n: $n, d: $d, e: $e, p: $p, q: $q';
 }
 
+/// https://github.com/openssh/openssh-portable/blob/master/PROTOCOL.key
 class OpenSSHKey extends Serializable {
   String magic = 'openssh-key-v1', ciphername, kdfname;
   Uint8List kdfoptions, privatekey;
@@ -209,6 +242,44 @@ class OpenSSHPrivateKeyHeader extends Serializable {
     output.addUint32(checkint1);
     output.addUint32(checkint2);
   }
+}
+
+class OpenSSHRSAPrivateKey extends Serializable {
+  String keytype = 'ssh-rsa', comment;
+  BigInt n, d, e, p, q;
+  OpenSSHRSAPrivateKey();
+
+  @override
+  int get serializedHeaderSize => 6 * 4;
+
+  @override
+  int get serializedSize =>
+      serializedHeaderSize +
+      mpIntLength(n) +
+      mpIntLength(d) +
+      mpIntLength(e) +
+      mpIntLength(p) +
+      mpIntLength(q);
+
+  @override
+  void deserialize(SerializableInput input) {
+    keytype = deserializeString(input);
+    if (keytype != 'ssh-rsa') throw FormatException('$keytype');
+
+    /// Couldn't find any documentation on this format.
+    n = deserializeMpInt(input);
+    e = deserializeMpInt(input);
+    d = deserializeMpInt(input);
+    deserializeMpInt(input);
+    p = deserializeMpInt(input);
+    q = deserializeMpInt(input);
+    comment = deserializeString(input);
+  }
+
+  @override
+  void serialize(SerializableOutput output) {}
+
+  String toString() => 'n: $n, d: $d, e: $e, p: $p, q: $q';
 }
 
 class OpenSSHEd25519PrivateKey extends Serializable {

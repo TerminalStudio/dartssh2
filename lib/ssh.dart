@@ -4,7 +4,6 @@
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:convert/convert.dart';
 import 'package:pointycastle/api.dart' hide Signature;
 import 'package:pointycastle/asymmetric/api.dart' as asymmetric;
 import 'package:pointycastle/block/aes_fast.dart';
@@ -1077,27 +1076,19 @@ class EllipticCurveDiffieHellman {
   ECDomainParameters curve;
   int secretBits;
   BigInt x;
-  ECPoint c, s;
   Uint8List cText, sText;
   EllipticCurveDiffieHellman([this.curve, this.secretBits]);
 
   void generatePair(Random random) {
     x = decodeBigInt(randBits(random, secretBits)) % curve.n;
     assert(x != BigInt.zero);
-    c = curve.G * x;
-    cText = c.getEncoded();
-    /*BigInt xx = c.x.toBigInteger();
-    cText = Uint8List(4 + mpIntLength(xx));
-    serializeMpInt(SerializableOutput(cText), xx);*/
-    cText = viewUint8List(cText, 1, cText.length - 1);
-    print(
-        'hello hmm ${cText.length} ${hex.encode(encodeBigInt(x))} and ${hex.encode(cText)}');
+    ECPoint c = curve.G * x;
+    cText = c.getEncoded(false);
   }
 
   BigInt computeSecret(Uint8List sText) {
-    print('here we compute');
     this.sText = sText;
-    s = curve.curve.decodePoint(sText);
+    ECPoint s = curve.curve.decodePoint(sText);
     return (s * x).x.toBigInteger();
   }
 }
