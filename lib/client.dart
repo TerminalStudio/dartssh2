@@ -13,6 +13,7 @@ import 'package:pointycastle/digests/sha1.dart';
 import "package:pointycastle/digests/sha256.dart";
 import 'package:pointycastle/ecc/api.dart';
 import 'package:pointycastle/macs/hmac.dart';
+import 'package:pointycastle/random/fortuna_random.dart';
 import 'package:pointycastle/signers/ecdsa_signer.dart';
 import 'package:pointycastle/signers/rsa_signer.dart';
 import 'package:validators/sanitizers.dart';
@@ -42,9 +43,11 @@ class Forward {
 }
 
 class Identity {
+  int keyType;
   asymmetric.RSAPublicKey rsaPublic;
   asymmetric.RSAPrivateKey rsaPrivate;
-  ECPrivateKey ecdsa;
+  ECPublicKey ecdsaPublic;
+  ECPrivateKey ecdsaPrivate;
   tweetnacl.KeyPair ed25519;
 }
 
@@ -80,6 +83,7 @@ class SSHClient {
   IdentityFunction loadIdentity;
   VoidCallback success;
   Random random;
+  SecureRandom secureRandom;
 
   String verC = 'SSH-2.0-dartssh_1.0', verS, login;
 
@@ -171,7 +175,8 @@ class SSHClient {
       this.loadIdentity,
       this.getPassword,
       this.socket,
-      this.random}) {
+      this.random,
+      this.secureRandom}) {
     socket ??= SocketImpl();
     random ??= Random.secure();
     if (debugPrint != null) {
@@ -179,6 +184,12 @@ class SSHClient {
     }
     socket.connect(
         hostport, onConnected, (error) => disconnect('connect error'));
+  }
+
+  SecureRandom getSecureRandom() {
+    if (secureRandom != null) return secureRandom;
+    return (secureRandom = FortunaRandom())
+      ..seed(KeyParameter(randBytes(random, 32)));
   }
 
   /// If anything goes wrong, disconnect with [reason].
@@ -1011,7 +1022,25 @@ class SSHClient {
       writeCipher(MSG_USERAUTH_REQUEST(login, 'ssh-connection', 'publickey',
           'ssh-ed25519', pubkey, sig.toRaw()));
       return;
-    } else if (identity.ecdsa != null) {
+    } else if (identity.ecdsaPrivate != null) {
+      String keyType = Key.name(identity.keyType),
+          curveName = Key.ellipticCurveName(identity.keyType);
+      Uint8List pubkey =
+          ECDSAKey(keyType, curveName, identity.ecdsaPublic.Q.getEncoded(false))
+              .toRaw();
+      Uint8List challenge = deriveChallengeText(
+          sessionId, login, 'ssh-connection', 'publickey', keyType, pubkey);
+      ECDSASigner ecdsa = ECDSASigner(Key.ellipticCurveHash(identity.keyType));
+      ecdsa.init(
+          true,
+          ParametersWithRandom(
+            PrivateKeyParameter(identity.ecdsaPrivate),
+            getSecureRandom(),
+          ));
+      ECSignature sig = ecdsa.generateSignature(challenge);
+      writeCipher(MSG_USERAUTH_REQUEST(login, 'ssh-connection', 'publickey',
+          keyType, pubkey, ECDSASignature(keyType, sig.r, sig.s).toRaw()));
+      return;
     } else if (identity.rsaPrivate != null) {
       Uint8List pubkey =
           RSAKey(identity.rsaPublic.exponent, identity.rsaPublic.modulus)

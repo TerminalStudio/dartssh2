@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:asn1lib/asn1lib.dart';
 import 'package:pointycastle/api.dart' hide Signature;
 import 'package:pointycastle/asymmetric/api.dart' as asymmetric;
+import 'package:pointycastle/ecc/api.dart';
 import 'package:tweetnacl/tweetnacl.dart' as tweetnacl;
 
 import 'package:dartssh/client.dart';
@@ -106,6 +107,7 @@ Identity parsePem(String text, {StringFunction getPassword}) {
           OpenSSHEd25519PrivateKey ed25519 = OpenSSHEd25519PrivateKey()
             ..deserialize(input);
           Identity ret = Identity()
+            ..keyType = Key.ED25519
             ..ed25519 =
                 tweetnacl.Signature.keyPair_fromSecretKey(ed25519.privkey);
           assert(equalUint8List(ret.ed25519.publicKey, ed25519.pubkey));
@@ -115,13 +117,28 @@ Identity parsePem(String text, {StringFunction getPassword}) {
           OpenSSHRSAPrivateKey rsaPrivateKey = OpenSSHRSAPrivateKey()
             ..deserialize(input);
           return Identity()
+            ..keyType = Key.RSA
             ..rsaPublic =
                 asymmetric.RSAPublicKey(rsaPrivateKey.n, rsaPrivateKey.e)
             ..rsaPrivate = asymmetric.RSAPrivateKey(rsaPrivateKey.n,
                 rsaPrivateKey.d, rsaPrivateKey.p, rsaPrivateKey.q);
 
         default:
-          throw FormatException('type $type');
+          if (type.startsWith('ecdsa-')) {
+            OpenSSHECDSAPrivateKey ecdsaPrivateKey = OpenSSHECDSAPrivateKey()
+              ..deserialize(input);
+            ECDomainParameters curve =
+                Key.ellipticCurve(ecdsaPrivateKey.keyTypeId);
+            Identity ret = Identity()
+              ..keyType = ecdsaPrivateKey.keyTypeId
+              ..ecdsaPublic =
+                  ECPublicKey(curve.curve.decodePoint(ecdsaPrivateKey.q), curve)
+              ..ecdsaPrivate = ECPrivateKey(ecdsaPrivateKey.d, curve);
+            assert((curve.G * ret.ecdsaPrivate.d) == ret.ecdsaPublic.Q);
+            return ret;
+          } else {
+            throw FormatException('type $type');
+          }
       }
       break;
 
@@ -129,6 +146,7 @@ Identity parsePem(String text, {StringFunction getPassword}) {
       RSAPrivateKey rsaPrivateKey = RSAPrivateKey()
         ..deserialize(SerializableInput(payload));
       return Identity()
+        ..keyType = Key.RSA
         ..rsaPublic = asymmetric.RSAPublicKey(rsaPrivateKey.n, rsaPrivateKey.e)
         ..rsaPrivate = asymmetric.RSAPrivateKey(
             rsaPrivateKey.n, rsaPrivateKey.d, rsaPrivateKey.p, rsaPrivateKey.q);
@@ -246,31 +264,33 @@ class OpenSSHPrivateKeyHeader extends Serializable {
 
 class OpenSSHRSAPrivateKey extends Serializable {
   String keytype = 'ssh-rsa', comment;
-  BigInt n, d, e, p, q;
+  BigInt n, e, d, iqmp, p, q;
   OpenSSHRSAPrivateKey();
 
   @override
-  int get serializedHeaderSize => 6 * 4;
+  int get serializedHeaderSize => 7 * 4;
 
   @override
   int get serializedSize =>
       serializedHeaderSize +
       mpIntLength(n) +
-      mpIntLength(d) +
       mpIntLength(e) +
+      mpIntLength(d) +
+      mpIntLength(iqmp) +
       mpIntLength(p) +
-      mpIntLength(q);
+      mpIntLength(q) +
+      comment.length;
 
   @override
   void deserialize(SerializableInput input) {
     keytype = deserializeString(input);
     if (keytype != 'ssh-rsa') throw FormatException('$keytype');
 
-    /// Couldn't find any documentation on this format.
+    /// https://github.com/openssh/openssh-portable/blob/master/sshkey.c#L3274
     n = deserializeMpInt(input);
     e = deserializeMpInt(input);
     d = deserializeMpInt(input);
-    deserializeMpInt(input);
+    iqmp = deserializeMpInt(input);
     p = deserializeMpInt(input);
     q = deserializeMpInt(input);
     comment = deserializeString(input);
@@ -280,6 +300,42 @@ class OpenSSHRSAPrivateKey extends Serializable {
   void serialize(SerializableOutput output) {}
 
   String toString() => 'n: $n, d: $d, e: $e, p: $p, q: $q';
+}
+
+class OpenSSHECDSAPrivateKey extends Serializable {
+  String keytype, curveName, comment;
+  int keyTypeId;
+  Uint8List q;
+  BigInt d;
+  OpenSSHECDSAPrivateKey();
+
+  @override
+  int get serializedHeaderSize => 4 * 5;
+
+  @override
+  int get serializedSize =>
+      serializedHeaderSize +
+      keytype.length +
+      curveName.length +
+      q.length +
+      mpIntLength(d);
+
+  @override
+  void deserialize(SerializableInput input) {
+    keytype = deserializeString(input);
+    if (!keytype.startsWith('ecdsa-sha2-')) throw FormatException('$keytype');
+    keyTypeId = Key.id(keytype);
+    assert(Key.ellipticCurveDSA(keyTypeId));
+
+    /// https://github.com/openssh/openssh-portable/blob/master/sshkey.c#L3223
+    curveName = deserializeString(input);
+    q = deserializeStringBytes(input);
+    deserializeString(input);
+    d = deserializeMpInt(input);
+  }
+
+  @override
+  void serialize(SerializableOutput output) {}
 }
 
 class OpenSSHEd25519PrivateKey extends Serializable {

@@ -101,6 +101,58 @@ class Key {
       id == ECDSA_SHA2_NISTP384 ||
       id == ECDSA_SHA2_NISTP521;
 
+  static ECDomainParameters ellipticCurve(int id) {
+    switch (id) {
+      case ECDSA_SHA2_NISTP256:
+        return ECCurve_secp256r1();
+      case ECDSA_SHA2_NISTP384:
+        return ECCurve_secp384r1();
+      case ECDSA_SHA2_NISTP521:
+        return ECCurve_secp521r1();
+      default:
+        return null;
+    }
+  }
+
+  static String ellipticCurveName(int id) {
+    switch (id) {
+      case ECDSA_SHA2_NISTP256:
+        return 'nistp256';
+      case ECDSA_SHA2_NISTP384:
+        return 'nistp384';
+      case ECDSA_SHA2_NISTP521:
+        return 'nistp521';
+      default:
+        return null;
+    }
+  }
+
+  static int ellipticCurveSecretBits(int id) {
+    switch (id) {
+      case ECDSA_SHA2_NISTP256:
+        return 256;
+      case ECDSA_SHA2_NISTP384:
+        return 384;
+      case ECDSA_SHA2_NISTP521:
+        return 521;
+      default:
+        return null;
+    }
+  }
+
+  static Digest ellipticCurveHash(int id) {
+    switch (id) {
+      case ECDSA_SHA2_NISTP256:
+        return SHA256Digest();
+      case ECDSA_SHA2_NISTP384:
+        return SHA384Digest();
+      case ECDSA_SHA2_NISTP521:
+        return SHA512Digest();
+      default:
+        return null;
+    }
+  }
+
   static String preferenceCsv([int startAfter = 0]) =>
       buildPreferenceCsv(name, supported, End, startAfter);
 
