@@ -44,6 +44,7 @@ String buildPreferenceCsv(
   return ret;
 }
 
+/// Choose the first algorithm that satisfies the conditions.
 String preferenceIntersection(String intersectCsv, String supportedCsv) {
   Set<String> supported = Set<String>.of(supportedCsv.split(','));
   for (String intersect in intersectCsv.split(',')) {
@@ -52,6 +53,8 @@ String preferenceIntersection(String intersectCsv, String supportedCsv) {
   return '';
 }
 
+/// This protocol has been designed to operate with almost any public key
+/// format, encoding, and algorithm (signature and/or encryption).
 class Key {
   static const int ED25519 = 1,
       ECDSA_SHA2_NISTP256 = 2,
@@ -160,6 +163,8 @@ class Key {
       id(preferenceIntersection(preferenceCsv(startAfter), intersectCsv));
 }
 
+/// The key exchange method specifies how one-time session keys are generated for
+/// encryption and for authentication, and how the server authentication is done.
 class KEX {
   static const int ECDH_SHA2_X25519 = 1,
       ECDH_SHA2_NISTP256 = 2,
@@ -281,6 +286,8 @@ class KEX {
       id(preferenceIntersection(preferenceCsv(startAfter), intersectCsv));
 }
 
+// When encryption is in effect, the packet length, padding length, payload,
+// and padding fields of each packet MUST be encrypted with the given algorithm.
 class Cipher {
   static const int AES128_CTR = 1,
       AES128_CBC = 2,
@@ -374,6 +381,8 @@ class Cipher {
   }
 }
 
+/// Data integrity is protected by including with each packet a MAC that is computed
+/// from a shared secret, packet sequence number, and the contents of the packet.
 class MAC {
   static const int MD5 = 1,
       SHA1 = 2,
@@ -509,6 +518,8 @@ class MAC {
   }
 }
 
+/// If compression has been negotiated, the 'payload' field (and only it)
+/// will be compressed using the negotiated algorithm.
 class Compression {
   static const int OpenSSHZLib = 1, None = 2, End = 2;
 
@@ -543,6 +554,7 @@ class Compression {
       id(preferenceIntersection(preferenceCsv(startAfter), intersectCsv));
 }
 
+/// https://tools.ietf.org/html/rfc4253#section-6.6
 class RSAKey with Serializable {
   String formatId = 'ssh-rsa';
   BigInt e, n;
@@ -571,6 +583,7 @@ class RSAKey with Serializable {
   }
 }
 
+/// https://tools.ietf.org/html/rfc4253#section-6.6
 class RSASignature with Serializable {
   String formatId = 'ssh-rsa';
   Uint8List sig;
@@ -596,6 +609,7 @@ class RSASignature with Serializable {
   }
 }
 
+/// https://tools.ietf.org/html/rfc5656#section-3.1
 class ECDSAKey with Serializable {
   String formatId, curveId;
   Uint8List q;
@@ -624,6 +638,7 @@ class ECDSAKey with Serializable {
   }
 }
 
+/// https://tools.ietf.org/html/rfc5656#section-3.1.2
 class ECDSASignature with Serializable {
   String formatId;
   BigInt r, s;
@@ -659,6 +674,7 @@ class ECDSASignature with Serializable {
   }
 }
 
+/// https://tools.ietf.org/html/draft-ietf-curdle-ssh-ed25519-02#section-4
 class Ed25519Key with Serializable {
   String formatId = 'ssh-ed25519';
   Uint8List key;
@@ -684,6 +700,7 @@ class Ed25519Key with Serializable {
   }
 }
 
+/// https://tools.ietf.org/html/draft-ietf-curdle-ssh-ed25519-02#section-6
 class Ed25519Signature with Serializable {
   String formatId = 'ssh-ed25519';
   Uint8List sig;
@@ -1124,6 +1141,9 @@ class DiffieHellman {
   BigInt computeSecret(BigInt f) => (this.f = f).modPow(x, p);
 }
 
+/// The Elliptic Curve Diffie-Hellman (ECDH) key exchange method
+/// generates a shared secret from an ephemeral local elliptic curve
+/// private key and ephemeral remote elliptic curve public key.
 class EllipticCurveDiffieHellman {
   ECDomainParameters curve;
   int secretBits;
@@ -1131,6 +1151,7 @@ class EllipticCurveDiffieHellman {
   Uint8List cText, sText;
   EllipticCurveDiffieHellman([this.curve, this.secretBits]);
 
+  /// Generate ephemeral key pair.
   void generatePair(Random random) {
     x = decodeBigInt(randBits(random, secretBits)) % curve.n;
     assert(x != BigInt.zero);
@@ -1138,6 +1159,7 @@ class EllipticCurveDiffieHellman {
     cText = c.getEncoded(false);
   }
 
+  /// Compute shared secret.
   BigInt computeSecret(Uint8List sText) {
     this.sText = sText;
     ECPoint s = curve.curve.decodePoint(sText);
@@ -1145,6 +1167,7 @@ class EllipticCurveDiffieHellman {
   }
 }
 
+/// https://tools.ietf.org/html/rfc7748#section-6
 class X25519DiffieHellman {
   Uint8List myPrivKey, myPubKey, remotePubKey;
 
@@ -1157,6 +1180,7 @@ class X25519DiffieHellman {
       decodeBigInt(ScalarMult.scalseMult(myPrivKey, remotePubKey));
 }
 
+/// Hashes SSH protocol data without first serializing it.
 class Digester {
   Digest digest;
   Digester(this.digest) {
@@ -1201,6 +1225,7 @@ class Digester {
   }
 }
 
+/// The exchange hash is used to authenticate the key exchange and SHOULD be kept secret.
 Uint8List computeExchangeHash(
     int kexMethod,
     Digest algo,
@@ -1246,8 +1271,9 @@ Uint8List computeExchangeHash(
   return H.finish();
 }
 
+/// Verifies that [key] signed [exH] producing [sig].
 bool verifyHostKey(
-    Uint8List hText, int hostkeyType, Uint8List key, Uint8List sig) {
+    Uint8List exH, int hostkeyType, Uint8List key, Uint8List sig) {
   if (hostkeyType == Key.RSA) {
     RSAKey keyMsg = RSAKey()..deserialize(SerializableInput(key));
     RSASignature sigMsg = RSASignature()..deserialize(SerializableInput(sig));
@@ -1258,7 +1284,7 @@ bool verifyHostKey(
             PublicKeyParameter<asymmetric.RSAPublicKey>(
                 asymmetric.RSAPublicKey(keyMsg.n, keyMsg.e)),
             null));
-    return rsa.verifySignature(hText, asymmetric.RSASignature(sigMsg.sig));
+    return rsa.verifySignature(exH, asymmetric.RSASignature(sigMsg.sig));
   } else if (Key.ellipticCurveDSA(hostkeyType)) {
     ECDSAKey keyMsg = ECDSAKey()..deserialize(SerializableInput(key));
     ECDSASignature sigMsg = ECDSASignature()
@@ -1269,24 +1295,25 @@ bool verifyHostKey(
         false,
         PublicKeyParameter(
             ECPublicKey(curve.curve.decodePoint(keyMsg.q), curve)));
-    return ecdsa.verifySignature(hText, ECSignature(sigMsg.r, sigMsg.s));
+    return ecdsa.verifySignature(exH, ECSignature(sigMsg.r, sigMsg.s));
   } else if (hostkeyType == Key.ED25519) {
     Ed25519Key keyMsg = Ed25519Key()..deserialize(SerializableInput(key));
     Ed25519Signature sigMsg = Ed25519Signature()
       ..deserialize(SerializableInput(sig));
-    return Signature(keyMsg.key, null).detached_verify(hText, sigMsg.sig);
+    return Signature(keyMsg.key, null).detached_verify(exH, sigMsg.sig);
   } else {
     return false;
   }
 }
 
-Uint8List deriveKey(Digest algo, Uint8List sessionId, Uint8List hText, BigInt K,
+/// https://tools.ietf.org/html/rfc4253#section-7.2
+Uint8List deriveKey(Digest algo, Uint8List sessionId, Uint8List exH, BigInt K,
     int id, int bytes) {
   Uint8List ret = Uint8List(0);
   while (ret.length < bytes) {
     Digester digest = Digester(algo);
     digest.updateBigInt(K);
-    digest.updateRaw(hText);
+    digest.updateRaw(exH);
     if (ret.isEmpty) {
       digest.updateByte(id);
       digest.updateRaw(sessionId);
@@ -1298,7 +1325,8 @@ Uint8List deriveKey(Digest algo, Uint8List sessionId, Uint8List hText, BigInt K,
   return viewUint8List(ret, 0, bytes);
 }
 
-Uint8List deriveChallengeText(Uint8List sessionId, String userName,
+/// https://tools.ietf.org/html/rfc4252#section-7
+Uint8List deriveChallenge(Uint8List sessionId, String userName,
     String serviceName, String methodName, String algoName, Uint8List secret) {
   SerializableOutput output = SerializableOutput(Uint8List(2 +
       4 * 6 +
@@ -1320,15 +1348,19 @@ Uint8List deriveChallengeText(Uint8List sessionId, String userName,
   return output.buffer;
 }
 
+/// Transforms [m] by [cipher] provided [m.length] is a multiple of [cipher.blockSize].
 Uint8List applyBlockCipher(BlockCipher cipher, Uint8List m) {
   Uint8List out = Uint8List(m.length);
-  assert(m.length % cipher.blockSize == 0);
+  if (m.length % cipher.blockSize != 0) {
+    throw FormatException('${m.length} not multiple of ${cipher.blockSize}');
+  }
   for (int offset = 0; offset < m.length; offset += cipher.blockSize) {
     cipher.processBlock(m, offset, out, offset);
   }
   return out;
 }
 
+/// Signs [seq] | [m] with [k] using [mac].
 Uint8List computeMAC(
     HMac mac, int macLen, Uint8List m, int seq, Uint8List k, int prefix) {
   mac.init(KeyParameter(k));

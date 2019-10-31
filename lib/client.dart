@@ -77,7 +77,7 @@ class SSHClient {
   List<Forward> forwardLocal, forwardRemote;
   VoidCallback disconnected;
   StringCallback response, print, debugPrint, tracePrint;
-  FingerprintCallback hostFingerprint;
+  FingerprintCallback acceptHostFingerprint;
   RemoteForwardCallback remoteForward;
   Uint8ListFunction getPassword;
   IdentityFunction loadIdentity;
@@ -129,7 +129,7 @@ class SSHClient {
   Uint8List kexInitC,
       kexInitS,
       decryptBuf,
-      hText,
+      exH,
       sessionId,
       integrityC2s,
       integrityS2c,
@@ -171,7 +171,7 @@ class SSHClient {
       this.debugPrint,
       this.tracePrint,
       this.success,
-      this.hostFingerprint,
+      this.acceptHostFingerprint,
       this.loadIdentity,
       this.getPassword,
       this.socket,
@@ -597,8 +597,8 @@ class SSHClient {
     writeClearOrEncrypted(MSG_NEWKEYS());
     if (state == SSHClientState.FIRST_KEXREPLY) {
       state = SSHClientState.FIRST_NEWKEYS;
-      if (hostFingerprint != null) {
-        acceptedHostkey = hostFingerprint(hostkeyType, fingerprint);
+      if (acceptHostFingerprint != null) {
+        acceptedHostkey = acceptHostFingerprint(hostkeyType, fingerprint);
       } else {
         acceptedHostkey = true;
       }
@@ -674,13 +674,13 @@ class SSHClient {
         keyLenS = Cipher.keySize(cipherIdS2c);
     encrypt = initCipher(
         cipherIdC2s,
-        deriveKey(kexHash, sessionId, hText, K, 'A'.codeUnits[0], 24),
-        deriveKey(kexHash, sessionId, hText, K, 'C'.codeUnits[0], keyLenC),
+        deriveKey(kexHash, sessionId, exH, K, 'A'.codeUnits[0], 24),
+        deriveKey(kexHash, sessionId, exH, K, 'C'.codeUnits[0], keyLenC),
         true);
     decrypt = initCipher(
         cipherIdS2c,
-        deriveKey(kexHash, sessionId, hText, K, 'B'.codeUnits[0], 24),
-        deriveKey(kexHash, sessionId, hText, K, 'D'.codeUnits[0], keyLenS),
+        deriveKey(kexHash, sessionId, exH, K, 'B'.codeUnits[0], 24),
+        deriveKey(kexHash, sessionId, exH, K, 'D'.codeUnits[0], keyLenS),
         false);
     if ((macLenC = MAC.hashSize(macIdC2s)) <= 0) {
       throw FormatException('$hostport: invalid maclen $encryptBlockSize');
@@ -688,9 +688,9 @@ class SSHClient {
       throw FormatException('$hostport: invalid maclen $encryptBlockSize');
     }
     integrityC2s =
-        deriveKey(kexHash, sessionId, hText, K, 'E'.codeUnits[0], macLenC);
+        deriveKey(kexHash, sessionId, exH, K, 'E'.codeUnits[0], macLenC);
     integrityS2c =
-        deriveKey(kexHash, sessionId, hText, K, 'F'.codeUnits[0], macLenS);
+        deriveKey(kexHash, sessionId, exH, K, 'F'.codeUnits[0], macLenS);
     state = SSHClientState.NEWKEYS;
     writeCipher(MSG_SERVICE_REQUEST('ssh-userauth'));
   }
@@ -936,13 +936,16 @@ class SSHClient {
   void handleAGENTC_SIGN_REQUEST(AGENTC_SIGN_REQUEST msg) {}
 
   bool computeExchangeHashAndVerifyHostKey(Uint8List kS, Uint8List hSig) {
-    hText = computeExchangeHash(kexMethod, kexHash, verC, verS, kexInitC,
+    exH = computeExchangeHash(kexMethod, kexHash, verC, verS, kexInitC,
         kexInitS, kS, K, dh, ecdh, x25519dh);
-    if (state == SSHClientState.FIRST_KEXREPLY) sessionId = hText;
+
+    /// The exchange hash H from the first key exchange is used as the session identifier.
+    if (state == SSHClientState.FIRST_KEXREPLY) sessionId = exH;
     if (tracePrint != null) {
-      tracePrint('$hostport: H = "${hex.encode(hText)}"');
+      tracePrint('$hostport: H = "${hex.encode(exH)}"');
     }
-    return verifyHostKey(hText, hostkeyType, kS, hSig);
+
+    return verifyHostKey(exH, hostkeyType, kS, hSig);
   }
 
   BlockCipher initCipher(int cipherId, Uint8List IV, Uint8List key, bool dir) {
@@ -971,12 +974,18 @@ class SSHClient {
     Uint8List mac = computeMAC(MAC.mac(macIdC2s), macLenC, m,
         sequenceNumberC2s - 1, integrityC2s, macPrefixC2s);
     socket.sendRaw(Uint8List.fromList(encM + mac));
+    if (tracePrint != null) {
+      tracePrint('$hostport: sent MSG id=${msg.id}');
+    }
   }
 
-  void writeClearOrEncrypted(SSHMessage m) {
-    if (state > SSHClientState.FIRST_NEWKEYS) return writeCipher(m);
+  void writeClearOrEncrypted(SSHMessage msg) {
+    if (state > SSHClientState.FIRST_NEWKEYS) return writeCipher(msg);
     sequenceNumberC2s++;
-    socket.sendRaw(m.toBytes(null, random, encryptBlockSize));
+    socket.sendRaw(msg.toBytes(null, random, encryptBlockSize));
+    if (tracePrint != null) {
+      tracePrint('$hostport: sent MSG id=${msg.id} in clear');
+    }
   }
 
   void loadPassword() {
@@ -1012,8 +1021,8 @@ class SSHClient {
       // do nothing
     } else if (identity.ed25519 != null) {
       Uint8List pubkey = Ed25519Key(identity.ed25519.publicKey).toRaw();
-      Uint8List challenge = deriveChallengeText(sessionId, login,
-          'ssh-connection', 'publickey', 'ssh-ed25519', pubkey);
+      Uint8List challenge = deriveChallenge(sessionId, login, 'ssh-connection',
+          'publickey', 'ssh-ed25519', pubkey);
       Ed25519Signature sig = Ed25519Signature(
           tweetnacl.Signature(null, identity.ed25519.secretKey)
               .sign(challenge)
@@ -1028,7 +1037,7 @@ class SSHClient {
       Uint8List pubkey =
           ECDSAKey(keyType, curveName, identity.ecdsaPublic.Q.getEncoded(false))
               .toRaw();
-      Uint8List challenge = deriveChallengeText(
+      Uint8List challenge = deriveChallenge(
           sessionId, login, 'ssh-connection', 'publickey', keyType, pubkey);
       ECDSASigner ecdsa = ECDSASigner(Key.ellipticCurveHash(identity.keyType));
       ecdsa.init(
@@ -1045,7 +1054,7 @@ class SSHClient {
       Uint8List pubkey =
           RSAKey(identity.rsaPublic.exponent, identity.rsaPublic.modulus)
               .toRaw();
-      Uint8List challenge = deriveChallengeText(
+      Uint8List challenge = deriveChallenge(
           sessionId, login, 'ssh-connection', 'publickey', 'ssh-rsa', pubkey);
       RSASigner rsa = RSASigner(SHA1Digest(), '06052b0e03021a');
       rsa.init(true,
