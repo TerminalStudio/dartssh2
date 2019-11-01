@@ -3,6 +3,5 @@
 
 import 'package:dartssh/socket.dart';
 
-class SocketImpl extends TestSocket {
-  /// No implementation is possible in browser.
-}
+/// No socket implementation is possible in browser.
+class SocketImpl extends TestSocket {}

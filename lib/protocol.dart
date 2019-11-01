@@ -792,9 +792,11 @@ class MSG_CHANNEL_OPEN_TCPIP extends SSHMessage {
 class MSG_CHANNEL_OPEN_CONFIRMATION extends SSHMessage {
   static const int ID = 91;
   int recipientChannel, senderChannel, initialWinSize, maximumPacketSize;
-  MSG_CHANNEL_OPEN_CONFIRMATION() : super(ID);
-  MSG_CHANNEL_OPEN_CONFIRMATION.create(this.recipientChannel,
-      this.senderChannel, this.initialWinSize, this.maximumPacketSize)
+  MSG_CHANNEL_OPEN_CONFIRMATION(
+      [this.recipientChannel,
+      this.senderChannel,
+      this.initialWinSize,
+      this.maximumPacketSize])
       : super(ID);
 
   @override
@@ -825,9 +827,8 @@ class MSG_CHANNEL_OPEN_FAILURE extends SSHMessage {
   static const int ID = 91;
   int recipientChannel = 0, reason = 0;
   String description, language;
-  MSG_CHANNEL_OPEN_FAILURE() : super(ID);
-  MSG_CHANNEL_OPEN_FAILURE.create(
-      this.recipientChannel, this.reason, this.description, this.language)
+  MSG_CHANNEL_OPEN_FAILURE(
+      [this.recipientChannel, this.reason, this.description, this.language])
       : super(ID);
 
   @override

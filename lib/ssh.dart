@@ -1275,32 +1275,19 @@ Uint8List computeExchangeHash(
 bool verifyHostKey(
     Uint8List exH, int hostkeyType, Uint8List key, Uint8List sig) {
   if (hostkeyType == Key.RSA) {
-    RSAKey keyMsg = RSAKey()..deserialize(SerializableInput(key));
-    RSASignature sigMsg = RSASignature()..deserialize(SerializableInput(sig));
-    RSASigner rsa = RSASigner(SHA1Digest(), '06052b0e03021a');
-    rsa.init(
-        false,
-        ParametersWithRandom(
-            PublicKeyParameter<asymmetric.RSAPublicKey>(
-                asymmetric.RSAPublicKey(keyMsg.n, keyMsg.e)),
-            null));
-    return rsa.verifySignature(exH, asymmetric.RSASignature(sigMsg.sig));
+    return verifyRSASignature(RSAKey()..deserialize(SerializableInput(key)),
+        RSASignature()..deserialize(SerializableInput(sig)), exH);
   } else if (Key.ellipticCurveDSA(hostkeyType)) {
-    ECDSAKey keyMsg = ECDSAKey()..deserialize(SerializableInput(key));
-    ECDSASignature sigMsg = ECDSASignature()
-      ..deserialize(SerializableInput(sig));
-    ECDSASigner ecdsa = ECDSASigner(KEX.ellipticCurveHash(hostkeyType));
-    ECDomainParameters curve = KEX.ellipticCurve(hostkeyType);
-    ecdsa.init(
-        false,
-        PublicKeyParameter(
-            ECPublicKey(curve.curve.decodePoint(keyMsg.q), curve)));
-    return ecdsa.verifySignature(exH, ECSignature(sigMsg.r, sigMsg.s));
+    return verifyECDSASignature(
+        hostkeyType,
+        ECDSAKey()..deserialize(SerializableInput(key)),
+        ECDSASignature()..deserialize(SerializableInput(sig)),
+        exH);
   } else if (hostkeyType == Key.ED25519) {
-    Ed25519Key keyMsg = Ed25519Key()..deserialize(SerializableInput(key));
-    Ed25519Signature sigMsg = Ed25519Signature()
-      ..deserialize(SerializableInput(sig));
-    return Signature(keyMsg.key, null).detached_verify(exH, sigMsg.sig);
+    return verifyEd25519Signature(
+        Ed25519Key()..deserialize(SerializableInput(key)),
+        Ed25519Signature()..deserialize(SerializableInput(sig)),
+        exH);
   } else {
     return false;
   }
@@ -1375,4 +1362,35 @@ Uint8List computeMAC(
   int finalLen = mac.doFinal(ret, 0);
   assert(finalLen == macLen);
   return ret;
+}
+
+/// Verifies Ed25519 [signature] on [message] with private key matching [publicKey].
+bool verifyEd25519Signature(
+        Ed25519Key publicKey, Ed25519Signature signature, Uint8List message) =>
+    Signature(publicKey.key, null).detached_verify(message, signature.sig);
+
+/// Verifies ECDSA [signature] on [message] with private key matching [publicKey].
+bool verifyECDSASignature(int keyType, ECDSAKey publicKey,
+    ECDSASignature signature, Uint8List message) {
+  ECDSASigner signer = ECDSASigner(KEX.ellipticCurveHash(keyType));
+  ECDomainParameters curve = KEX.ellipticCurve(keyType);
+  signer.init(
+      false,
+      PublicKeyParameter(
+          ECPublicKey(curve.curve.decodePoint(publicKey.q), curve)));
+  return signer.verifySignature(message, ECSignature(signature.r, signature.s));
+}
+
+/// Verifies RSA [signature] on [message] with private key matching [publicKey].
+bool verifyRSASignature(
+    RSAKey publicKey, RSASignature signature, Uint8List message) {
+  RSASigner signer = RSASigner(SHA1Digest(), '06052b0e03021a');
+  signer.init(
+      false,
+      ParametersWithRandom(
+          PublicKeyParameter<asymmetric.RSAPublicKey>(
+              asymmetric.RSAPublicKey(publicKey.n, publicKey.e)),
+          null));
+  return signer.verifySignature(
+      message, asymmetric.RSASignature(signature.sig));
 }

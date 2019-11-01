@@ -15,6 +15,8 @@ import 'package:dartssh/protocol.dart';
 import 'package:dartssh/serializable.dart';
 import 'package:dartssh/ssh.dart';
 
+/// Privacy-Enhanced Mail (PEM) is a de facto file format for storing and sending
+/// cryptographic keys, certificates, and other data.
 Identity parsePem(String text, {StringFunction getPassword}) {
   const String beginText = '-----BEGIN ',
       endText = '-----END ',
@@ -236,6 +238,8 @@ class OpenSSHKey extends Serializable {
   }
 }
 
+/// Before the key is encrypted, a random integer is assigned to both checkint fields so successful
+/// decryption can be quickly checked by verifying that both checkint fields hold the same value.
 class OpenSSHPrivateKeyHeader extends Serializable {
   int checkint1 = 0, checkint2 = 0;
   OpenSSHPrivateKeyHeader();
@@ -262,6 +266,7 @@ class OpenSSHPrivateKeyHeader extends Serializable {
   }
 }
 
+/// https://github.com/openssh/openssh-portable/blob/master/sshkey.c#L3274
 class OpenSSHRSAPrivateKey extends Serializable {
   String keytype = 'ssh-rsa', comment;
   BigInt n, e, d, iqmp, p, q;
@@ -285,8 +290,6 @@ class OpenSSHRSAPrivateKey extends Serializable {
   void deserialize(SerializableInput input) {
     keytype = deserializeString(input);
     if (keytype != 'ssh-rsa') throw FormatException('$keytype');
-
-    /// https://github.com/openssh/openssh-portable/blob/master/sshkey.c#L3274
     n = deserializeMpInt(input);
     e = deserializeMpInt(input);
     d = deserializeMpInt(input);
@@ -302,6 +305,7 @@ class OpenSSHRSAPrivateKey extends Serializable {
   String toString() => 'n: $n, d: $d, e: $e, p: $p, q: $q';
 }
 
+/// https://github.com/openssh/openssh-portable/blob/master/sshkey.c#L3223
 class OpenSSHECDSAPrivateKey extends Serializable {
   String keytype, curveName, comment;
   int keyTypeId;
@@ -326,8 +330,6 @@ class OpenSSHECDSAPrivateKey extends Serializable {
     if (!keytype.startsWith('ecdsa-sha2-')) throw FormatException('$keytype');
     keyTypeId = Key.id(keytype);
     assert(Key.ellipticCurveDSA(keyTypeId));
-
-    /// https://github.com/openssh/openssh-portable/blob/master/sshkey.c#L3223
     curveName = deserializeString(input);
     q = deserializeStringBytes(input);
     deserializeString(input);
@@ -338,6 +340,7 @@ class OpenSSHECDSAPrivateKey extends Serializable {
   void serialize(SerializableOutput output) {}
 }
 
+/// https://github.com/openssh/openssh-portable/blob/master/sshkey.c#L2446
 class OpenSSHEd25519PrivateKey extends Serializable {
   String keytype = 'ssh-ed25519', comment;
   Uint8List pubkey, privkey;
@@ -374,6 +377,7 @@ class OpenSSHEd25519PrivateKey extends Serializable {
   }
 }
 
+/// The options: string salt, uint32 rounds are concatenated and represented as a string.
 class OpenSSHBCryptKDFOptions extends Serializable {
   Uint8List salt;
   int rounds;

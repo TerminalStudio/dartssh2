@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:dartssh/socket.dart';
 
+/// dart:io [Socket] based implementation of [SocketInterface].
 class SocketImpl extends SocketInterface {
   Socket socket;
   Function onError, onDone;

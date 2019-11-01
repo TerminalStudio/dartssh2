@@ -37,11 +37,6 @@ typedef ChannelCallback = void Function(Channel, Uint8List);
 typedef RemoteForwardCallback = void Function(
     Channel, String, int, String, int);
 
-class Forward {
-  int port, targetPort;
-  String targetHost;
-}
-
 class Identity {
   int keyType;
   asymmetric.RSAPublicKey rsaPublic;
@@ -49,6 +44,43 @@ class Identity {
   ECPublicKey ecdsaPublic;
   ECPrivateKey ecdsaPrivate;
   tweetnacl.KeyPair ed25519;
+
+  Ed25519Key getEd25519PublicKey() => Ed25519Key(ed25519.publicKey);
+
+  Ed25519Signature signWithEd25519Key(Uint8List m) =>
+      Ed25519Signature(tweetnacl.Signature(null, ed25519.secretKey)
+          .sign(m)
+          .buffer
+          .asUint8List(0, 64));
+
+  ECDSAKey getECDSAPublicKey() => ECDSAKey(Key.name(keyType),
+      Key.ellipticCurveName(keyType), ecdsaPublic.Q.getEncoded(false));
+
+  ECDSASignature signWithECDSAKey(Uint8List m, SecureRandom secureRandom) {
+    ECDSASigner signer = ECDSASigner(Key.ellipticCurveHash(keyType));
+    signer.init(
+        true,
+        ParametersWithRandom(
+          PrivateKeyParameter(ecdsaPrivate),
+          secureRandom,
+        ));
+    ECSignature sig = signer.generateSignature(m);
+    return ECDSASignature(Key.name(keyType), sig.r, sig.s);
+  }
+
+  RSAKey getRSAPublicKey() => RSAKey(rsaPublic.exponent, rsaPublic.modulus);
+
+  RSASignature signWithRSAKey(Uint8List m) {
+    RSASigner signer = RSASigner(SHA1Digest(), '06052b0e03021a');
+    signer.init(
+        true, PrivateKeyParameter<asymmetric.RSAPrivateKey>(rsaPrivate));
+    return RSASignature(signer.generateSignature(m).bytes);
+  }
+}
+
+class Forward {
+  int port, targetPort;
+  String targetHost;
 }
 
 class Channel {
@@ -304,15 +336,15 @@ class SSHClient {
     }
   }
 
-  void handleAgentRead(Channel chan, Uint8List msg) {
-    chan.buf.add(msg);
-    while (chan.buf.data.length > 4) {
-      SerializableInput input = SerializableInput(chan.buf.data);
+  void handleAgentRead(Channel channel, Uint8List msg) {
+    channel.buf.add(msg);
+    while (channel.buf.data.length > 4) {
+      SerializableInput input = SerializableInput(channel.buf.data);
       int agentPacketLen = input.getUint32();
       if (input.remaining < agentPacketLen) break;
-      handleAgentPacket(
+      handleAgentPacket(channel,
           SerializableInput(input.viewOffset(input.offset, agentPacketLen)));
-      chan.buf.flush(agentPacketLen + 4);
+      channel.buf.flush(agentPacketLen + 4);
     }
   }
 
@@ -381,7 +413,8 @@ class SSHClient {
         break;
 
       case MSG_CHANNEL_OPEN.ID:
-        handleMSG_CHANNEL_OPEN(MSG_CHANNEL_OPEN()..deserialize(packetS));
+        handleMSG_CHANNEL_OPEN(
+            MSG_CHANNEL_OPEN()..deserialize(packetS), packetS);
         break;
 
       case MSG_CHANNEL_OPEN_CONFIRMATION.ID:
@@ -442,16 +475,16 @@ class SSHClient {
     }
   }
 
-  void handleAgentPacket(SerializableInput agentPacketS) {
+  void handleAgentPacket(Channel channel, SerializableInput agentPacketS) {
     int agentPacketId = agentPacketS.getUint8();
     switch (agentPacketId) {
       case AGENTC_REQUEST_IDENTITIES.ID:
-        handleAGENTC_REQUEST_IDENTITIES();
+        handleAGENTC_REQUEST_IDENTITIES(channel);
         break;
 
       case AGENTC_SIGN_REQUEST.ID:
         handleAGENTC_SIGN_REQUEST(
-            AGENTC_SIGN_REQUEST()..deserialize(agentPacketS));
+            channel, AGENTC_SIGN_REQUEST()..deserialize(agentPacketS));
         break;
 
       default:
@@ -779,8 +812,38 @@ class SSHClient {
     }
   }
 
-  void handleMSG_CHANNEL_OPEN(MSG_CHANNEL_OPEN msg) {
-    /**/
+  void handleMSG_CHANNEL_OPEN(MSG_CHANNEL_OPEN msg, SerializableInput packetS) {
+    if (tracePrint != null) {
+      tracePrint('$hostport: MSG_CHANNEL_OPEN type=${msg.channelType}');
+    }
+    if (msg.channelType == 'auth-agent@openssh.com' && agentForwarding) {
+      Channel channel = acceptChannel(msg);
+      channel.agentChannel = true;
+      writeCipher(MSG_CHANNEL_OPEN_CONFIRMATION(
+          channel.remoteId, channel.localId, channel.windowS, maxPacketSize));
+    } else if (msg.channelType == 'forwarded-tcpip') {
+      MSG_CHANNEL_OPEN_TCPIP openTcpIp = MSG_CHANNEL_OPEN_TCPIP()
+        ..deserialize(packetS);
+      Forward forward =
+          forwardingRemote == null ? null : forwardingRemote[openTcpIp.dstPort];
+      if (forward == null || remoteForward == null) {
+        if (print != null) {
+          print('unknown port open ${openTcpIp.dstPort}');
+        }
+        writeCipher(MSG_CHANNEL_OPEN_FAILURE(msg.senderChannel, 0, '', ''));
+      } else {
+        Channel channel = acceptChannel(msg);
+        remoteForward(channel, forward.targetHost, forward.targetPort,
+            openTcpIp.srcHost, openTcpIp.srcPort);
+        writeCipher(MSG_CHANNEL_OPEN_CONFIRMATION(
+            channel.remoteId, channel.localId, channel.windowS, maxPacketSize));
+      }
+    } else {
+      if (print != null) {
+        print('unknown channel open ${msg.channelType}');
+      }
+      writeCipher(MSG_CHANNEL_OPEN_FAILURE(msg.senderChannel, 0, '', ''));
+    }
   }
 
   void handleMSG_CHANNEL_OPEN_CONFIRMATION(MSG_CHANNEL_OPEN_CONFIRMATION msg) {
@@ -931,9 +994,52 @@ class SSHClient {
     }
   }
 
-  void handleAGENTC_REQUEST_IDENTITIES() {}
+  void handleAGENTC_REQUEST_IDENTITIES(Channel channel) {
+    if (tracePrint != null) {
+      tracePrint('$hostport: agent channel: AGENTC_REQUEST_IDENTITIES');
+    }
+    AGENT_IDENTITIES_ANSWER reply = AGENT_IDENTITIES_ANSWER();
+    if (identity != null) {
+      if (identity.ed25519 != null) {
+        reply.keys.add(MapEntry<Uint8List, String>(
+            identity.getEd25519PublicKey().toRaw(), ''));
+      }
+      if (identity.ecdsaPublic != null) {
+        reply.keys.add(MapEntry<Uint8List, String>(
+            identity.getECDSAPublicKey().toRaw(), ''));
+      }
+      if (identity.rsaPublic != null) {
+        reply.keys.add(MapEntry<Uint8List, String>(
+            identity.getRSAPublicKey().toRaw(), ''));
+      }
+    }
+    sendToChannel(channel, reply.toRaw());
+  }
 
-  void handleAGENTC_SIGN_REQUEST(AGENTC_SIGN_REQUEST msg) {}
+  void handleAGENTC_SIGN_REQUEST(Channel channel, AGENTC_SIGN_REQUEST msg) {
+    if (tracePrint != null) {
+      tracePrint('$hostport: agent channel: AGENTC_SIGN_REQUEST');
+    }
+    SerializableInput keyStream = SerializableInput(msg.key);
+    String keyType = deserializeString(keyStream);
+    Uint8List sig;
+
+    if (keyType == Key.name(Key.ED25519)) {
+      sig = identity.signWithEd25519Key(msg.data).toRaw();
+    } else if (keyType == Key.name(Key.ECDSA_SHA2_NISTP256) ||
+        keyType == Key.name(Key.ECDSA_SHA2_NISTP384) ||
+        keyType == Key.name(Key.ECDSA_SHA2_NISTP521)) {
+      sig = identity.signWithECDSAKey(msg.data, getSecureRandom()).toRaw();
+    } else if (keyType == Key.name(Key.RSA)) {
+      sig = identity.signWithRSAKey(msg.data).toRaw();
+    }
+
+    if (sig != null) {
+      sendToChannel(channel, AGENT_SIGN_RESPONSE(sig).toRaw());
+    } else {
+      sendToChannel(channel, AGENT_FAILURE().toRaw());
+    }
+  }
 
   bool computeExchangeHashAndVerifyHostKey(Uint8List kS, Uint8List hSig) {
     exH = computeExchangeHash(kexMethod, kexHash, verC, verS, kexInitC,
@@ -1020,46 +1126,28 @@ class SSHClient {
     if (identity == null) {
       // do nothing
     } else if (identity.ed25519 != null) {
-      Uint8List pubkey = Ed25519Key(identity.ed25519.publicKey).toRaw();
+      Uint8List pubkey = identity.getEd25519PublicKey().toRaw();
       Uint8List challenge = deriveChallenge(sessionId, login, 'ssh-connection',
           'publickey', 'ssh-ed25519', pubkey);
-      Ed25519Signature sig = Ed25519Signature(
-          tweetnacl.Signature(null, identity.ed25519.secretKey)
-              .sign(challenge)
-              .buffer
-              .asUint8List(0, 64));
+      Ed25519Signature sig = identity.signWithEd25519Key(challenge);
       writeCipher(MSG_USERAUTH_REQUEST(login, 'ssh-connection', 'publickey',
           'ssh-ed25519', pubkey, sig.toRaw()));
       return;
     } else if (identity.ecdsaPrivate != null) {
-      String keyType = Key.name(identity.keyType),
-          curveName = Key.ellipticCurveName(identity.keyType);
-      Uint8List pubkey =
-          ECDSAKey(keyType, curveName, identity.ecdsaPublic.Q.getEncoded(false))
-              .toRaw();
+      String keyType = Key.name(identity.keyType);
+      Uint8List pubkey = identity.getECDSAPublicKey().toRaw();
       Uint8List challenge = deriveChallenge(
           sessionId, login, 'ssh-connection', 'publickey', keyType, pubkey);
-      ECDSASigner ecdsa = ECDSASigner(Key.ellipticCurveHash(identity.keyType));
-      ecdsa.init(
-          true,
-          ParametersWithRandom(
-            PrivateKeyParameter(identity.ecdsaPrivate),
-            getSecureRandom(),
-          ));
-      ECSignature sig = ecdsa.generateSignature(challenge);
-      writeCipher(MSG_USERAUTH_REQUEST(login, 'ssh-connection', 'publickey',
-          keyType, pubkey, ECDSASignature(keyType, sig.r, sig.s).toRaw()));
+      ECDSASignature sig =
+          identity.signWithECDSAKey(challenge, getSecureRandom());
+      writeCipher(MSG_USERAUTH_REQUEST(
+          login, 'ssh-connection', 'publickey', keyType, pubkey, sig.toRaw()));
       return;
     } else if (identity.rsaPrivate != null) {
-      Uint8List pubkey =
-          RSAKey(identity.rsaPublic.exponent, identity.rsaPublic.modulus)
-              .toRaw();
+      Uint8List pubkey = identity.getRSAPublicKey().toRaw();
       Uint8List challenge = deriveChallenge(
           sessionId, login, 'ssh-connection', 'publickey', 'ssh-rsa', pubkey);
-      RSASigner rsa = RSASigner(SHA1Digest(), '06052b0e03021a');
-      rsa.init(true,
-          PrivateKeyParameter<asymmetric.RSAPrivateKey>(identity.rsaPrivate));
-      RSASignature sig = RSASignature(rsa.generateSignature(challenge).bytes);
+      RSASignature sig = identity.signWithRSAKey(challenge);
       writeCipher(MSG_USERAUTH_REQUEST(login, 'ssh-connection', 'publickey',
           'ssh-rsa', pubkey, sig.toRaw()));
       return;
@@ -1093,5 +1181,16 @@ class SSHClient {
         sendToChannel(sessionChannel, b);
       }
     }
+  }
+
+  Channel acceptChannel(MSG_CHANNEL_OPEN msg) {
+    Channel channel = channels[nextChannelId];
+    channel.localId = nextChannelId;
+    channel.remoteId = msg.senderChannel;
+    channel.windowC = msg.initialWinSize;
+    channel.windowS = initialWindowSize;
+    channel.opened = true;
+    nextChannelId++;
+    return channel;
   }
 }

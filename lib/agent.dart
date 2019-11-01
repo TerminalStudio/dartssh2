@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/serializable.dart';
 
+/// https://tools.ietf.org/html/draft-miller-ssh-agent-03#section-3
 abstract class AgentMessage extends Serializable {
   int id;
   AgentMessage(this.id);
@@ -21,6 +22,7 @@ abstract class AgentMessage extends Serializable {
   }
 }
 
+/// https://tools.ietf.org/html/draft-miller-ssh-agent-03#section-4.1
 class AGENT_FAILURE extends AgentMessage {
   static const int ID = 5;
   AGENT_FAILURE() : super(ID);
@@ -38,13 +40,15 @@ class AGENT_FAILURE extends AgentMessage {
   void serialize(SerializableOutput output) {}
 }
 
+/// https://tools.ietf.org/html/draft-miller-ssh-agent-03#section-4.4
 class AGENTC_REQUEST_IDENTITIES {
   static const int ID = 11;
 }
 
+/// https://tools.ietf.org/html/draft-miller-ssh-agent-03#section-4.4
 class AGENT_IDENTITIES_ANSWER extends AgentMessage {
   static const int ID = 12;
-  List<MapEntry<String, String>> keys;
+  List<MapEntry<Uint8List, String>> keys = List<MapEntry<Uint8List, String>>();
   AGENT_IDENTITIES_ANSWER() : super(ID);
 
   @override
@@ -60,16 +64,17 @@ class AGENT_IDENTITIES_ANSWER extends AgentMessage {
   @override
   void serialize(SerializableOutput output) {
     output.addUint32(keys.length);
-    for (MapEntry<String, String> key in keys) {
+    for (MapEntry<Uint8List, String> key in keys) {
       serializeString(output, key.key);
       serializeString(output, key.value);
     }
   }
 }
 
+/// https://tools.ietf.org/html/draft-miller-ssh-agent-03#section-4.5
 class AGENTC_SIGN_REQUEST extends AgentMessage {
   static const int ID = 13;
-  String key, data;
+  Uint8List key, data;
   int flags;
   AGENTC_SIGN_REQUEST() : super(ID);
 
@@ -81,8 +86,8 @@ class AGENTC_SIGN_REQUEST extends AgentMessage {
 
   @override
   void deserialize(SerializableInput input) {
-    key = deserializeString(input);
-    data = deserializeString(input);
+    key = deserializeStringBytes(input);
+    data = deserializeStringBytes(input);
     flags = input.getUint32();
   }
 
@@ -90,9 +95,10 @@ class AGENTC_SIGN_REQUEST extends AgentMessage {
   void serialize(SerializableOutput output) {}
 }
 
+/// On success, the agent shall reply with:
 class AGENT_SIGN_RESPONSE extends AgentMessage {
   static const int ID = 14;
-  String sig;
+  Uint8List sig;
   AGENT_SIGN_RESPONSE(this.sig) : super(ID);
 
   @override
@@ -102,7 +108,8 @@ class AGENT_SIGN_RESPONSE extends AgentMessage {
   int get serializedSize => serializedHeaderSize + sig.length;
 
   @override
-  void deserialize(SerializableInput input) => sig = deserializeString(input);
+  void deserialize(SerializableInput input) =>
+      sig = deserializeStringBytes(input);
 
   @override
   void serialize(SerializableOutput output) => serializeString(output, sig);

@@ -52,6 +52,7 @@ abstract class SerializableBuffer {
       viewUint8List(buffer, start, end - start);
 }
 
+/// Consumes [SerializableBuffer] to deserialized input.
 class SerializableInput extends SerializableBuffer {
   SerializableInput(Uint8List buffer, {Endian endian = Endian.big})
       : super(buffer, endian: endian);
@@ -84,6 +85,7 @@ class SerializableInput extends SerializableBuffer {
   }
 }
 
+/// Fills [SerializableBuffer] with serialized output.
 class SerializableOutput extends SerializableBuffer {
   SerializableOutput(Uint8List buffer, {Endian endian = Endian.big})
       : super(buffer, endian: endian);
