@@ -44,7 +44,7 @@ void main(List<String> arguments) async {
   try {
     final SSHClient ssh = SSHClient(
         hostport: 'ssh://' + host + (port != null ? ':$port' : ':22'),
-        user: login,
+        login: login,
         print: print,
         debugPrint: ((args['debug'] != null) ? print : null),
         tracePrint: ((args['trace'] != null) ? print : null),

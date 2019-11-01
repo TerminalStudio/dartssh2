@@ -452,7 +452,7 @@ class MSG_KEX_DH_GEX_REPLY extends MSG_KEXDH_REPLY {
 class MSG_KEX_ECDH_INIT extends SSHMessage {
   static const int ID = 30;
   Uint8List qC;
-  MSG_KEX_ECDH_INIT(this.qC) : super(ID);
+  MSG_KEX_ECDH_INIT([this.qC]) : super(ID);
 
   @override
   int get serializedHeaderSize => 4;
@@ -473,7 +473,7 @@ class MSG_KEX_ECDH_INIT extends SSHMessage {
 class MSG_KEX_ECDH_REPLY extends SSHMessage {
   static const int ID = 31;
   Uint8List kS, qS, hSig;
-  MSG_KEX_ECDH_REPLY() : super(ID);
+  MSG_KEX_ECDH_REPLY([this.qS, this.kS, this.hSig]) : super(ID);
 
   @override
   int get serializedHeaderSize => 4 * 3;

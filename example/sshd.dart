@@ -4,11 +4,13 @@
 import 'dart:io';
 
 import 'package:args/args.dart';
+import 'package:stack_trace/stack_trace.dart';
 
-import 'package:dartssh/client.dart';
 import 'package:dartssh/identity.dart';
 import 'package:dartssh/pem.dart';
 import 'package:dartssh/socket_io.dart';
+import 'package:dartssh/server.dart';
+import 'package:dartssh/transport.dart';
 
 void main(List<String> arguments) async {
   exitCode = 0;
@@ -21,31 +23,28 @@ void main(List<String> arguments) async {
     ..addOption('trace');
 
   final ArgResults args = argParser.parse(arguments);
-
-  if (args.rest.length != 1) {
-    print('usage: sshd [args]');
-    print(argParser.usage);
-    exitCode = 1;
-    return;
-  }
-
   final int port = int.parse(args['port'] ?? '22');
   final String config = args['config'];
   Identity hostkey = loadHostKey(path: args['hostkey']);
 
   try {
-    ServerSocket listener = await ServerSocket.bind('0.0.0.0', port);
-    await for (Socket socket in listener) {
-      final SSHClient client = SSHClient(
-          socket: SocketImpl()..socket = socket,
-          print: print,
-          debugPrint: ((args['debug'] != null) ? print : null),
-          tracePrint: ((args['trace'] != null) ? print : null),
-          response: (String v) => stdout.write(v),
-          disconnected: () { print('disconnected'); });
-      client.onConnected(client.socket);
-    }
-
+    await Chain.capture(() async {
+      ServerSocket listener = await ServerSocket.bind('0.0.0.0', port);
+      await for (Socket socket in listener) {
+        String hostport = '${socket.remoteAddress.host}:${socket.remotePort}';
+        print('accepted $hostport');
+        final SSHServer server = SSHServer(hostkey,
+            socket: SocketImpl()..socket = socket,
+            hostport: hostport,
+            print: print,
+            debugPrint: ((args['debug'] != null) ? print : null),
+            tracePrint: ((args['trace'] != null) ? print : null),
+            response: (String v) => stdout.write(v),
+            disconnected: () {
+              print('disconnected');
+            });
+      }
+    });
   } catch (error, stacktrace) {
     print('sshd: exception: $error: $stacktrace');
     exitCode = -1;
@@ -55,11 +54,17 @@ void main(List<String> arguments) async {
 Identity loadHostKey({StringFunction getPassword, String path}) {
   Identity hostkey = Identity();
   path ??= '/etc/ssh/ssh_host_';
-  parsePem(File('${path}ecdsa_key').readAsStringSync(),
-      identity: hostkey, getPassword: getPassword);
-  parsePem(File('${path}ed25519_key').readAsStringSync(),
-      identity: hostkey, getPassword: getPassword);
-  parsePem(File('${path}rsa_key').readAsStringSync(),
-      identity: hostkey, getPassword: getPassword);
+  try {
+    parsePem(File('${path}ecdsa_key').readAsStringSync(),
+        identity: hostkey, getPassword: getPassword);
+  } catch (error) {}
+  try {
+    parsePem(File('${path}ed25519_key').readAsStringSync(),
+        identity: hostkey, getPassword: getPassword);
+  } catch (error) {}
+  try {
+    parsePem(File('${path}rsa_key').readAsStringSync(),
+        identity: hostkey, getPassword: getPassword);
+  } catch (error) {}
   return hostkey;
 }

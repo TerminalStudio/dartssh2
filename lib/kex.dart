@@ -4,23 +4,65 @@
 import 'dart:math';
 import 'dart:typed_data';
 
+import "package:pointycastle/api.dart";
+import 'package:pointycastle/digests/sha1.dart';
+import "package:pointycastle/digests/sha256.dart";
 import 'package:pointycastle/ecc/api.dart';
 import 'package:pointycastle/src/utils.dart';
 import 'package:tweetnacl/tweetnacl.dart';
 
 import 'package:dartssh/protocol.dart';
+import 'package:dartssh/ssh.dart';
+
+/// Mixin providing a suite of key exchange methods.
+mixin SSHDiffieHellman {
+  DiffieHellman dh = DiffieHellman();
+  EllipticCurveDiffieHellman ecdh = EllipticCurveDiffieHellman();
+  X25519DiffieHellman x25519dh = X25519DiffieHellman();
+  Digest kexHash;
+
+  void initializeDiffieHellman(int kexMethod, Random random) {
+    if (KEX.x25519DiffieHellman(kexMethod)) {
+      kexHash = SHA256Digest();
+      x25519dh.generatePair(random);
+    } else if (KEX.ellipticCurveDiffieHellman(kexMethod)) {
+      kexHash = KEX.ellipticCurveHash(kexMethod);
+      ecdh = EllipticCurveDiffieHellman(
+          KEX.ellipticCurve(kexMethod), KEX.ellipticCurveSecretBits(kexMethod));
+      ecdh.generatePair(random);
+    } else if (KEX.diffieHellmanGroupExchange(kexMethod)) {
+      if (kexMethod == KEX.DHGEX_SHA1) {
+        kexHash = SHA1Digest();
+      } else if (kexMethod == KEX.DHGEX_SHA256) {
+        kexHash = SHA256Digest();
+      }
+    } else if (KEX.diffieHellman(kexMethod)) {
+      if (kexMethod == KEX.DH14_SHA1) {
+        dh = DiffieHellman.group14();
+      } else if (kexMethod == KEX.DH1_SHA1) {
+        dh = DiffieHellman.group1();
+      }
+      kexHash = SHA1Digest();
+      dh.generatePair(random);
+    } else {
+      throw FormatException('unknown kex method: $kexMethod');
+    }
+  }
+}
 
 /// https://tools.ietf.org/html/rfc7748#section-6
 class X25519DiffieHellman {
   Uint8List myPrivKey, myPubKey, remotePubKey;
 
-  void GeneratePair(Random random) {
+  void generatePair(Random random) {
     myPrivKey = randBytes(random, 32);
     myPubKey = ScalarMult.scalseMult_base(myPrivKey);
   }
 
-  BigInt computeSecret() =>
-      decodeBigInt(ScalarMult.scalseMult(myPrivKey, remotePubKey));
+  BigInt computeSecret(Uint8List remotePubKey) {
+    this.remotePubKey = remotePubKey;
+    return decodeBigInt(ScalarMult.scalseMult(myPrivKey, remotePubKey));
+  }
 }
 
 /// The Elliptic Curve Diffie-Hellman (ECDH) key exchange method

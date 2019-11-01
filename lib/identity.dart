@@ -54,6 +54,32 @@ class Identity {
         true, PrivateKeyParameter<asymmetric.RSAPrivateKey>(rsaPrivate));
     return RSASignature(signer.generateSignature(m).bytes);
   }
+
+  Uint8List getRawPublicKey(int keyType) {
+    if (Key.ellipticCurveDSA(keyType)) return getECDSAPublicKey().toRaw();
+    switch (keyType) {
+      case Key.ED25519:
+        return getEd25519PublicKey().toRaw();
+      case Key.RSA:
+        return getRSAPublicKey().toRaw();
+      default:
+        throw FormatException('key type $keyType');
+    }
+  }
+
+  Uint8List signMessage(int keyType, Uint8List m, [SecureRandom secureRandom]) {
+    if (Key.ellipticCurveDSA(keyType)) {
+      return signWithECDSAKey(m, secureRandom).toRaw();
+    }
+    switch (keyType) {
+      case Key.ED25519:
+        return signWithEd25519Key(m).toRaw();
+      case Key.RSA:
+        return signWithRSAKey(m).toRaw();
+      default:
+        throw FormatException('key type $keyType');
+    }
+  }
 }
 
 /// https://tools.ietf.org/html/rfc4253#section-6.6
@@ -231,7 +257,8 @@ class Ed25519Signature with Serializable {
 /// Verifies Ed25519 [signature] on [message] with private key matching [publicKey].
 bool verifyEd25519Signature(
         Ed25519Key publicKey, Ed25519Signature signature, Uint8List message) =>
-    tweetnacl.Signature(publicKey.key, null).detached_verify(message, signature.sig);
+    tweetnacl.Signature(publicKey.key, null)
+        .detached_verify(message, signature.sig);
 
 /// Verifies ECDSA [signature] on [message] with private key matching [publicKey].
 bool verifyECDSASignature(int keyType, ECDSAKey publicKey,

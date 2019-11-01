@@ -10,11 +10,11 @@ import 'package:pointycastle/asymmetric/api.dart' as asymmetric;
 import 'package:pointycastle/ecc/api.dart';
 import 'package:tweetnacl/tweetnacl.dart' as tweetnacl;
 
-import 'package:dartssh/client.dart';
 import 'package:dartssh/identity.dart';
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/serializable.dart';
 import 'package:dartssh/ssh.dart';
+import 'package:dartssh/transport.dart';
 
 /// Privacy-Enhanced Mail (PEM) is a de facto file format for storing and sending
 /// cryptographic keys, certificates, and other data.

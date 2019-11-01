@@ -598,6 +598,7 @@ class Digester {
 
 /// The exchange hash is used to authenticate the key exchange and SHOULD be kept secret.
 Uint8List computeExchangeHash(
+    bool server,
     int kexMethod,
     Digest algo,
     String verC,
@@ -629,14 +630,17 @@ Uint8List computeExchangeHash(
     H.updateBigInt(dh.g);
   }
   if (KEX.x25519DiffieHellman(kexMethod)) {
+    if (server) H.update(x25519dh.remotePubKey);
     H.update(x25519dh.myPubKey);
-    H.update(x25519dh.remotePubKey);
+    if (!server) H.update(x25519dh.remotePubKey);
   } else if (KEX.ellipticCurveDiffieHellman(kexMethod)) {
+    if (server) H.update(ecdh.sText);
     H.update(ecdh.cText);
-    H.update(ecdh.sText);
+    if (!server) H.update(ecdh.sText);
   } else {
+    if (server) H.updateBigInt(dh.f);
     H.updateBigInt(dh.e);
-    H.updateBigInt(dh.f);
+    if (!server) H.updateBigInt(dh.f);
   }
   H.updateBigInt(K);
   return H.finish();

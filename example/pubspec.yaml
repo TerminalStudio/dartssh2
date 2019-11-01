@@ -12,3 +12,4 @@ dependencies:
   args: ^1.5.2
   dartssh:
     path: ../
+  stack_trace: ^1.9.3
