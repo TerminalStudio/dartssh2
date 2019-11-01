@@ -10,6 +10,7 @@ import 'package:dartssh/socket.dart';
 class SocketImpl extends SocketInterface {
   Socket socket;
   Function onError, onDone;
+  SocketImpl([this.socket]);
 
   @override
   void close() {

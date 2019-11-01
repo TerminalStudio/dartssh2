@@ -8,18 +8,15 @@ import 'dart:typed_data';
 
 import 'package:convert/convert.dart';
 import "package:pointycastle/api.dart";
-import 'package:pointycastle/asymmetric/api.dart' as asymmetric;
 import 'package:pointycastle/digests/sha1.dart';
 import "package:pointycastle/digests/sha256.dart";
-import 'package:pointycastle/ecc/api.dart';
 import 'package:pointycastle/macs/hmac.dart';
 import 'package:pointycastle/random/fortuna_random.dart';
-import 'package:pointycastle/signers/ecdsa_signer.dart';
-import 'package:pointycastle/signers/rsa_signer.dart';
 import 'package:validators/sanitizers.dart';
-import 'package:tweetnacl/tweetnacl.dart' as tweetnacl;
 
 import 'package:dartssh/agent.dart';
+import 'package:dartssh/identity.dart';
+import 'package:dartssh/kex.dart';
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/serializable.dart';
 import 'package:dartssh/socket.dart';
@@ -36,47 +33,6 @@ typedef FingerprintCallback = bool Function(int, Uint8List);
 typedef ChannelCallback = void Function(Channel, Uint8List);
 typedef RemoteForwardCallback = void Function(
     Channel, String, int, String, int);
-
-class Identity {
-  int keyType;
-  asymmetric.RSAPublicKey rsaPublic;
-  asymmetric.RSAPrivateKey rsaPrivate;
-  ECPublicKey ecdsaPublic;
-  ECPrivateKey ecdsaPrivate;
-  tweetnacl.KeyPair ed25519;
-
-  Ed25519Key getEd25519PublicKey() => Ed25519Key(ed25519.publicKey);
-
-  Ed25519Signature signWithEd25519Key(Uint8List m) =>
-      Ed25519Signature(tweetnacl.Signature(null, ed25519.secretKey)
-          .sign(m)
-          .buffer
-          .asUint8List(0, 64));
-
-  ECDSAKey getECDSAPublicKey() => ECDSAKey(Key.name(keyType),
-      Key.ellipticCurveName(keyType), ecdsaPublic.Q.getEncoded(false));
-
-  ECDSASignature signWithECDSAKey(Uint8List m, SecureRandom secureRandom) {
-    ECDSASigner signer = ECDSASigner(Key.ellipticCurveHash(keyType));
-    signer.init(
-        true,
-        ParametersWithRandom(
-          PrivateKeyParameter(ecdsaPrivate),
-          secureRandom,
-        ));
-    ECSignature sig = signer.generateSignature(m);
-    return ECDSASignature(Key.name(keyType), sig.r, sig.s);
-  }
-
-  RSAKey getRSAPublicKey() => RSAKey(rsaPublic.exponent, rsaPublic.modulus);
-
-  RSASignature signWithRSAKey(Uint8List m) {
-    RSASigner signer = RSASigner(SHA1Digest(), '06052b0e03021a');
-    signer.init(
-        true, PrivateKeyParameter<asymmetric.RSAPrivateKey>(rsaPrivate));
-    return RSASignature(signer.generateSignature(m).bytes);
-  }
-}
 
 class Forward {
   int port, targetPort;
@@ -209,13 +165,15 @@ class SSHClient {
       this.socket,
       this.random,
       this.secureRandom}) {
-    socket ??= SocketImpl();
     random ??= Random.secure();
-    if (debugPrint != null) {
-      debugPrint('Connecting to $hostport');
+    if (socket == null) {
+      if (debugPrint != null) {
+        debugPrint('Connecting to $hostport');
+      }
+      socket = SocketImpl();
+      socket.connect(
+                     hostport, onConnected, (error) => disconnect('connect error'));
     }
-    socket.connect(
-        hostport, onConnected, (error) => disconnect('connect error'));
   }
 
   SecureRandom getSecureRandom() {
@@ -1134,7 +1092,7 @@ class SSHClient {
           'ssh-ed25519', pubkey, sig.toRaw()));
       return;
     } else if (identity.ecdsaPrivate != null) {
-      String keyType = Key.name(identity.keyType);
+      String keyType = Key.name(identity.ecdsaKeyType);
       Uint8List pubkey = identity.getECDSAPublicKey().toRaw();
       Uint8List challenge = deriveChallenge(
           sessionId, login, 'ssh-connection', 'publickey', keyType, pubkey);

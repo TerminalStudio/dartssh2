@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:args/args.dart';
 
 import 'package:dartssh/client.dart';
+import 'package:dartssh/identity.dart';
 import 'package:dartssh/pem.dart';
 
 void main(List<String> arguments) async {

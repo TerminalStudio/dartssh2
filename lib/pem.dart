@@ -11,13 +11,16 @@ import 'package:pointycastle/ecc/api.dart';
 import 'package:tweetnacl/tweetnacl.dart' as tweetnacl;
 
 import 'package:dartssh/client.dart';
+import 'package:dartssh/identity.dart';
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/serializable.dart';
 import 'package:dartssh/ssh.dart';
 
 /// Privacy-Enhanced Mail (PEM) is a de facto file format for storing and sending
 /// cryptographic keys, certificates, and other data.
-Identity parsePem(String text, {StringFunction getPassword}) {
+Identity parsePem(String text,
+    {StringFunction getPassword, Identity identity}) {
+  identity ??= Identity();
   const String beginText = '-----BEGIN ',
       endText = '-----END ',
       termText = '-----';
@@ -108,18 +111,17 @@ Identity parsePem(String text, {StringFunction getPassword}) {
         case 'ssh-ed25519':
           OpenSSHEd25519PrivateKey ed25519 = OpenSSHEd25519PrivateKey()
             ..deserialize(input);
-          Identity ret = Identity()
-            ..keyType = Key.ED25519
-            ..ed25519 =
-                tweetnacl.Signature.keyPair_fromSecretKey(ed25519.privkey);
-          assert(equalUint8List(ret.ed25519.publicKey, ed25519.pubkey));
-          return ret;
+          assert(identity.ed25519 == null);
+          identity.ed25519 =
+              tweetnacl.Signature.keyPair_fromSecretKey(ed25519.privkey);
+          assert(equalUint8List(identity.ed25519.publicKey, ed25519.pubkey));
+          return identity;
 
         case 'ssh-rsa':
           OpenSSHRSAPrivateKey rsaPrivateKey = OpenSSHRSAPrivateKey()
             ..deserialize(input);
-          return Identity()
-            ..keyType = Key.RSA
+          assert(identity.rsaPublic == null && identity.rsaPrivate == null);
+          return identity
             ..rsaPublic =
                 asymmetric.RSAPublicKey(rsaPrivateKey.n, rsaPrivateKey.e)
             ..rsaPrivate = asymmetric.RSAPrivateKey(rsaPrivateKey.n,
@@ -131,13 +133,16 @@ Identity parsePem(String text, {StringFunction getPassword}) {
               ..deserialize(input);
             ECDomainParameters curve =
                 Key.ellipticCurve(ecdsaPrivateKey.keyTypeId);
-            Identity ret = Identity()
-              ..keyType = ecdsaPrivateKey.keyTypeId
+            assert(
+                identity.ecdsaPublic == null && identity.ecdsaPrivate == null);
+            identity
+              ..ecdsaKeyType = ecdsaPrivateKey.keyTypeId
               ..ecdsaPublic =
                   ECPublicKey(curve.curve.decodePoint(ecdsaPrivateKey.q), curve)
               ..ecdsaPrivate = ECPrivateKey(ecdsaPrivateKey.d, curve);
-            assert((curve.G * ret.ecdsaPrivate.d) == ret.ecdsaPublic.Q);
-            return ret;
+            assert(
+                (curve.G * identity.ecdsaPrivate.d) == identity.ecdsaPublic.Q);
+            return identity;
           } else {
             throw FormatException('type $type');
           }
@@ -147,8 +152,8 @@ Identity parsePem(String text, {StringFunction getPassword}) {
     case 'RSA PRIVATE KEY':
       RSAPrivateKey rsaPrivateKey = RSAPrivateKey()
         ..deserialize(SerializableInput(payload));
-      return Identity()
-        ..keyType = Key.RSA
+      assert(identity.rsaPublic == null && identity.rsaPrivate == null);
+      return identity
         ..rsaPublic = asymmetric.RSAPublicKey(rsaPrivateKey.n, rsaPrivateKey.e)
         ..rsaPrivate = asymmetric.RSAPrivateKey(
             rsaPrivateKey.n, rsaPrivateKey.d, rsaPrivateKey.p, rsaPrivateKey.q);
