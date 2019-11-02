@@ -4,7 +4,7 @@ OBS_PORT=9292
 dart --disable-service-auth-codes \
   --enable-vm-service=$OBS_PORT \
   --pause-isolates-on-exit \
-  test/test_all.dart &
+  test/dartssh_test.dart &
 
 pub global run coverage:collect_coverage \
   --port=$OBS_PORT \

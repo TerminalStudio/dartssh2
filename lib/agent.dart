@@ -5,6 +5,69 @@ import 'dart:typed_data';
 
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/serializable.dart';
+import 'package:dartssh/ssh.dart';
+import 'package:dartssh/transport.dart';
+
+/// Mixin providing SSH Agent forwarding.
+mixin SSHAgentForwarding on SSHTransport {
+  void handleAgentRead(Channel channel, Uint8List msg) {
+    channel.buf.add(msg);
+    while (channel.buf.data.length > 4) {
+      SerializableInput input = SerializableInput(channel.buf.data);
+      int agentPacketLen = input.getUint32();
+      if (input.remaining < agentPacketLen) break;
+      handleAgentPacket(channel,
+          SerializableInput(input.viewOffset(input.offset, agentPacketLen)));
+      channel.buf.flush(agentPacketLen + 4);
+    }
+  }
+
+  void handleAgentPacket(Channel channel, SerializableInput agentPacketS) {
+    int agentPacketId = agentPacketS.getUint8();
+    switch (agentPacketId) {
+      case AGENTC_REQUEST_IDENTITIES.ID:
+        handleAGENTC_REQUEST_IDENTITIES(channel);
+        break;
+
+      case AGENTC_SIGN_REQUEST.ID:
+        handleAGENTC_SIGN_REQUEST(
+            channel, AGENTC_SIGN_REQUEST()..deserialize(agentPacketS));
+        break;
+
+      default:
+        if (print != null) {
+          print('$hostport: unknown agent packet number: $agentPacketId');
+        }
+        break;
+    }
+  }
+
+  void handleAGENTC_REQUEST_IDENTITIES(Channel channel) {
+    if (tracePrint != null) {
+      tracePrint('$hostport: agent channel: AGENTC_REQUEST_IDENTITIES');
+    }
+    AGENT_IDENTITIES_ANSWER reply = AGENT_IDENTITIES_ANSWER();
+    if (identity != null) {
+      reply.keys = identity.getRawPublicKeyList();
+    }
+    sendToChannel(channel, reply.toRaw());
+  }
+
+  void handleAGENTC_SIGN_REQUEST(Channel channel, AGENTC_SIGN_REQUEST msg) {
+    if (tracePrint != null) {
+      tracePrint('$hostport: agent channel: AGENTC_SIGN_REQUEST');
+    }
+    SerializableInput keyStream = SerializableInput(msg.key);
+    String keyType = deserializeString(keyStream);
+    Uint8List sig =
+        identity.signMessage(Key.id(keyType), msg.data, getSecureRandom());
+    if (sig != null) {
+      sendToChannel(channel, AGENT_SIGN_RESPONSE(sig).toRaw());
+    } else {
+      sendToChannel(channel, AGENT_FAILURE().toRaw());
+    }
+  }
+}
 
 /// https://tools.ietf.org/html/draft-miller-ssh-agent-03#section-3
 abstract class AgentMessage extends Serializable {

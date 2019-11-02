@@ -20,7 +20,7 @@ import 'package:dartssh/transport.dart';
 
 /// The Secure Shell (SSH) is a protocol for secure remote login and
 /// other secure network services over an insecure network.
-class SSHClient extends SSHTransport {
+class SSHClient extends SSHTransport with SSHAgentForwarding {
   String login, termvar, startupCommand;
   bool agentForwarding, closeOnDisconnect, startShell;
   FingerprintCallback acceptHostFingerprint;
@@ -31,7 +31,6 @@ class SSHClient extends SSHTransport {
   int loginPrompts = 0, passwordPrompts = 0, userauthFail = 0;
   bool acceptedHostkey = false, loadedPw = false, wrotePw = false;
   Uint8List pw;
-  Identity identity;
   int termWidth = 80, termHeight = 25;
 
   SSHClient(
@@ -46,7 +45,7 @@ class SSHClient extends SSHTransport {
       List<Forward> forwardLocal,
       List<Forward> forwardRemote,
       VoidCallback disconnected,
-      StringCallback response,
+      ResponseCallback response,
       StringCallback print,
       StringCallback debugPrint,
       StringCallback tracePrint,
@@ -77,38 +76,6 @@ class SSHClient extends SSHTransport {
       socket = SocketImpl();
       socket.connect(
           hostport, onConnected, (error) => disconnect('connect error'));
-    }
-  }
-
-  void handleAgentRead(Channel channel, Uint8List msg) {
-    channel.buf.add(msg);
-    while (channel.buf.data.length > 4) {
-      SerializableInput input = SerializableInput(channel.buf.data);
-      int agentPacketLen = input.getUint32();
-      if (input.remaining < agentPacketLen) break;
-      handleAgentPacket(channel,
-          SerializableInput(input.viewOffset(input.offset, agentPacketLen)));
-      channel.buf.flush(agentPacketLen + 4);
-    }
-  }
-
-  void handleAgentPacket(Channel channel, SerializableInput agentPacketS) {
-    int agentPacketId = agentPacketS.getUint8();
-    switch (agentPacketId) {
-      case AGENTC_REQUEST_IDENTITIES.ID:
-        handleAGENTC_REQUEST_IDENTITIES(channel);
-        break;
-
-      case AGENTC_SIGN_REQUEST.ID:
-        handleAGENTC_SIGN_REQUEST(
-            channel, AGENTC_SIGN_REQUEST()..deserialize(agentPacketS));
-        break;
-
-      default:
-        if (print != null) {
-          print('$hostport: unknown agent packet number: $agentPacketId');
-        }
-        break;
     }
   }
 
@@ -343,7 +310,7 @@ class SSHClient extends SSHTransport {
     if (tracePrint != null) tracePrint('$hostport: MSG_SERVICE_ACCEPT');
     if (login == null || login.isEmpty) {
       loginPrompts = 1;
-      response('login: ');
+      response(this, 'login: ');
     }
     if (identity == null && loadIdentity != null) {
       identity = loadIdentity();
@@ -359,7 +326,7 @@ class SSHClient extends SSHTransport {
     if (!loadedPw) clearPassword();
     userauthFail++;
     if (userauthFail == 1 && !wrotePw) {
-      response('Password:');
+      response(this, 'Password:');
       passwordPrompts = 1;
       loadPassword();
     } else {
@@ -398,14 +365,14 @@ class SSHClient extends SSHTransport {
       if (tracePrint != null) {
         tracePrint('$hostport: instruction: ${msg.instruction}');
       }
-      response(msg.instruction);
+      response(this, msg.instruction);
     }
 
     for (MapEntry<String, int> prompt in msg.prompts) {
       if (tracePrint != null) {
         tracePrint('$hostport: prompt: ${prompt.key}');
       }
-      response(prompt.key);
+      response(this, prompt.key);
     }
 
     if (msg.prompts.isNotEmpty) {
@@ -416,9 +383,10 @@ class SSHClient extends SSHTransport {
     }
   }
 
-  void handleMSG_GLOBAL_REQUEST(MSG_GLOBAL_REQUEST msg) {
+  void handleMSG_CHANNEL_REQUEST(MSG_CHANNEL_REQUEST msg) {
     if (tracePrint != null) {
-      tracePrint('$hostport: MSG_GLOBAL_REQUEST request=${msg.request}');
+      tracePrint(
+          '$hostport: MSG_CHANNEL_REQUEST ${msg.requestType} wantReply=${msg.wantReply}');
     }
   }
 
@@ -493,14 +461,14 @@ class SSHClient extends SSHTransport {
 
   void handleChannelData(Channel chan, Uint8List data) {
     if (chan == sessionChannel) {
-      response(utf8.decode(data));
+      response(this, utf8.decode(data));
     } else if (chan.cb != null) {
       chan.cb(chan, data);
     } else if (chan.agentChannel) {
       handleAgentRead(chan, data);
     }
   }
-  
+
   void handleChannelClose(Channel chan) {
     if (chan == sessionChannel) {
       writeCipher(MSG_DISCONNECT());
@@ -511,34 +479,8 @@ class SSHClient extends SSHTransport {
     }
   }
 
-  void handleAGENTC_REQUEST_IDENTITIES(Channel channel) {
-    if (tracePrint != null) {
-      tracePrint('$hostport: agent channel: AGENTC_REQUEST_IDENTITIES');
-    }
-    AGENT_IDENTITIES_ANSWER reply = AGENT_IDENTITIES_ANSWER();
-    if (identity != null) {
-      reply.keys = identity.getRawPublicKeyList();
-    }
-    sendToChannel(channel, reply.toRaw());
-  }
-
-  void handleAGENTC_SIGN_REQUEST(Channel channel, AGENTC_SIGN_REQUEST msg) {
-    if (tracePrint != null) {
-      tracePrint('$hostport: agent channel: AGENTC_SIGN_REQUEST');
-    }
-    SerializableInput keyStream = SerializableInput(msg.key);
-    String keyType = deserializeString(keyStream);
-    Uint8List sig =
-        identity.signMessage(Key.id(keyType), msg.data, getSecureRandom());
-    if (sig != null) {
-      sendToChannel(channel, AGENT_SIGN_RESPONSE(sig).toRaw());
-    } else {
-      sendToChannel(channel, AGENT_FAILURE().toRaw());
-    }
-  }
-
   bool computeExchangeHashAndVerifyHostKey(Uint8List kS, Uint8List hSig) {
-    computeTheExchangeHash(kS);
+    updateExchangeHash(kS);
     return verifyHostKey(exH, hostkeyType, kS, hSig);
   }
 
@@ -555,7 +497,7 @@ class SSHClient extends SSHTransport {
   }
 
   void sendPassword() {
-    response('\r\n');
+    response(this, '\r\n');
     wrotePw = true;
     if (userauthFail != 0) {
       writeCipher(MSG_USERAUTH_REQUEST(
@@ -604,13 +546,14 @@ class SSHClient extends SSHTransport {
         'keyboard-interactive', '', Uint8List(0), Uint8List(0)));
   }
 
+  @override
   void sendChannelData(Uint8List b) {
     if (loginPrompts != 0) {
-      response(utf8.decode(b));
+      response(this, utf8.decode(b));
       bool cr = b.isNotEmpty && b.last == '\n'.codeUnits[0];
       login += String.fromCharCodes(b, 0, b.length - (cr ? 1 : 0));
       if (cr) {
-        response('\n');
+        response(this, '\n');
         loginPrompts = 0;
         sendAuthenticationRequest();
       }

@@ -25,6 +25,7 @@ typedef Uint8ListFunction = Uint8List Function();
 typedef IdentityFunction = Identity Function();
 typedef FingerprintCallback = bool Function(int, Uint8List);
 typedef ChannelCallback = void Function(Channel, Uint8List);
+typedef ResponseCallback = void Function(SSHTransport, String);
 typedef RemoteForwardCallback = void Function(
     Channel, String, int, String, int);
 
@@ -53,18 +54,24 @@ class SSHTransportState {
 
 /// https://tools.ietf.org/html/rfc4253
 abstract class SSHTransport with SSHDiffieHellman {
+  // Parameters
+  Identity identity;
   String hostport;
   bool compress;
   Random random;
   SecureRandom secureRandom;
   VoidCallback disconnected;
-  StringCallback response, print, debugPrint, tracePrint;
+  ResponseCallback response;
+  StringCallback print, debugPrint, tracePrint;
   List<Forward> forwardLocal, forwardRemote;
   RemoteForwardCallback remoteForward;
 
-  String verC = 'SSH-2.0-dartssh_1.0', verS;
-
-  num serverVersion = 0;
+  // State
+  bool server,
+      guessedC = false,
+      guessedS = false,
+      guessedRightC = false,
+      guessedRightS = false;
 
   int state = 0,
       padding = 0,
@@ -87,12 +94,13 @@ abstract class SSHTransport with SSHDiffieHellman {
       decryptBlockSize = 0,
       sequenceNumberC2s = 0,
       sequenceNumberS2c = 0,
-      nextChannelId = 1;
+      nextChannelId = 1,
+      maxPacketSize = 32768,
+      initialWindowSize = 1048576;
 
-  bool guessedC = false,
-      guessedS = false,
-      guessedRightC = false,
-      guessedRightS = false;
+  num serverVersion = 0;
+
+  String verC = 'SSH-2.0-dartssh_1.0', verS;
 
   SocketInterface socket;
   QueueBuffer readBuffer = QueueBuffer(Uint8List(0));
@@ -104,23 +112,16 @@ abstract class SSHTransport with SSHDiffieHellman {
       sessionId,
       integrityC2s,
       integrityS2c;
-
-  BigInt K;
   BlockCipher encrypt, decrypt;
   HMac macAlgoC2s, macAlgoS2c;
-
-  int initialWindowSize = 1048576, maxPacketSize = 32768;
-  bool server;
-  bool get client => !server;
-
-  dynamic zreader;
-  dynamic zwriter;
-  HashMap<int, Forward> forwardingRemote;
-  HashMap<int, Channel> channels = HashMap<int, Channel>();
+  dynamic zreader, zwriter;
   Channel sessionChannel;
+  HashMap<int, Channel> channels = HashMap<int, Channel>();
+  HashMap<int, Forward> forwardingRemote;
 
   SSHTransport(this.server,
-      {this.hostport,
+      {this.identity,
+      this.hostport,
       this.compress,
       this.forwardLocal,
       this.forwardRemote,
@@ -135,11 +136,15 @@ abstract class SSHTransport with SSHDiffieHellman {
     random ??= Random.secure();
   }
 
+  // Interface
   void sendDiffileHellmanInit();
+  void sendChannelData(Uint8List b);
   void handlePacket(Uint8List packet);
   void handleChannelOpenConfirmation(Channel chan);
   void handleChannelData(Channel chan, Uint8List data);
   void handleChannelClose(Channel chan);
+
+  bool get client => !server;
 
   SecureRandom getSecureRandom() {
     if (secureRandom != null) return secureRandom;
@@ -445,7 +450,6 @@ abstract class SSHTransport with SSHDiffieHellman {
     handleChannelData(chan, msg.data);
   }
 
-
   void handleMSG_CHANNEL_EOF(MSG_CHANNEL_EOF msg) {
     if (tracePrint != null) {
       tracePrint('$hostport: MSG_CHANNEL_EOF ${msg.recipientChannel}');
@@ -479,10 +483,9 @@ abstract class SSHTransport with SSHDiffieHellman {
     channels.remove(msg.recipientChannel);
   }
 
-  void handleMSG_CHANNEL_REQUEST(MSG_CHANNEL_REQUEST msg) {
+  void handleMSG_GLOBAL_REQUEST(MSG_GLOBAL_REQUEST msg) {
     if (tracePrint != null) {
-      tracePrint(
-          '$hostport: MSG_CHANNEL_REQUEST ${msg.requestType} wantReply=${msg.wantReply}');
+      tracePrint('$hostport: MSG_GLOBAL_REQUEST request=${msg.request}');
     }
   }
 
@@ -490,6 +493,9 @@ abstract class SSHTransport with SSHDiffieHellman {
     if (tracePrint != null) {
       tracePrint(
           '$hostport: MSG_DISCONNECT ${msg.reasonCode} ${msg.description}');
+    }
+    if (server) {
+      disconnect('MSG_DISCONNECT ${msg.reasonCode} ${msg.description}');
     }
   }
 
@@ -505,7 +511,7 @@ abstract class SSHTransport with SSHDiffieHellman {
     }
   }
 
-  void computeTheExchangeHash(Uint8List kS) {
+  void updateExchangeHash(Uint8List kS) {
     exH = computeExchangeHash(server, kexMethod, kexHash, verC, verS, kexInitC,
         kexInitS, kS, K, dh, ecdh, x25519dh);
 

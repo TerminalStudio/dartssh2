@@ -20,6 +20,7 @@ mixin SSHDiffieHellman {
   EllipticCurveDiffieHellman ecdh = EllipticCurveDiffieHellman();
   X25519DiffieHellman x25519dh = X25519DiffieHellman();
   Digest kexHash;
+  BigInt K;
 
   void initializeDiffieHellman(int kexMethod, Random random) {
     if (KEX.x25519DiffieHellman(kexMethod)) {

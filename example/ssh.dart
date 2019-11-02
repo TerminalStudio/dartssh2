@@ -9,10 +9,20 @@ import 'package:args/args.dart';
 import 'package:dartssh/client.dart';
 import 'package:dartssh/identity.dart';
 import 'package:dartssh/pem.dart';
+import 'package:dartssh/transport.dart';
+
+Identity identity;
+SSHClient client;
 
 void main(List<String> arguments) async {
   exitCode = 0;
+  stdin.lineMode = false;
+  stdin.echoMode = false;
+  await ssh(arguments, stdin, () => exit(0));
+}
 
+Future<void> ssh(
+    List<String> arguments, Stream<List<int>> input, VoidCallback done) async {
   final argParser = ArgParser()
     ..addOption('login', abbr: 'l')
     ..addOption('port', abbr: 'p')
@@ -33,7 +43,6 @@ void main(List<String> arguments) async {
   final String port = args['port'];
   final String login = args['login'];
   final String identityFile = args['identity'];
-  Identity identity;
 
   if (login == null || login.isEmpty) {
     print('no login specified');
@@ -42,25 +51,23 @@ void main(List<String> arguments) async {
   }
 
   try {
-    final SSHClient ssh = SSHClient(
+    client = SSHClient(
         hostport: 'ssh://' + host + (port != null ? ':$port' : ':22'),
         login: login,
         print: print,
         debugPrint: ((args['debug'] != null) ? print : null),
         tracePrint: ((args['trace'] != null) ? print : null),
-        response: (String v) => stdout.write(v),
+        response: (_, String v) => stdout.write(v),
         loadIdentity: () {
           if (identity == null && identityFile != null) {
             identity = parsePem(File(identityFile).readAsStringSync());
           }
           return identity;
         },
-        disconnected: () => exit(0));
+        disconnected: done);
 
-    stdin.lineMode = false;
-    stdin.echoMode = false;
-    await for (String input in stdin.transform(utf8.decoder)) {
-      ssh.sendChannelData(utf8.encode(input));
+    await for (String x in input.transform(utf8.decoder)) {
+      client.sendChannelData(utf8.encode(x));
     }
   } catch (error, stacktrace) {
     print('ssh: exception: $error: $stacktrace');
