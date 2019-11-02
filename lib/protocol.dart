@@ -174,7 +174,7 @@ class MSG_DEBUG extends SSHMessage {
 class MSG_SERVICE_REQUEST extends SSHMessage {
   static const int ID = 5;
   String serviceName;
-  MSG_SERVICE_REQUEST(this.serviceName) : super(ID);
+  MSG_SERVICE_REQUEST([this.serviceName]) : super(ID);
 
   @override
   int get serializedHeaderSize => 4;
@@ -502,8 +502,13 @@ class MSG_USERAUTH_REQUEST extends SSHMessage {
   static const int ID = 50;
   String userName, serviceName, methodName, algoName;
   Uint8List secret, sig;
-  MSG_USERAUTH_REQUEST(this.userName, this.serviceName, this.methodName,
-      this.algoName, this.secret, this.sig)
+  MSG_USERAUTH_REQUEST(
+      [this.userName,
+      this.serviceName,
+      this.methodName,
+      this.algoName,
+      this.secret,
+      this.sig])
       : super(ID);
 
   @override
@@ -545,7 +550,26 @@ class MSG_USERAUTH_REQUEST extends SSHMessage {
   }
 
   @override
-  void deserialize(SerializableInput input) {}
+  void deserialize(SerializableInput input) {
+    userName = deserializeString(input);
+    serviceName = deserializeString(input);
+    methodName = deserializeString(input);
+    if (methodName == 'publickey') {
+      input.getUint8();
+      algoName = deserializeString(input);
+      secret = deserializeStringBytes(input);
+      sig = deserializeStringBytes(input);
+    } else if (methodName == 'password') {
+      input.getUint8();
+      secret = deserializeStringBytes(input);
+    } else if (methodName == 'keyboard-interactive') {
+      deserializeString(input);
+      deserializeString(input);
+    }
+  }
+
+  String toString() =>
+      'userName=$userName, serviceName=$serviceName, methodName=$methodName';
 }
 
 /// If the server rejects the authentication request, it MUST respond with the following:

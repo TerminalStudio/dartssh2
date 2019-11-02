@@ -41,7 +41,7 @@ class Channel {
   Channel([this.localId = 0, this.remoteId = 0]);
 }
 
-class SSHClientState {
+class SSHTransportState {
   static const int INIT = 0,
       FIRST_KEXINIT = 1,
       FIRST_KEXREPLY = 2,
@@ -116,8 +116,8 @@ abstract class SSHTransport with SSHDiffieHellman {
   dynamic zreader;
   dynamic zwriter;
   HashMap<int, Forward> forwardingRemote;
-
   HashMap<int, Channel> channels = HashMap<int, Channel>();
+  Channel sessionChannel;
 
   SSHTransport(this.server,
       {this.hostport,
@@ -137,6 +137,9 @@ abstract class SSHTransport with SSHDiffieHellman {
 
   void sendDiffileHellmanInit();
   void handlePacket(Uint8List packet);
+  void handleChannelOpenConfirmation(Channel chan);
+  void handleChannelData(Channel chan, Uint8List data);
+  void handleChannelClose(Channel chan);
 
   SecureRandom getSecureRandom() {
     if (secureRandom != null) return secureRandom;
@@ -163,7 +166,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   /// https://tools.ietf.org/html/rfc4253#section-4.2
   void handleConnected() {
     if (debugPrint != null) debugPrint('handleConnected');
-    if (state != SSHClientState.INIT) throw FormatException('$state');
+    if (state != SSHTransportState.INIT) throw FormatException('$state');
     socket.send(verC + '\r\n');
     if (client) sendKeyExchangeInit(false);
   }
@@ -198,13 +201,13 @@ abstract class SSHTransport with SSHDiffieHellman {
   void handleRead(Uint8List dataChunk) {
     readBuffer.add(dataChunk);
 
-    if (state == SSHClientState.INIT) {
+    if (state == SSHTransportState.INIT) {
       handleInitialState();
-      if (state == SSHClientState.INIT) return;
+      if (state == SSHTransportState.INIT) return;
     }
 
     while (true) {
-      bool encrypted = state > SSHClientState.FIRST_NEWKEYS;
+      bool encrypted = state > SSHTransportState.FIRST_NEWKEYS;
 
       if (packetLen == 0) {
         packetMacLen =
@@ -356,8 +359,8 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   void handleMSG_NEWKEYS() {
-    if (state != SSHClientState.FIRST_NEWKEYS &&
-        state != SSHClientState.NEWKEYS) {
+    if (state != SSHTransportState.FIRST_NEWKEYS &&
+        state != SSHTransportState.NEWKEYS) {
       throw FormatException('$hostport: unexpected state $state');
     }
     if (tracePrint != null) {
@@ -393,7 +396,113 @@ abstract class SSHTransport with SSHDiffieHellman {
       integrityC2s = integrityS2c;
       integrityS2c = swapUL;
     }
-    state = SSHClientState.NEWKEYS;
+    state = SSHTransportState.NEWKEYS;
+  }
+
+  void handleMSG_CHANNEL_OPEN_CONFIRMATION(MSG_CHANNEL_OPEN_CONFIRMATION msg) {
+    if (tracePrint != null) {
+      tracePrint(
+          '$hostport: MSG_CHANNEL_OPEN_CONFIRMATION local_id=${msg.recipientChannel} remote_id=${msg.senderChannel}');
+    }
+
+    Channel chan = channels[msg.recipientChannel];
+    if (chan == null || chan.remoteId == null) {
+      throw FormatException('$hostport: open invalid channel');
+    }
+    chan.remoteId = msg.senderChannel;
+    chan.windowC = msg.initialWinSize;
+    chan.opened = true;
+    handleChannelOpenConfirmation(chan);
+  }
+
+  void handleMSG_CHANNEL_WINDOW_ADJUST(MSG_CHANNEL_WINDOW_ADJUST msg) {
+    if (tracePrint != null) {
+      tracePrint(
+          '$hostport: MSG_CHANNEL_WINDOW_ADJUST add ${msg.bytesToAdd} to channel ${msg.recipientChannel}');
+    }
+    Channel chan = channels[msg.recipientChannel];
+    if (chan == null) {
+      throw FormatException('$hostport: window adjust invalid channel');
+    }
+    chan.windowC += msg.bytesToAdd;
+  }
+
+  void handleMSG_CHANNEL_DATA(MSG_CHANNEL_DATA msg) {
+    if (tracePrint != null) {
+      tracePrint(
+          '$hostport: MSG_CHANNEL_DATA: channel ${msg.recipientChannel} : ${msg.data.length} bytes');
+    }
+    Channel chan = channels[msg.recipientChannel];
+    if (chan == null) {
+      throw FormatException('$hostport: data for invalid channel');
+    }
+    chan.windowS -= (packetLen - packetMacLen - 4);
+    if (chan.windowS < initialWindowSize ~/ 2) {
+      writeClearOrEncrypted(
+          MSG_CHANNEL_WINDOW_ADJUST(chan.remoteId, initialWindowSize));
+      chan.windowS += initialWindowSize;
+    }
+    handleChannelData(chan, msg.data);
+  }
+
+
+  void handleMSG_CHANNEL_EOF(MSG_CHANNEL_EOF msg) {
+    if (tracePrint != null) {
+      tracePrint('$hostport: MSG_CHANNEL_EOF ${msg.recipientChannel}');
+    }
+    Channel chan = channels[msg.recipientChannel];
+    if (chan == null) {
+      throw FormatException('$hostport: close invalid channel');
+    }
+    if (!chan.sentEof) {
+      chan.sentEof = true;
+      writeCipher(MSG_CHANNEL_EOF(chan.remoteId));
+    }
+  }
+
+  void handleMSG_CHANNEL_CLOSE(MSG_CHANNEL_CLOSE msg) {
+    if (tracePrint != null) {
+      tracePrint('$hostport: MSG_CHANNEL_CLOSE ${msg.recipientChannel}');
+    }
+    Channel chan = channels[msg.recipientChannel];
+    if (chan == null) {
+      throw FormatException('$hostport: EOF invalid channel');
+    }
+
+    bool alreadySentClose = chan.sentClose;
+    if (!alreadySentClose) {
+      chan.sentClose = true;
+      writeCipher(MSG_CHANNEL_CLOSE(chan.remoteId));
+      handleChannelClose(chan);
+    }
+
+    channels.remove(msg.recipientChannel);
+  }
+
+  void handleMSG_CHANNEL_REQUEST(MSG_CHANNEL_REQUEST msg) {
+    if (tracePrint != null) {
+      tracePrint(
+          '$hostport: MSG_CHANNEL_REQUEST ${msg.requestType} wantReply=${msg.wantReply}');
+    }
+  }
+
+  void handleMSG_DISCONNECT(MSG_DISCONNECT msg) {
+    if (tracePrint != null) {
+      tracePrint(
+          '$hostport: MSG_DISCONNECT ${msg.reasonCode} ${msg.description}');
+    }
+  }
+
+  void handleMSG_IGNORE(MSG_IGNORE msg) {
+    if (tracePrint != null) {
+      tracePrint('$hostport: MSG_IGNORE');
+    }
+  }
+
+  void handleMSG_DEBUG(MSG_DEBUG msg) {
+    if (tracePrint != null) {
+      tracePrint('$hostport: MSG_DEBUG ${msg.message}');
+    }
   }
 
   void computeTheExchangeHash(Uint8List kS) {
@@ -401,7 +510,7 @@ abstract class SSHTransport with SSHDiffieHellman {
         kexInitS, kS, K, dh, ecdh, x25519dh);
 
     /// The exchange hash H from the first key exchange is used as the session identifier.
-    if (state == SSHClientState.FIRST_KEXREPLY) sessionId = exH;
+    if (state == SSHTransportState.FIRST_KEXREPLY) sessionId = exH;
 
     if (tracePrint != null) {
       tracePrint('$hostport: H = "${hex.encode(exH)}"');
@@ -440,11 +549,27 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   void writeClearOrEncrypted(SSHMessage msg) {
-    if (state > SSHClientState.FIRST_NEWKEYS) return writeCipher(msg);
+    if (state > SSHTransportState.FIRST_NEWKEYS) return writeCipher(msg);
     sequenceNumberC2s++;
     socket.sendRaw(msg.toBytes(null, random, encryptBlockSize));
     if (tracePrint != null) {
       tracePrint('$hostport: sent MSG id=${msg.id} in clear');
     }
+  }
+
+  void sendToChannel(Channel chan, Uint8List b) {
+    writeCipher(MSG_CHANNEL_DATA(chan.remoteId, b));
+    chan.windowC -= (b.length - 4);
+  }
+
+  Channel acceptChannel(MSG_CHANNEL_OPEN msg) {
+    Channel channel = channels[nextChannelId] = Channel();
+    channel.localId = nextChannelId;
+    channel.remoteId = msg.senderChannel;
+    channel.windowC = msg.initialWinSize;
+    channel.windowS = initialWindowSize;
+    channel.opened = true;
+    nextChannelId++;
+    return channel;
   }
 }

@@ -10,6 +10,7 @@ import 'package:dartssh/identity.dart';
 import 'package:dartssh/socket.dart';
 import 'package:dartssh/ssh.dart';
 import 'package:dartssh/protocol.dart';
+import 'package:dartssh/serializable.dart';
 import 'package:dartssh/transport.dart';
 
 class SSHServer extends SSHTransport {
@@ -52,9 +53,9 @@ class SSHServer extends SSHTransport {
     packetId = packetS.getUint8();
     switch (packetId) {
       case MSG_KEXINIT.ID:
-        state = state == SSHClientState.FIRST_KEXINIT
-            ? SSHClientState.FIRST_KEXREPLY
-            : SSHClientState.KEXREPLY;
+        state = state == SSHTransportState.FIRST_KEXINIT
+            ? SSHTransportState.FIRST_KEXREPLY
+            : SSHTransportState.KEXREPLY;
         handleMSG_KEXINIT(MSG_KEXINIT()..deserialize(packetS), packet);
         break;
 
@@ -64,6 +65,25 @@ class SSHServer extends SSHTransport {
 
       case MSG_NEWKEYS.ID:
         handleMSG_NEWKEYS();
+        break;
+
+      case MSG_SERVICE_REQUEST.ID:
+        handleMSG_SERVICE_REQUEST(MSG_SERVICE_REQUEST()..deserialize(packetS));
+        break;
+
+      case MSG_USERAUTH_REQUEST.ID:
+        handleMSG_USERAUTH_REQUEST(
+            MSG_USERAUTH_REQUEST()..deserialize(packetS));
+        break;
+
+      case MSG_CHANNEL_OPEN.ID:
+        handleMSG_CHANNEL_OPEN(
+            MSG_CHANNEL_OPEN()..deserialize(packetS), packetS);
+        break;
+
+      case MSG_CHANNEL_REQUEST.ID:
+        handleMSG_CHANNEL_REQUEST(
+            MSG_CHANNEL_REQUEST()..deserialize(packetS));
         break;
 
       default:
@@ -96,10 +116,10 @@ class SSHServer extends SSHTransport {
     writeClearOrEncrypted(MSG_KEX_ECDH_REPLY(x25519dh.myPubKey, kS,
         hostkey.signMessage(hostkeyType, exH, getSecureRandom())));
     writeClearOrEncrypted(MSG_NEWKEYS());
-    if (state == SSHClientState.FIRST_KEXREPLY) {
-      state = SSHClientState.FIRST_NEWKEYS;
+    if (state == SSHTransportState.FIRST_KEXREPLY) {
+      state = SSHTransportState.FIRST_NEWKEYS;
     } else {
-      state = SSHClientState.NEWKEYS;
+      state = SSHTransportState.NEWKEYS;
     }
   }
 
@@ -110,5 +130,60 @@ class SSHServer extends SSHTransport {
     computeTheExchangeHash(kS);
     writeClearOrEncrypted(MSG_KEX_ECDH_REPLY(ecdh.cText, kS,
         hostkey.signMessage(hostkeyType, exH, getSecureRandom())));
+  }
+
+  void handleMSG_SERVICE_REQUEST(MSG_SERVICE_REQUEST msg) {
+    switch (msg.serviceName) {
+      case 'ssh-userauth':
+        writeCipher(MSG_SERVICE_ACCEPT(msg.serviceName));
+        break;
+
+      default:
+        throw FormatException('service name ${msg.serviceName}');
+    }
+  }
+
+  void handleMSG_USERAUTH_REQUEST(MSG_USERAUTH_REQUEST msg) {
+    if (tracePrint != null) {
+      tracePrint('$hostport: MSG_USERAUTH_REQUEST: $msg');
+    }
+
+    /// Graciously accept all authorization requests.
+    writeCipher(MSG_USERAUTH_SUCCESS());
+  }
+
+  void handleMSG_CHANNEL_OPEN(MSG_CHANNEL_OPEN msg, SerializableInput packetS) {
+    if (tracePrint != null) {
+      tracePrint('$hostport: MSG_CHANNEL_OPEN type=${msg.channelType}');
+    }
+    if (msg.channelType == 'session') {
+      if (sessionChannel != null) {
+        throw FormatException('already started session');
+      }
+      sessionChannel = acceptChannel(msg);
+      writeCipher(MSG_CHANNEL_OPEN_CONFIRMATION(sessionChannel.remoteId,
+          sessionChannel.localId, sessionChannel.windowS, maxPacketSize));
+    } else {
+      if (print != null) {
+        print('unknown channel open ${msg.channelType}');
+      }
+      writeCipher(MSG_CHANNEL_OPEN_FAILURE(msg.senderChannel, 0, '', ''));
+    }
+  }
+
+  void handleMSG_CHANNEL_REQUEST(MSG_CHANNEL_REQUEST msg) {
+    if (tracePrint != null) {
+      tracePrint(
+          '$hostport: MSG_CHANNEL_REQUEST ${msg.requestType} wantReply=${msg.wantReply}');
+    }
+  }
+
+  void handleChannelOpenConfirmation(Channel chan) {
+  }
+
+  void handleChannelData(Channel chan, Uint8List data) {
+  }
+
+  void handleChannelClose(Channel chan) {
   }
 }

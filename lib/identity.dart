@@ -80,6 +80,20 @@ class Identity {
         throw FormatException('key type $keyType');
     }
   }
+
+  List<MapEntry<Uint8List, String>> getRawPublicKeyList() {
+    List<MapEntry<Uint8List, String>> ret = List<MapEntry<Uint8List, String>>();
+    if (ed25519 != null) {
+      ret.add(MapEntry<Uint8List, String>(getEd25519PublicKey().toRaw(), ''));
+    }
+    if (ecdsaPublic != null) {
+      ret.add(MapEntry<Uint8List, String>(getECDSAPublicKey().toRaw(), ''));
+    }
+    if (rsaPublic != null) {
+      ret.add(MapEntry<Uint8List, String>(getRSAPublicKey().toRaw(), ''));
+    }
+    return ret;
+  }
 }
 
 /// https://tools.ietf.org/html/rfc4253#section-6.6

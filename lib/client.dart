@@ -5,7 +5,6 @@ import 'dart:math';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:convert/convert.dart';
 import "package:pointycastle/api.dart";
 
 import 'package:dartssh/agent.dart';
@@ -33,7 +32,6 @@ class SSHClient extends SSHTransport {
   bool acceptedHostkey = false, loadedPw = false, wrotePw = false;
   Uint8List pw;
   Identity identity;
-  Channel sessionChannel;
   int termWidth = 80, termHeight = 25;
 
   SSHClient(
@@ -120,9 +118,9 @@ class SSHClient extends SSHTransport {
     packetId = packetS.getUint8();
     switch (packetId) {
       case MSG_KEXINIT.ID:
-        state = state == SSHClientState.FIRST_KEXINIT
-            ? SSHClientState.FIRST_KEXREPLY
-            : SSHClientState.KEXREPLY;
+        state = state == SSHTransportState.FIRST_KEXINIT
+            ? SSHTransportState.FIRST_KEXREPLY
+            : SSHTransportState.KEXREPLY;
         handleMSG_KEXINIT(MSG_KEXINIT()..deserialize(packetS), packet);
         break;
 
@@ -240,8 +238,8 @@ class SSHClient extends SSHTransport {
 
   /// https://tools.ietf.org/html/rfc4253#section-8
   void handleMSG_KEXDH_REPLY(int packetId, Uint8List packet) {
-    if (state != SSHClientState.FIRST_KEXREPLY &&
-        state != SSHClientState.KEXREPLY) {
+    if (state != SSHTransportState.FIRST_KEXREPLY &&
+        state != SSHTransportState.KEXREPLY) {
       throw FormatException('$hostport: unexpected state $state');
     }
     if (guessedS && !guessedRightS) {
@@ -275,15 +273,15 @@ class SSHClient extends SSHTransport {
     }
 
     writeClearOrEncrypted(MSG_NEWKEYS());
-    if (state == SSHClientState.FIRST_KEXREPLY) {
-      state = SSHClientState.FIRST_NEWKEYS;
+    if (state == SSHTransportState.FIRST_KEXREPLY) {
+      state = SSHTransportState.FIRST_NEWKEYS;
       if (acceptHostFingerprint != null) {
         acceptedHostkey = acceptHostFingerprint(hostkeyType, fingerprint);
       } else {
         acceptedHostkey = true;
       }
     } else {
-      state = SSHClientState.NEWKEYS;
+      state = SSHTransportState.NEWKEYS;
     }
   }
 
@@ -458,19 +456,7 @@ class SSHClient extends SSHTransport {
     }
   }
 
-  void handleMSG_CHANNEL_OPEN_CONFIRMATION(MSG_CHANNEL_OPEN_CONFIRMATION msg) {
-    if (tracePrint != null) {
-      tracePrint(
-          '$hostport: MSG_CHANNEL_OPEN_CONFIRMATION local_id=${msg.recipientChannel} remote_id=${msg.senderChannel}');
-    }
-
-    Channel chan = channels[msg.recipientChannel];
-    if (chan == null || chan.remoteId == null) {
-      throw FormatException('$hostport: open invalid channel');
-    }
-    chan.remoteId = msg.senderChannel;
-    chan.windowC = msg.initialWinSize;
-    chan.opened = true;
+  void handleChannelOpenConfirmation(Channel chan) {
     if (chan == sessionChannel) {
       if (agentForwarding) {
         writeCipher(MSG_CHANNEL_REQUEST.exec(
@@ -505,104 +491,23 @@ class SSHClient extends SSHTransport {
     }
   }
 
-  void handleMSG_CHANNEL_WINDOW_ADJUST(MSG_CHANNEL_WINDOW_ADJUST msg) {
-    if (tracePrint != null) {
-      tracePrint(
-          '$hostport: MSG_CHANNEL_WINDOW_ADJUST add ${msg.bytesToAdd} to channel ${msg.recipientChannel}');
-    }
-    Channel chan = channels[msg.recipientChannel];
-    if (chan == null) {
-      throw FormatException('$hostport: window adjust invalid channel');
-    }
-    chan.windowC += msg.bytesToAdd;
-  }
-
-  void handleMSG_CHANNEL_DATA(MSG_CHANNEL_DATA msg) {
-    if (tracePrint != null) {
-      tracePrint(
-          '$hostport: MSG_CHANNEL_DATA: channel ${msg.recipientChannel} : ${msg.data.length} bytes');
-    }
-    Channel chan = channels[msg.recipientChannel];
-    if (chan == null) {
-      throw FormatException('$hostport: data for invalid channel');
-    }
-    chan.windowS -= (packetLen - packetMacLen - 4);
-    if (chan.windowS < initialWindowSize ~/ 2) {
-      writeClearOrEncrypted(
-          MSG_CHANNEL_WINDOW_ADJUST(chan.remoteId, initialWindowSize));
-      chan.windowS += initialWindowSize;
-    }
-
+  void handleChannelData(Channel chan, Uint8List data) {
     if (chan == sessionChannel) {
-      response(utf8.decode(msg.data));
+      response(utf8.decode(data));
     } else if (chan.cb != null) {
-      chan.cb(chan, msg.data);
+      chan.cb(chan, data);
     } else if (chan.agentChannel) {
-      handleAgentRead(chan, msg.data);
+      handleAgentRead(chan, data);
     }
   }
-
-  void handleMSG_CHANNEL_EOF(MSG_CHANNEL_EOF msg) {
-    if (tracePrint != null) {
-      tracePrint('$hostport: MSG_CHANNEL_EOF ${msg.recipientChannel}');
-    }
-    Channel chan = channels[msg.recipientChannel];
-    if (chan == null) {
-      throw FormatException('$hostport: close invalid channel');
-    }
-    if (!chan.sentEof) {
-      chan.sentEof = true;
-      writeCipher(MSG_CHANNEL_EOF(chan.remoteId));
-    }
-  }
-
-  void handleMSG_CHANNEL_CLOSE(MSG_CHANNEL_CLOSE msg) {
-    if (tracePrint != null) {
-      tracePrint('$hostport: MSG_CHANNEL_CLOSE ${msg.recipientChannel}');
-    }
-    Channel chan = channels[msg.recipientChannel];
-    if (chan == null) {
-      throw FormatException('$hostport: EOF invalid channel');
-    }
-
-    bool alreadySentClose = chan.sentClose;
-    if (!alreadySentClose) {
-      chan.sentClose = true;
-      writeCipher(MSG_CHANNEL_CLOSE(chan.remoteId));
-    }
+  
+  void handleChannelClose(Channel chan) {
     if (chan == sessionChannel) {
       writeCipher(MSG_DISCONNECT());
       sessionChannel = null;
-    } else if (!alreadySentClose && chan.cb != null) {
+    } else if (chan.cb != null) {
       chan.opened = false;
       chan.cb(chan, Uint8List(0));
-    }
-    channels.remove(msg.recipientChannel);
-  }
-
-  void handleMSG_CHANNEL_REQUEST(MSG_CHANNEL_REQUEST msg) {
-    if (tracePrint != null) {
-      tracePrint(
-          '$hostport: MSG_CHANNEL_REQUEST ${msg.requestType} wantReply=${msg.wantReply}');
-    }
-  }
-
-  void handleMSG_DISCONNECT(MSG_DISCONNECT msg) {
-    if (tracePrint != null) {
-      tracePrint(
-          '$hostport: MSG_DISCONNECT ${msg.reasonCode} ${msg.description}');
-    }
-  }
-
-  void handleMSG_IGNORE(MSG_IGNORE msg) {
-    if (tracePrint != null) {
-      tracePrint('$hostport: MSG_IGNORE');
-    }
-  }
-
-  void handleMSG_DEBUG(MSG_DEBUG msg) {
-    if (tracePrint != null) {
-      tracePrint('$hostport: MSG_DEBUG ${msg.message}');
     }
   }
 
@@ -612,18 +517,7 @@ class SSHClient extends SSHTransport {
     }
     AGENT_IDENTITIES_ANSWER reply = AGENT_IDENTITIES_ANSWER();
     if (identity != null) {
-      if (identity.ed25519 != null) {
-        reply.keys.add(MapEntry<Uint8List, String>(
-            identity.getEd25519PublicKey().toRaw(), ''));
-      }
-      if (identity.ecdsaPublic != null) {
-        reply.keys.add(MapEntry<Uint8List, String>(
-            identity.getECDSAPublicKey().toRaw(), ''));
-      }
-      if (identity.rsaPublic != null) {
-        reply.keys.add(MapEntry<Uint8List, String>(
-            identity.getRSAPublicKey().toRaw(), ''));
-      }
+      reply.keys = identity.getRawPublicKeyList();
     }
     sendToChannel(channel, reply.toRaw());
   }
@@ -634,18 +528,8 @@ class SSHClient extends SSHTransport {
     }
     SerializableInput keyStream = SerializableInput(msg.key);
     String keyType = deserializeString(keyStream);
-    Uint8List sig;
-
-    if (keyType == Key.name(Key.ED25519)) {
-      sig = identity.signWithEd25519Key(msg.data).toRaw();
-    } else if (keyType == Key.name(Key.ECDSA_SHA2_NISTP256) ||
-        keyType == Key.name(Key.ECDSA_SHA2_NISTP384) ||
-        keyType == Key.name(Key.ECDSA_SHA2_NISTP521)) {
-      sig = identity.signWithECDSAKey(msg.data, getSecureRandom()).toRaw();
-    } else if (keyType == Key.name(Key.RSA)) {
-      sig = identity.signWithRSAKey(msg.data).toRaw();
-    }
-
+    Uint8List sig =
+        identity.signMessage(Key.id(keyType), msg.data, getSecureRandom());
     if (sig != null) {
       sendToChannel(channel, AGENT_SIGN_RESPONSE(sig).toRaw());
     } else {
@@ -720,11 +604,6 @@ class SSHClient extends SSHTransport {
         'keyboard-interactive', '', Uint8List(0), Uint8List(0)));
   }
 
-  void sendToChannel(Channel chan, Uint8List b) {
-    writeCipher(MSG_CHANNEL_DATA(chan.remoteId, b));
-    chan.windowC -= (b.length - 4);
-  }
-
   void sendChannelData(Uint8List b) {
     if (loginPrompts != 0) {
       response(utf8.decode(b));
@@ -745,16 +624,5 @@ class SSHClient extends SSHTransport {
         sendToChannel(sessionChannel, b);
       }
     }
-  }
-
-  Channel acceptChannel(MSG_CHANNEL_OPEN msg) {
-    Channel channel = channels[nextChannelId];
-    channel.localId = nextChannelId;
-    channel.remoteId = msg.senderChannel;
-    channel.windowC = msg.initialWinSize;
-    channel.windowS = initialWindowSize;
-    channel.opened = true;
-    nextChannelId++;
-    return channel;
   }
 }
