@@ -76,7 +76,9 @@ abstract class SSHMessage extends Serializable {
     SerializableOutput output = SerializableOutput(payload);
     output.addUint8(id);
     serialize(output);
-    assert(output.done);
+    if (!output.done) {
+      throw FormatException('${output.offset}/${output.buffer.length}');
+    }
     return toPacket(
         zlib != null ? zlib.convert(payload) : payload, random, blockSize);
   }
@@ -90,7 +92,9 @@ abstract class SSHMessage extends Serializable {
     output.addUint8(padding);
     output.addBytes(payload);
     output.addBytes(randBytes(random, padding));
-    assert(output.done);
+    if (!output.done) {
+      throw FormatException('${output.offset}/${output.buffer.length}');
+    }
     return buffer;
   }
 }
@@ -767,16 +771,15 @@ class MSG_CHANNEL_OPEN_TCPIP extends SSHMessage {
       maximumPacketSize = 0,
       srcPort = 0,
       dstPort = 0;
-  MSG_CHANNEL_OPEN_TCPIP() : super(ID);
-  MSG_CHANNEL_OPEN_TCPIP.create(
-      this.channelType,
+  MSG_CHANNEL_OPEN_TCPIP(
+      [this.channelType,
       this.senderChannel,
       this.initialWinSize,
       this.maximumPacketSize,
       this.dstHost,
       this.dstPort,
       this.srcHost,
-      this.srcPort)
+      this.srcPort])
       : super(ID);
 
   @override
@@ -1051,35 +1054,41 @@ class MSG_CHANNEL_REQUEST extends SSHMessage {
 /// the recipient responds with either SSH_MSG_CHANNEL_SUCCESS, or SSH_MSG_CHANNEL_FAILURE.
 class MSG_CHANNEL_SUCCESS extends SSHMessage {
   static const int ID = 99;
-  MSG_CHANNEL_SUCCESS() : super(ID);
+  int recipientChannel;
+  MSG_CHANNEL_SUCCESS([this.recipientChannel]) : super(ID);
 
   @override
-  int get serializedHeaderSize => 0;
+  int get serializedHeaderSize => 4;
 
   @override
   int get serializedSize => serializedHeaderSize;
 
   @override
-  void serialize(SerializableOutput output) {}
+  void serialize(SerializableOutput output) =>
+      output.addUint32(recipientChannel);
 
   @override
-  void deserialize(SerializableInput input) {}
+  void deserialize(SerializableInput input) =>
+      recipientChannel = input.getUint32();
 }
 
 /// These messages do not consume window space and can be sent even if no window space is available.
 class MSG_CHANNEL_FAILURE extends SSHMessage {
   static const int ID = 100;
-  MSG_CHANNEL_FAILURE() : super(ID);
+  int recipientChannel;
+  MSG_CHANNEL_FAILURE([this.recipientChannel]) : super(ID);
 
   @override
-  int get serializedHeaderSize => 0;
+  int get serializedHeaderSize => 4;
 
   @override
   int get serializedSize => serializedHeaderSize;
 
   @override
-  void serialize(SerializableOutput output) {}
+  void serialize(SerializableOutput output) =>
+      output.addUint32(recipientChannel);
 
   @override
-  void deserialize(SerializableInput input) {}
+  void deserialize(SerializableInput input) =>
+      recipientChannel = input.getUint32();
 }

@@ -111,16 +111,20 @@ Identity parsePem(String text,
         case 'ssh-ed25519':
           OpenSSHEd25519PrivateKey ed25519 = OpenSSHEd25519PrivateKey()
             ..deserialize(input);
-          assert(identity.ed25519 == null);
+          if (identity.ed25519 != null) throw FormatException();
           identity.ed25519 =
               tweetnacl.Signature.keyPair_fromSecretKey(ed25519.privkey);
-          assert(equalUint8List(identity.ed25519.publicKey, ed25519.pubkey));
+          if (!equalUint8List(identity.ed25519.publicKey, ed25519.pubkey)) {
+            throw FormatException();
+          }
           return identity;
 
         case 'ssh-rsa':
           OpenSSHRSAPrivateKey rsaPrivateKey = OpenSSHRSAPrivateKey()
             ..deserialize(input);
-          assert(identity.rsaPublic == null && identity.rsaPrivate == null);
+          if (identity.rsaPublic != null || identity.rsaPrivate != null) {
+            throw FormatException();
+          }
           return identity
             ..rsaPublic =
                 asymmetric.RSAPublicKey(rsaPrivateKey.n, rsaPrivateKey.e)
@@ -133,15 +137,18 @@ Identity parsePem(String text,
               ..deserialize(input);
             ECDomainParameters curve =
                 Key.ellipticCurve(ecdsaPrivateKey.keyTypeId);
-            assert(
-                identity.ecdsaPublic == null && identity.ecdsaPrivate == null);
+            if (identity.ecdsaPublic != null || identity.ecdsaPrivate != null) {
+              throw FormatException();
+            }
             identity
               ..ecdsaKeyType = ecdsaPrivateKey.keyTypeId
               ..ecdsaPublic =
                   ECPublicKey(curve.curve.decodePoint(ecdsaPrivateKey.q), curve)
               ..ecdsaPrivate = ECPrivateKey(ecdsaPrivateKey.d, curve);
-            assert(
-                (curve.G * identity.ecdsaPrivate.d) == identity.ecdsaPublic.Q);
+
+            if (curve.G * identity.ecdsaPrivate.d != identity.ecdsaPublic.Q) {
+              throw FormatException();
+            }
             return identity;
           } else {
             throw FormatException('type $type');
@@ -152,7 +159,9 @@ Identity parsePem(String text,
     case 'RSA PRIVATE KEY':
       RSAPrivateKey rsaPrivateKey = RSAPrivateKey()
         ..deserialize(SerializableInput(payload));
-      assert(identity.rsaPublic == null && identity.rsaPrivate == null);
+      if (identity.rsaPublic != null || identity.rsaPrivate != null) {
+        throw FormatException();
+      }
       return identity
         ..rsaPublic = asymmetric.RSAPublicKey(rsaPrivateKey.n, rsaPrivateKey.e)
         ..rsaPrivate = asymmetric.RSAPrivateKey(
@@ -334,11 +343,11 @@ class OpenSSHECDSAPrivateKey extends Serializable {
     keytype = deserializeString(input);
     if (!keytype.startsWith('ecdsa-sha2-')) throw FormatException('$keytype');
     keyTypeId = Key.id(keytype);
-    assert(Key.ellipticCurveDSA(keyTypeId));
+    if (!Key.ellipticCurveDSA(keyTypeId)) throw FormatException();
     curveName = deserializeString(input);
     q = deserializeStringBytes(input);
-    deserializeString(input);
     d = deserializeMpInt(input);
+    comment = deserializeString(input);
   }
 
   @override

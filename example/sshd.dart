@@ -77,13 +77,7 @@ Future<void> sshd(List<String> arguments) async {
         );
 
         input.stream.transform(LineSplitter()).listen((String line) {
-          if (line == 'exit') {
-            server.writeCipher(MSG_CHANNEL_EOF(server.sessionChannel.remoteId));
-            server
-                .writeCipher(MSG_CHANNEL_CLOSE(server.sessionChannel.remoteId));
-            server.sessionChannel.sentEof = true;
-            server.sessionChannel.sentClose = true;
-          }
+          if (line == 'exit') server.closeChannel(server.sessionChannel);
         });
       }
     });
@@ -99,14 +93,20 @@ Identity loadHostKey({StringFunction getPassword, String path}) {
   try {
     parsePem(File('${path}ecdsa_key').readAsStringSync(),
         identity: hostkey, getPassword: getPassword);
-  } catch (error) {}
+  } catch (error) {
+    print('open ${path}ecdsa_key failed');
+  }
   try {
     parsePem(File('${path}ed25519_key').readAsStringSync(),
         identity: hostkey, getPassword: getPassword);
-  } catch (error) {}
+  } catch (error) {
+    print('open ${path}ed25519_key failed');
+  }
   try {
     parsePem(File('${path}rsa_key').readAsStringSync(),
         identity: hostkey, getPassword: getPassword);
-  } catch (error) {}
+  } catch (error) {
+    print('open ${path}rsa_key failed');
+  }
   return hostkey;
 }

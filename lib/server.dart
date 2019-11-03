@@ -139,12 +139,7 @@ class SSHServer extends SSHTransport {
     updateExchangeHash(kS);
     writeClearOrEncrypted(MSG_KEX_ECDH_REPLY(x25519dh.myPubKey, kS,
         identity.signMessage(hostkeyType, exH, getSecureRandom())));
-    writeClearOrEncrypted(MSG_NEWKEYS());
-    if (state == SSHTransportState.FIRST_KEXREPLY) {
-      state = SSHTransportState.FIRST_NEWKEYS;
-    } else {
-      state = SSHTransportState.NEWKEYS;
-    }
+    sendNewKeys();
   }
 
   void handleEcDhMSG_KEX_ECDH_INIT(MSG_KEX_ECDH_INIT msg) {
@@ -154,6 +149,7 @@ class SSHServer extends SSHTransport {
     updateExchangeHash(kS);
     writeClearOrEncrypted(MSG_KEX_ECDH_REPLY(ecdh.cText, kS,
         identity.signMessage(hostkeyType, exH, getSecureRandom())));
+    sendNewKeys();
   }
 
   void handleMSG_SERVICE_REQUEST(MSG_SERVICE_REQUEST msg) {
@@ -207,9 +203,13 @@ class SSHServer extends SSHTransport {
     if (chan == sessionChannel &&
         sessionChannelRequest != null &&
         sessionChannelRequest(this, msg.requestType)) {
-      writeCipher(MSG_CHANNEL_SUCCESS());
+      if (msg.wantReply) {
+        writeCipher(MSG_CHANNEL_SUCCESS(chan.remoteId));
+      }
     } else {
-      writeCipher(MSG_CHANNEL_FAILURE());
+      if (msg.wantReply) {
+        writeCipher(MSG_CHANNEL_FAILURE(chan != null ? chan.remoteId : 0));
+      }
     }
   }
 

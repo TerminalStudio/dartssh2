@@ -78,8 +78,9 @@ class EllipticCurveDiffieHellman {
 
   /// Generate ephemeral key pair.
   void generatePair(Random random) {
-    x = decodeBigInt(randBits(random, secretBits)) % curve.n;
-    assert(x != BigInt.zero);
+    do {
+      x = decodeBigInt(randBits(random, secretBits)) % curve.n;
+    } while (x == BigInt.zero);
     ECPoint c = curve.G * x;
     cText = c.getEncoded(false);
   }
@@ -499,7 +500,7 @@ class DiffieHellman {
         ]));
 
   void generatePair(Random random) {
-    assert(secretBits % 8 == 0);
+    if (secretBits % 8 != 0) throw FormatException();
     x = decodeBigInt(randBytes(random, secretBits ~/ 8));
     e = g.modPow(x, p);
   }

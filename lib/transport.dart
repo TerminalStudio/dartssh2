@@ -102,9 +102,6 @@ abstract class SSHTransport with SSHDiffieHellman {
 
   String verC = 'SSH-2.0-dartssh_1.0', verS;
 
-  SocketInterface socket;
-  QueueBuffer readBuffer = QueueBuffer(Uint8List(0));
-  SerializableInput packetS;
   Uint8List kexInitC,
       kexInitS,
       decryptBuf,
@@ -112,6 +109,10 @@ abstract class SSHTransport with SSHDiffieHellman {
       sessionId,
       integrityC2s,
       integrityS2c;
+
+  SocketInterface socket;
+  QueueBuffer readBuffer = QueueBuffer(Uint8List(0));
+  SerializableInput packetS;
   BlockCipher encrypt, decrypt;
   HMac macAlgoC2s, macAlgoS2c;
   dynamic zreader, zwriter;
@@ -304,32 +305,39 @@ abstract class SSHTransport with SSHDiffieHellman {
       kexInitC = packet.sublist(0, packetLen - packetMacLen);
     }
 
-    if (0 == (kexMethod = KEX.preferenceIntersect(msg.kexAlgorithms))) {
+    if (0 == (kexMethod = KEX.preferenceIntersect(msg.kexAlgorithms, server))) {
       throw FormatException('$hostport: negotiate kex');
     } else if (0 ==
-        (hostkeyType = Key.preferenceIntersect(msg.serverHostKeyAlgorithms))) {
+        (hostkeyType =
+            Key.preferenceIntersect(msg.serverHostKeyAlgorithms, server))) {
       throw FormatException('$hostport: negotiate hostkey');
     } else if (0 ==
         (cipherIdC2s = Cipher.preferenceIntersect(
-            msg.encryptionAlgorithmsClientToServer))) {
+            msg.encryptionAlgorithmsClientToServer, server))) {
       throw FormatException('$hostport: negotiate c2s cipher');
     } else if (0 ==
         (cipherIdS2c = Cipher.preferenceIntersect(
-            msg.encryptionAlgorithmsServerToClient))) {
+            msg.encryptionAlgorithmsServerToClient, server))) {
       throw FormatException('$hostport: negotiate s2c cipher');
     } else if (0 ==
-        (macIdC2s = MAC.preferenceIntersect(msg.macAlgorithmsClientToServer))) {
+        (macIdC2s =
+            MAC.preferenceIntersect(msg.macAlgorithmsClientToServer, server))) {
       throw FormatException('$hostport: negotiate c2s mac');
     } else if (0 ==
-        (macIdS2c = MAC.preferenceIntersect(msg.macAlgorithmsServerToClient))) {
+        (macIdS2c =
+            MAC.preferenceIntersect(msg.macAlgorithmsServerToClient, server))) {
       throw FormatException('$hostport: negotiate s2c mac');
     } else if (0 ==
         (compressIdC2s = Compression.preferenceIntersect(
-            msg.compressionAlgorithmsClientToServer, compress ? 0 : 1))) {
+            msg.compressionAlgorithmsClientToServer,
+            server,
+            compress ? 0 : 1))) {
       throw FormatException('$hostport: negotiate c2s compression');
     } else if (0 ==
         (compressIdS2c = Compression.preferenceIntersect(
-            msg.compressionAlgorithmsServerToClient, compress ? 0 : 1))) {
+            msg.compressionAlgorithmsServerToClient,
+            server,
+            compress ? 0 : 1))) {
       throw FormatException('$hostport: negotiate s2c compression');
     }
 
@@ -563,6 +571,15 @@ abstract class SSHTransport with SSHDiffieHellman {
     }
   }
 
+  void sendNewKeys() {
+    writeClearOrEncrypted(MSG_NEWKEYS());
+    if (state == SSHTransportState.FIRST_KEXREPLY) {
+      state = SSHTransportState.FIRST_NEWKEYS;
+    } else {
+      state = SSHTransportState.NEWKEYS;
+    }
+  }
+
   void sendToChannel(Channel chan, Uint8List b) {
     writeCipher(MSG_CHANNEL_DATA(chan.remoteId, b));
     chan.windowC -= (b.length - 4);
@@ -577,5 +594,31 @@ abstract class SSHTransport with SSHDiffieHellman {
     channel.opened = true;
     nextChannelId++;
     return channel;
+  }
+
+  void closeChannel(Channel chan) {
+    chan.sentEof = chan.sentClose = true;
+    writeCipher(MSG_CHANNEL_EOF(chan.remoteId));
+    writeCipher(MSG_CHANNEL_CLOSE(chan.remoteId));
+  }
+
+  Channel openTcpChannel(String sourceHost, int sourcePort, String destHost,
+      int destPort, ChannelCallback cb) {
+    if (socket == null || state <= SSHTransportState.FIRST_NEWKEYS) return null;
+    Channel chan = channels[nextChannelId] = Channel();
+    chan.localId = nextChannelId++;
+    chan.windowS = initialWindowSize;
+    chan.cb = cb;
+    nextChannelId++;
+    writeCipher(MSG_CHANNEL_OPEN_TCPIP(
+        'direct-tcpip',
+        chan.localId,
+        chan.windowS,
+        maxPacketSize,
+        destHost,
+        destPort,
+        sourceHost,
+        sourcePort));
+    return chan;
   }
 }

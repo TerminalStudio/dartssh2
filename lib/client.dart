@@ -239,17 +239,15 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
               fingerprint;
     }
 
-    writeClearOrEncrypted(MSG_NEWKEYS());
     if (state == SSHTransportState.FIRST_KEXREPLY) {
-      state = SSHTransportState.FIRST_NEWKEYS;
       if (acceptHostFingerprint != null) {
         acceptedHostkey = acceptHostFingerprint(hostkeyType, fingerprint);
       } else {
         acceptedHostkey = true;
       }
-    } else {
-      state = SSHTransportState.NEWKEYS;
     }
+
+    sendNewKeys();
   }
 
   Uint8List handleX25519MSG_KEX_ECDH_REPLY(MSG_KEX_ECDH_REPLY msg) {
@@ -514,7 +512,8 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
 
   void sendAuthenticationRequest() {
     if (identity == null) {
-      // do nothing
+      writeCipher(MSG_USERAUTH_REQUEST(login, 'ssh-connection',
+          'keyboard-interactive', '', Uint8List(0), Uint8List(0)));
     } else if (identity.ed25519 != null) {
       Uint8List pubkey = identity.getEd25519PublicKey().toRaw();
       Uint8List challenge = deriveChallenge(sessionId, login, 'ssh-connection',
@@ -522,7 +521,6 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       Ed25519Signature sig = identity.signWithEd25519Key(challenge);
       writeCipher(MSG_USERAUTH_REQUEST(login, 'ssh-connection', 'publickey',
           'ssh-ed25519', pubkey, sig.toRaw()));
-      return;
     } else if (identity.ecdsaPrivate != null) {
       String keyType = Key.name(identity.ecdsaKeyType);
       Uint8List pubkey = identity.getECDSAPublicKey().toRaw();
@@ -532,7 +530,6 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
           identity.signWithECDSAKey(challenge, getSecureRandom());
       writeCipher(MSG_USERAUTH_REQUEST(
           login, 'ssh-connection', 'publickey', keyType, pubkey, sig.toRaw()));
-      return;
     } else if (identity.rsaPrivate != null) {
       Uint8List pubkey = identity.getRSAPublicKey().toRaw();
       Uint8List challenge = deriveChallenge(
@@ -540,10 +537,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       RSASignature sig = identity.signWithRSAKey(challenge);
       writeCipher(MSG_USERAUTH_REQUEST(login, 'ssh-connection', 'publickey',
           'ssh-rsa', pubkey, sig.toRaw()));
-      return;
     }
-    writeCipher(MSG_USERAUTH_REQUEST(login, 'ssh-connection',
-        'keyboard-interactive', '', Uint8List(0), Uint8List(0)));
   }
 
   @override
@@ -567,5 +561,19 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
         sendToChannel(sessionChannel, b);
       }
     }
+  }
+
+  void setTerminalWindowSize(int w, int h) {
+    termWidth = w;
+    termHeight = h;
+    if (socket == null || sessionChannel == null) return;
+    writeCipher(MSG_CHANNEL_REQUEST.ptyReq(
+        sessionChannel.remoteId,
+        'window-change',
+        Point(termWidth, termHeight),
+        Point(termWidth * 8, termHeight * 12),
+        '',
+        '',
+        false));
   }
 }

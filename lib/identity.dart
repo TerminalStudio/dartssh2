@@ -277,8 +277,8 @@ bool verifyEd25519Signature(
 /// Verifies ECDSA [signature] on [message] with private key matching [publicKey].
 bool verifyECDSASignature(int keyType, ECDSAKey publicKey,
     ECDSASignature signature, Uint8List message) {
-  ECDSASigner signer = ECDSASigner(KEX.ellipticCurveHash(keyType));
-  ECDomainParameters curve = KEX.ellipticCurve(keyType);
+  ECDSASigner signer = ECDSASigner(Key.ellipticCurveHash(keyType));
+  ECDomainParameters curve = Key.ellipticCurve(keyType);
   signer.init(
       false,
       PublicKeyParameter(

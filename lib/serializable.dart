@@ -133,12 +133,16 @@ abstract class Serializable {
   Uint8List toRaw() {
     SerializableOutput ret = SerializableOutput(Uint8List(serializedSize));
     serialize(ret);
-    assert(ret.done);
+    if (!ret.done) {
+      throw FormatException('${ret.offset}/${ret.buffer.length}');
+    }
     return ret.buffer;
   }
 
   void fromRaw(SerializableInput input) {
     deserialize(input);
-    assert(input.done);
+    if (!input.done) {
+      throw FormatException('${input.offset}/${input.buffer.length}');
+    }
   }
 }

@@ -42,7 +42,13 @@ String buildPreferenceCsv(
 }
 
 /// Choose the first algorithm that satisfies the conditions.
-String preferenceIntersection(String intersectCsv, String supportedCsv) {
+String preferenceIntersection(String intersectCsv, String supportedCsv,
+    [bool server = false]) {
+  if (server) {
+    String swapCsv = intersectCsv;
+    intersectCsv = supportedCsv;
+    supportedCsv = swapCsv;
+  }
   Set<String> supported = Set<String>.of(supportedCsv.split(','));
   for (String intersect in intersectCsv.split(',')) {
     if (supported.contains(intersect)) return intersect;
@@ -62,16 +68,16 @@ class Key {
 
   static int id(String name) {
     switch (name) {
-      case 'ssh-rsa':
-        return RSA;
+      case 'ssh-ed25519':
+        return ED25519;
       case 'ecdsa-sha2-nistp256':
         return ECDSA_SHA2_NISTP256;
       case 'ecdsa-sha2-nistp384':
         return ECDSA_SHA2_NISTP384;
       case 'ecdsa-sha2-nistp521':
         return ECDSA_SHA2_NISTP521;
-      case 'ssh-ed25519':
-        return ED25519;
+      case 'ssh-rsa':
+        return RSA;
       default:
         return 0;
     }
@@ -79,16 +85,16 @@ class Key {
 
   static String name(int id) {
     switch (id) {
-      case RSA:
-        return 'ssh-rsa';
+      case ED25519:
+        return 'ssh-ed25519';
       case ECDSA_SHA2_NISTP256:
         return 'ecdsa-sha2-nistp256';
       case ECDSA_SHA2_NISTP384:
         return 'ecdsa-sha2-nistp384';
       case ECDSA_SHA2_NISTP521:
         return 'ecdsa-sha2-nistp521';
-      case ED25519:
-        return 'ssh-ed25519';
+      case RSA:
+        return 'ssh-rsa';
       default:
         return '';
     }
@@ -156,8 +162,10 @@ class Key {
   static String preferenceCsv([int startAfter = 0]) =>
       buildPreferenceCsv(name, supported, End, startAfter);
 
-  static int preferenceIntersect(String intersectCsv, [int startAfter = 0]) =>
-      id(preferenceIntersection(preferenceCsv(startAfter), intersectCsv));
+  static int preferenceIntersect(String intersectCsv,
+          [bool server = false, int startAfter = 0]) =>
+      id(preferenceIntersection(
+          preferenceCsv(startAfter), intersectCsv, server));
 }
 
 /// The key exchange method specifies how one-time session keys are generated for
@@ -279,8 +287,10 @@ class KEX {
   static String preferenceCsv([int startAfter = 0]) =>
       buildPreferenceCsv(name, supported, End, startAfter);
 
-  static int preferenceIntersect(String intersectCsv, [int startAfter = 0]) =>
-      id(preferenceIntersection(preferenceCsv(startAfter), intersectCsv));
+  static int preferenceIntersect(String intersectCsv,
+          [bool server = false, int startAfter = 0]) =>
+      id(preferenceIntersection(
+          preferenceCsv(startAfter), intersectCsv, server));
 }
 
 // When encryption is in effect, the packet length, padding length, payload,
@@ -327,8 +337,10 @@ class Cipher {
   static String preferenceCsv([int startAfter = 0]) =>
       buildPreferenceCsv(name, supported, End, startAfter);
 
-  static int preferenceIntersect(String intersectCsv, [int startAfter = 0]) =>
-      id(preferenceIntersection(preferenceCsv(startAfter), intersectCsv));
+  static int preferenceIntersect(String intersectCsv,
+          [bool server = false, int startAfter = 0]) =>
+      id(preferenceIntersection(
+          preferenceCsv(startAfter), intersectCsv, server));
 
   static int keySize(int id) {
     switch (id) {
@@ -465,8 +477,10 @@ class MAC {
   static String preferenceCsv([int startAfter = 0]) =>
       buildPreferenceCsv(name, supported, End, startAfter);
 
-  static int preferenceIntersect(String intersectCsv, [int startAfter = 0]) =>
-      id(preferenceIntersection(preferenceCsv(startAfter), intersectCsv));
+  static int preferenceIntersect(String intersectCsv,
+          [bool server = false, int startAfter = 0]) =>
+      id(preferenceIntersection(
+          preferenceCsv(startAfter), intersectCsv, server));
 
   static int prefixBytes(int id) {
     switch (id) {
@@ -547,8 +561,10 @@ class Compression {
   static String preferenceCsv([int startAfter = 0]) =>
       buildPreferenceCsv(name, supported, End, startAfter);
 
-  static int preferenceIntersect(String intersectCsv, [int startAfter = 0]) =>
-      id(preferenceIntersection(preferenceCsv(startAfter), intersectCsv));
+  static int preferenceIntersect(String intersectCsv,
+          [bool server = false, int startAfter = 0]) =>
+      id(preferenceIntersection(
+          preferenceCsv(startAfter), intersectCsv, server));
 }
 
 /// Hashes SSH protocol data without first serializing it.
@@ -591,7 +607,7 @@ class Digester {
   Uint8List finish() {
     Uint8List ret = Uint8List(digest.digestSize);
     int finalLength = digest.doFinal(ret, 0);
-    assert(finalLength == ret.length);
+    if (finalLength != ret.length) throw FormatException();
     return ret;
   }
 }
@@ -616,8 +632,9 @@ Uint8List computeExchangeHash(
       kexSPacketLen = 4 + kexSPacket.length;
 
   Digester H = Digester(algo);
+  if (server) H.updateString(verS);
   H.updateString(verC);
-  H.updateString(verS);
+  if (!server) H.updateString(verS);
   H.updateOffset(kexInitC, 5, kexCPacketLen - 5 - kexCPacket.padding);
   H.updateOffset(kexInitS, 5, kexSPacketLen - 5 - kexSPacket.padding);
   H.update(kS);
@@ -706,7 +723,9 @@ Uint8List deriveChallenge(Uint8List sessionId, String userName,
   output.addUint8(1);
   serializeString(output, algoName);
   serializeString(output, secret);
-  assert(output.done);
+  if (!output.done) {
+    throw FormatException('${output.offset}/${output.buffer.length}');
+  }
   return output.buffer;
 }
 
@@ -732,9 +751,9 @@ Uint8List computeMAC(
   mac.update(buf, 0, buf.length);
   mac.update(m, 0, m.length);
 
-  assert(macLen == mac.macSize);
+  if (macLen != mac.macSize) throw FormatException();
   Uint8List ret = Uint8List(macLen);
   int finalLen = mac.doFinal(ret, 0);
-  assert(finalLen == macLen);
+  if (finalLen != macLen) throw FormatException();
   return ret;
 }

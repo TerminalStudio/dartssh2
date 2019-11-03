@@ -23,7 +23,7 @@ class SocketImpl extends SocketInterface {
   @override
   void connect(String address, Function onConnected, Function onError,
       {int timeoutSeconds = 15}) {
-    assert(socket == null);
+    if (socket != null) throw FormatException();
     Uri uri = Uri.parse(address);
     Socket.connect(uri.host, uri.port,
             timeout: Duration(seconds: timeoutSeconds))

@@ -80,7 +80,9 @@ abstract class AgentMessage extends Serializable {
     output.addUint32(buffer.length - 4);
     output.addUint8(id);
     serialize(output);
-    assert(output.done);
+    if (!output.done) {
+      throw FormatException('${output.offset}/${output.buffer.length}');
+    }
     return buffer;
   }
 }
