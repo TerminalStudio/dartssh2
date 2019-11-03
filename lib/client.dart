@@ -9,7 +9,6 @@ import "package:pointycastle/api.dart";
 
 import 'package:dartssh/agent.dart';
 import 'package:dartssh/identity.dart';
-import 'package:dartssh/kex.dart';
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/serializable.dart';
 import 'package:dartssh/socket.dart';
@@ -284,8 +283,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     if (tracePrint != null) {
       tracePrint('$hostport: MSG_KEX_DH_GEX_GROUP');
     }
-    dh = DiffieHellman(msg.p, msg.g, 256);
-    dh.generatePair(random);
+    initializeDiffieHellmanGroup(msg.p, msg.g, random);
     writeClearOrEncrypted(MSG_KEX_DH_GEX_INIT(dh.e));
   }
 

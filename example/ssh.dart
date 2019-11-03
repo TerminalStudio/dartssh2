@@ -9,6 +9,7 @@ import 'package:args/args.dart';
 import 'package:dartssh/client.dart';
 import 'package:dartssh/identity.dart';
 import 'package:dartssh/pem.dart';
+import 'package:dartssh/ssh.dart';
 import 'package:dartssh/transport.dart';
 
 Identity identity;
@@ -18,15 +19,19 @@ void main(List<String> arguments) async {
   exitCode = 0;
   stdin.lineMode = false;
   stdin.echoMode = false;
-  await ssh(arguments, stdin, () => exit(0));
+  await ssh(arguments, stdin, (_, String v) => stdout.write(v), () => exit(0));
 }
 
-Future<void> ssh(
-    List<String> arguments, Stream<List<int>> input, VoidCallback done) async {
+Future<void> ssh(List<String> arguments, Stream<List<int>> input,
+    ResponseCallback response, VoidCallback done) async {
   final argParser = ArgParser()
     ..addOption('login', abbr: 'l')
     ..addOption('port', abbr: 'p')
     ..addOption('identity', abbr: 'i')
+    ..addOption('kex')
+    ..addOption('key')
+    ..addOption('cipher')
+    ..addOption('mac')
     ..addOption('debug')
     ..addOption('trace');
 
@@ -39,16 +44,19 @@ Future<void> ssh(
     return;
   }
 
-  final String host = args.rest.first;
-  final String port = args['port'];
-  final String login = args['login'];
-  final String identityFile = args['identity'];
+  final String host = args.rest.first,
+      port = args['port'],
+      login = args['login'],
+      identityFile = args['identity'];
 
   if (login == null || login.isEmpty) {
     print('no login specified');
     exitCode = 1;
     return;
   }
+
+  applyCipherSuiteOverrides(
+      args['kex'], args['key'], args['cipher'], args['mac']);
 
   try {
     client = SSHClient(
@@ -57,7 +65,7 @@ Future<void> ssh(
         print: print,
         debugPrint: ((args['debug'] != null) ? print : null),
         tracePrint: ((args['trace'] != null) ? print : null),
-        response: (_, String v) => stdout.write(v),
+        response: response,
         loadIdentity: () {
           if (identity == null && identityFile != null) {
             identity = parsePem(File(identityFile).readAsStringSync());

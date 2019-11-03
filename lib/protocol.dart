@@ -340,7 +340,7 @@ class MSG_NEWKEYS extends SSHMessage {
 class MSG_KEXDH_INIT extends SSHMessage {
   static const int ID = 30;
   BigInt e;
-  MSG_KEXDH_INIT(this.e) : super(ID);
+  MSG_KEXDH_INIT([this.e]) : super(ID);
 
   @override
   int get serializedHeaderSize => 4;
@@ -361,7 +361,7 @@ class MSG_KEXDH_REPLY extends SSHMessage {
   static const int ID = 31;
   Uint8List kS, hSig;
   BigInt f;
-  MSG_KEXDH_REPLY([this.f]) : super(ID);
+  MSG_KEXDH_REPLY([this.f, this.kS, this.hSig]) : super(ID);
 
   @override
   int get serializedHeaderSize => 4 * 3;
@@ -371,7 +371,11 @@ class MSG_KEXDH_REPLY extends SSHMessage {
       serializedHeaderSize + mpIntLength(f) + kS.length + hSig.length;
 
   @override
-  void serialize(SerializableOutput output) {}
+  void serialize(SerializableOutput output) {
+    serializeString(output, kS);
+    serializeMpInt(output, f);
+    serializeString(output, hSig);
+  }
 
   @override
   void deserialize(SerializableInput input) {
@@ -387,7 +391,7 @@ class MSG_KEXDH_REPLY extends SSHMessage {
 class MSG_KEX_DH_GEX_REQUEST extends SSHMessage {
   static const int ID = 34;
   int minN, maxN, n;
-  MSG_KEX_DH_GEX_REQUEST(this.minN, this.maxN, this.n) : super(ID);
+  MSG_KEX_DH_GEX_REQUEST([this.minN, this.maxN, this.n]) : super(ID);
 
   @override
   int get serializedHeaderSize => 4 * 3;
@@ -424,7 +428,10 @@ class MSG_KEX_DH_GEX_GROUP extends SSHMessage {
       serializedHeaderSize + mpIntLength(p) + mpIntLength(g);
 
   @override
-  void serialize(SerializableOutput output) {}
+  void serialize(SerializableOutput output) {
+    serializeMpInt(output, p);
+    serializeMpInt(output, g);
+  }
 
   @override
   void deserialize(SerializableInput input) {
@@ -446,7 +453,8 @@ class MSG_KEX_DH_GEX_INIT extends MSG_KEXDH_INIT {
 /// f = g^y mod p.  S receives "e".  It computes K = e^y mod p, and H.
 class MSG_KEX_DH_GEX_REPLY extends MSG_KEXDH_REPLY {
   static const int ID = 33;
-  MSG_KEX_DH_GEX_REPLY([BigInt f]) : super(f) {
+  MSG_KEX_DH_GEX_REPLY([BigInt f, Uint8List kS, Uint8List hSig])
+      : super(f, kS, hSig) {
     id = ID;
   }
 }

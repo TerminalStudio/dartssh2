@@ -56,6 +56,43 @@ String preferenceIntersection(String intersectCsv, String supportedCsv,
   return '';
 }
 
+/// Limits cipher suite support to the specified parameter, if not null.
+void applyCipherSuiteOverrides(
+    String kex, String key, String cipher, String mac) {
+  if (kex != null) {
+    final int kexOverride = KEX.id(kex);
+    if (kexOverride == 0) {
+      throw FormatException(
+          'unknown kex: $kex, supported: ${KEX.preferenceCsv()}');
+    }
+    KEX.supported = (int id) => id == kexOverride;
+  }
+  if (key != null) {
+    final int keyOverride = Key.id(key);
+    if (keyOverride == 0) {
+      throw FormatException(
+          'unknown key: $key, supported: ${Key.preferenceCsv()}');
+    }
+    Key.supported = (int id) => id == keyOverride;
+  }
+  if (cipher != null) {
+    final int cipherOverride = Cipher.id(cipher);
+    if (cipherOverride == 0) {
+      throw FormatException(
+          'unknown cipher: $cipher, supported: ${Cipher.preferenceCsv()}');
+    }
+    Cipher.supported = (int id) => id == cipherOverride;
+  }
+  if (mac != null) {
+    final int macOverride = MAC.id(mac);
+    if (macOverride == 0) {
+      throw FormatException(
+          'unknown mac: $mac, supported: ${MAC.preferenceCsv()}');
+    }
+    MAC.supported = (int id) => id == macOverride;
+  }
+}
+
 /// This protocol has been designed to operate with almost any public key
 /// format, encoding, and algorithm (signature and/or encryption).
 class Key {
@@ -67,6 +104,7 @@ class Key {
       End = 5;
 
   static int id(String name) {
+    if (name == null) return 0;
     switch (name) {
       case 'ssh-ed25519':
         return ED25519;
@@ -100,7 +138,7 @@ class Key {
     }
   }
 
-  static bool supported(int id) => true;
+  static SupportedFunction supported = (int id) => true;
 
   static bool ellipticCurveDSA(int id) =>
       id == ECDSA_SHA2_NISTP256 ||
@@ -182,6 +220,7 @@ class KEX {
       End = 8;
 
   static int id(String name) {
+    if (name == null) return 0;
     switch (name) {
       case 'curve25519-sha256@libssh.org':
         return ECDH_SHA2_X25519;
@@ -227,7 +266,7 @@ class KEX {
     }
   }
 
-  static bool supported(int id) => true;
+  static SupportedFunction supported = (int id) => true;
 
   static bool x25519DiffieHellman(int id) => id == ECDH_SHA2_X25519;
 
@@ -303,6 +342,7 @@ class Cipher {
       End = 4;
 
   static int id(String name) {
+    if (name == null) return 0;
     switch (name) {
       case 'aes128-ctr':
         return AES128_CTR;
@@ -332,7 +372,7 @@ class Cipher {
     }
   }
 
-  static bool supported(int id) => true;
+  static SupportedFunction supported = (int id) => true;
 
   static String preferenceCsv([int startAfter = 0]) =>
       buildPreferenceCsv(name, supported, End, startAfter);
@@ -404,6 +444,7 @@ class MAC {
       End = 8;
 
   static int id(String name) {
+    if (name == null) return 0;
     switch (name) {
       case 'hmac-md5':
         return MD5;
@@ -472,7 +513,7 @@ class MAC {
     }
   }
 
-  static bool supported(int id) => true;
+  static SupportedFunction supported = (int id) => true;
 
   static String preferenceCsv([int startAfter = 0]) =>
       buildPreferenceCsv(name, supported, End, startAfter);
@@ -535,6 +576,7 @@ class Compression {
   static const int OpenSSHZLib = 1, None = 2, End = 2;
 
   static int id(String name) {
+    if (name == null) return 0;
     switch (name) {
       case 'zlib@openssh.com':
         return OpenSSHZLib;
@@ -556,7 +598,7 @@ class Compression {
     }
   }
 
-  static bool supported(int id) => true;
+  static SupportedFunction supported = (int id) => true;
 
   static String preferenceCsv([int startAfter = 0]) =>
       buildPreferenceCsv(name, supported, End, startAfter);

@@ -8,18 +8,21 @@ import 'dart:typed_data';
 import "package:pointycastle/api.dart";
 
 import 'package:dartssh/identity.dart';
+import 'package:dartssh/kex.dart';
 import 'package:dartssh/socket.dart';
 import 'package:dartssh/ssh.dart';
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/serializable.dart';
 import 'package:dartssh/transport.dart';
 
-typedef UserAuthRequest = bool Function(MSG_USERAUTH_REQUEST msg);
 typedef ChannelRequest = bool Function(SSHServer server, String request);
+typedef UserAuthRequest = bool Function(MSG_USERAUTH_REQUEST msg);
+typedef GexRequest = MapEntry<BigInt, BigInt> Function(MSG_KEX_DH_GEX_REQUEST);
 
 class SSHServer extends SSHTransport {
   UserAuthRequest userAuthRequest;
   ChannelRequest sessionChannelRequest;
+  GexRequest gexRequest;
 
   SSHServer(Identity hostkey,
       {String hostport,
@@ -35,7 +38,8 @@ class SSHServer extends SSHTransport {
       Random random,
       SecureRandom secureRandom,
       this.userAuthRequest,
-      this.sessionChannelRequest})
+      this.sessionChannelRequest,
+      this.gexRequest})
       : super(true,
             identity: hostkey,
             hostport: hostport,
@@ -69,7 +73,13 @@ class SSHServer extends SSHTransport {
         break;
 
       case MSG_KEXDH_INIT.ID:
+      case MSG_KEX_DH_GEX_INIT.ID:
         handleMSG_KEXDH_INIT(packetId, packet);
+        break;
+
+      case MSG_KEX_DH_GEX_REQUEST.ID:
+        handleMSG_KEX_DH_GEX_REQUEST(
+            MSG_KEX_DH_GEX_REQUEST()..deserialize(packetS));
         break;
 
       case MSG_NEWKEYS.ID:
@@ -125,10 +135,13 @@ class SSHServer extends SSHTransport {
     } else if (packetId == MSG_KEX_ECDH_INIT.ID &&
         KEX.ellipticCurveDiffieHellman(kexMethod)) {
       handleEcDhMSG_KEX_ECDH_INIT(MSG_KEX_ECDH_INIT()..deserialize(packetS));
-    } else if (packetId == MSG_KEXDH_INIT.ID && true) {
-      /**/
+    } else if ((packetId == MSG_KEXDH_INIT.ID &&
+            KEX.diffieHellman(kexMethod)) ||
+        (packetId == MSG_KEX_DH_GEX_INIT.ID &&
+            KEX.diffieHellmanGroupExchange(kexMethod))) {
+      handleDhMSG_KEXDH_INIT(packetId, MSG_KEXDH_INIT()..deserialize(packetS));
     } else {
-      /**/
+      throw FormatException('unknown kex: $kexMethod');
     }
   }
 
@@ -150,6 +163,32 @@ class SSHServer extends SSHTransport {
     writeClearOrEncrypted(MSG_KEX_ECDH_REPLY(ecdh.cText, kS,
         identity.signMessage(hostkeyType, exH, getSecureRandom())));
     sendNewKeys();
+  }
+
+  void handleDhMSG_KEXDH_INIT(int packetId, MSG_KEXDH_INIT msg) {
+    if (packetId != MSG_KEX_DH_GEX_INIT.ID) {
+      initializeDiffieHellman(kexMethod, random);
+    }
+    K = dh.computeSecret(msg.e);
+    Uint8List kS = identity.getRawPublicKey(hostkeyType);
+    updateExchangeHash(kS);
+    Uint8List hSig = identity.signMessage(hostkeyType, exH, getSecureRandom());
+    writeClearOrEncrypted(packetId == MSG_KEX_DH_GEX_INIT.ID
+        ? MSG_KEX_DH_GEX_REPLY(dh.e, kS, hSig)
+        : MSG_KEXDH_REPLY(dh.e, kS, hSig));
+    sendNewKeys();
+  }
+
+  void handleMSG_KEX_DH_GEX_REQUEST(MSG_KEX_DH_GEX_REQUEST msg) {
+    MapEntry<BigInt, BigInt> group =
+        gexRequest == null ? null : gexRequest(msg);
+    if (group == null) {
+      DiffieHellman group14 = DiffieHellman.group14();
+      group = MapEntry<BigInt, BigInt>(group14.p, group14.g);
+    }
+    initializeDiffieHellman(kexMethod, random);
+    initializeDiffieHellmanGroup(group.key, group.value, random);
+    writeClearOrEncrypted(MSG_KEX_DH_GEX_GROUP(group.key, group.value));
   }
 
   void handleMSG_SERVICE_REQUEST(MSG_SERVICE_REQUEST msg) {

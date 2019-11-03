@@ -49,6 +49,11 @@ mixin SSHDiffieHellman {
       throw FormatException('unknown kex method: $kexMethod');
     }
   }
+
+  void initializeDiffieHellmanGroup(BigInt p, BigInt g, Random random) {
+    dh = DiffieHellman(p, g, 256);
+    dh.generatePair(random);
+  }
 }
 
 /// https://tools.ietf.org/html/rfc7748#section-6

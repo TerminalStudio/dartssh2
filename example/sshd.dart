@@ -13,6 +13,7 @@ import 'package:dartssh/pem.dart';
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/socket_io.dart';
 import 'package:dartssh/server.dart';
+import 'package:dartssh/ssh.dart';
 import 'package:dartssh/transport.dart';
 
 void main(List<String> arguments) async {
@@ -25,6 +26,10 @@ Future<void> sshd(List<String> arguments) async {
     ..addOption('port', abbr: 'p')
     ..addOption('config', abbr: 'f')
     ..addOption('hostkey', abbr: 'h')
+    ..addOption('kex')
+    ..addOption('key')
+    ..addOption('cipher')
+    ..addOption('mac')
     ..addOption('debug')
     ..addOption('trace');
 
@@ -33,6 +38,9 @@ Future<void> sshd(List<String> arguments) async {
   final String config = args['config'];
   final bool debug = args['debug'] != null;
   final Identity hostkey = loadHostKey(path: args['hostkey']);
+
+  applyCipherSuiteOverrides(
+      args['kex'], args['key'], args['cipher'], args['mac']);
 
   try {
     await Chain.capture(() async {
