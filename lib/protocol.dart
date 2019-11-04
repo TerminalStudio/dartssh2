@@ -964,6 +964,7 @@ class MSG_CHANNEL_EOF extends SSHMessage {
       recipientChannel = input.getUint32();
 }
 
+/// When either party wishes to terminate the channel, it sends SSH_MSG_CHANNEL_CLOSE.
 /// https://tools.ietf.org/html/rfc4254#section-5.3
 class MSG_CHANNEL_CLOSE extends SSHMessage {
   static const int ID = 97;

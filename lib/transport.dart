@@ -29,11 +29,17 @@ typedef ResponseCallback = void Function(SSHTransport, String);
 typedef RemoteForwardCallback = void Function(
     Channel, String, int, String, int);
 
+/// When a connection comes to a port for which forwarding has been
+/// requested, a channel is opened to forward the port to the other side.
 class Forward {
   int port, targetPort;
   String targetHost;
 }
 
+/// All terminal sessions, forwarded connections, etc., are [Channel]s.
+/// Multiple [Channel]s are multiplexed into a single connection and
+/// [Channel]s are flow-controlled.  No data may be sent to a channel until
+/// a message is received to indicate that window space is available.
 class Channel {
   int localId, remoteId, windowC = 0, windowS = 0;
   bool opened = true, agentChannel = false, sentEof = false, sentClose = false;
@@ -42,6 +48,8 @@ class Channel {
   Channel([this.localId = 0, this.remoteId = 0]);
 }
 
+/// It is RECOMMENDED that the keys be changed after each gigabyte of transmitted
+/// data or after each hour of connection time, whichever comes sooner.
 class SSHTransportState {
   static const int INIT = 0,
       FIRST_KEXINIT = 1,
@@ -52,6 +60,7 @@ class SSHTransportState {
       NEWKEYS = 6;
 }
 
+/// SSH Transport Layer Protocol implementation providing KEX, ciphers, and MAC.
 /// https://tools.ietf.org/html/rfc4253
 abstract class SSHTransport with SSHDiffieHellman {
   // Parameters
@@ -145,8 +154,10 @@ abstract class SSHTransport with SSHDiffieHellman {
   void handleChannelData(Channel chan, Uint8List data);
   void handleChannelClose(Channel chan);
 
+  /// Whether we've initiated the connection.
   bool get client => !server;
 
+  /// PointyCastle random number generator interface.
   SecureRandom getSecureRandom() {
     if (secureRandom != null) return secureRandom;
     return (secureRandom = FortunaRandom())
@@ -184,7 +195,6 @@ abstract class SSHTransport with SSHDiffieHellman {
         cipherPref = Cipher.preferenceCsv(),
         macPref = MAC.preferenceCsv(),
         compressPref = Compression.preferenceCsv(compress ? 0 : 1);
-
     sequenceNumberC2s++;
     Uint8List kexInit = MSG_KEXINIT
         .create(randBytes(random, 16), kexPref, keyPref, cipherPref, cipherPref,
@@ -195,26 +205,28 @@ abstract class SSHTransport with SSHDiffieHellman {
     } else {
       kexInitS = kexInit;
     }
-
+    socket.sendRaw(kexInit);
     if (debugPrint != null) {
       debugPrint(
           '$hostport wrote KEXINIT { kex=$kexPref key=$keyPref, cipher=$cipherPref, mac=$macPref, compress=$compressPref }');
     }
-    socket.sendRaw(kexInit);
   }
 
   /// Callback supplied to [socket.listen].
   void handleRead(Uint8List dataChunk) {
     readBuffer.add(dataChunk);
 
+    /// Initialze with an ASCII version exchange.
     if (state == SSHTransportState.INIT) {
       handleInitialState();
       if (state == SSHTransportState.INIT) return;
     }
 
+    /// Thereafter we speak RFC4253 Binary Packet Protocol.
     while (true) {
       bool encrypted = state > SSHTransportState.FIRST_NEWKEYS;
 
+      /// We only need to decrypt one cipher block to determine the next packet length.
       if (packetLen == 0) {
         packetMacLen = macHashLenS != 0
             ? (macPrefixS2c != 0 ? macPrefixS2c : macHashLenS)
@@ -232,13 +244,19 @@ abstract class SSHTransport with SSHDiffieHellman {
         packetLen = 4 + binaryPacket.length + packetMacLen;
         padding = binaryPacket.padding;
       }
+
+      /// Wait until we've read the entire packet.
       if (readBuffer.data.length < packetLen) return;
+
+      /// Decrypts the remaining cipher blocks in the packet.
       if (encrypted) {
         decryptBuf = appendUint8List(
             decryptBuf,
             readCipher(viewUint8List(readBuffer.data, decryptBlockSize,
                 packetLen - decryptBlockSize - packetMacLen)));
       }
+
+      /// Verifies the Message Authentication Code (MAC).
       sequenceNumberS2c++;
       if (encrypted && packetMacLen != 0) {
         Uint8List mac = computeMAC(
@@ -256,6 +274,7 @@ abstract class SSHTransport with SSHDiffieHellman {
         }
       }
 
+      /// Handles the packet.
       Uint8List packet = encrypted ? decryptBuf : readBuffer.data;
       packetS = SerializableInput(viewUint8List(packet, BinaryPacket.headerSize,
           packetLen - BinaryPacket.headerSize - packetMacLen - padding));
@@ -306,6 +325,7 @@ abstract class SSHTransport with SSHDiffieHellman {
       kexInitC = packet.sublist(0, packetLen - packetMacLen);
     }
 
+    /// Make sure we can agree on an algorithm suite.
     if (0 == (kexMethod = KEX.preferenceIntersect(msg.kexAlgorithms, server))) {
       throw FormatException('$hostport: negotiate kex');
     } else if (0 ==
@@ -342,6 +362,7 @@ abstract class SSHTransport with SSHDiffieHellman {
       throw FormatException('$hostport: negotiate s2c compression');
     }
 
+    /// Setup connection and start Diffie Hellman key exchange.
     guessedRightS = kexMethod == KEX.id(msg.kexAlgorithms.split(',')[0]) &&
         hostkeyType == Key.id(msg.serverHostKeyAlgorithms.split(',')[0]);
     guessedRightC = kexMethod == 1 && hostkeyType == 1;
@@ -351,6 +372,7 @@ abstract class SSHTransport with SSHDiffieHellman {
     macPrefixC2s = MAC.prefixBytes(macIdC2s);
     macAlgoS2c = MAC.mac(macIdS2c);
     macPrefixS2c = MAC.prefixBytes(macIdS2c);
+    sendDiffileHellmanInit();
 
     if (print != null) {
       print('$hostport: ssh negotiated { kex=${KEX.name(kexMethod)}, hostkey=${Key.name(hostkeyType)}' +
@@ -369,9 +391,9 @@ abstract class SSHTransport with SSHDiffieHellman {
       tracePrint(
           '$hostport: blockSize=$encryptBlockSize,$decryptBlockSize, macHashLen=$macHashLenC,$macHashLenS');
     }
-    sendDiffileHellmanInit();
   }
 
+  /// When MSG_NEWKEYS is received, the new keys and algorithms MUST be used for receiving.
   void handleMSG_NEWKEYS() {
     if (state != SSHTransportState.FIRST_NEWKEYS &&
         state != SSHTransportState.NEWKEYS) {
@@ -413,6 +435,7 @@ abstract class SSHTransport with SSHDiffieHellman {
     state = SSHTransportState.NEWKEYS;
   }
 
+  /// If the remote side can open the channel, it responds with SSH_MSG_CHANNEL_OPEN_CONFIRMATION.
   void handleMSG_CHANNEL_OPEN_CONFIRMATION(MSG_CHANNEL_OPEN_CONFIRMATION msg) {
     if (tracePrint != null) {
       tracePrint(
@@ -429,6 +452,8 @@ abstract class SSHTransport with SSHDiffieHellman {
     handleChannelOpenConfirmation(chan);
   }
 
+  /// After receiving this message, the recipient MAY send the given number of bytes
+  /// more than it was previously allowed to send; the window size is incremented.
   void handleMSG_CHANNEL_WINDOW_ADJUST(MSG_CHANNEL_WINDOW_ADJUST msg) {
     if (tracePrint != null) {
       tracePrint(
@@ -441,6 +466,7 @@ abstract class SSHTransport with SSHDiffieHellman {
     chan.windowC += msg.bytesToAdd;
   }
 
+  /// Data transfer is done with messages of the type SSH_MSG_CHANNEL_DATA.
   void handleMSG_CHANNEL_DATA(MSG_CHANNEL_DATA msg) {
     if (tracePrint != null) {
       tracePrint(
@@ -459,6 +485,8 @@ abstract class SSHTransport with SSHDiffieHellman {
     handleChannelData(chan, msg.data);
   }
 
+  /// No explicit response is sent to this message.  However, the application
+  /// may send EOF to whatever is at the other end of the channel.
   void handleMSG_CHANNEL_EOF(MSG_CHANNEL_EOF msg) {
     if (tracePrint != null) {
       tracePrint('$hostport: MSG_CHANNEL_EOF ${msg.recipientChannel}');
@@ -473,6 +501,8 @@ abstract class SSHTransport with SSHDiffieHellman {
     }
   }
 
+  /// Upon receiving this message, a party MUST send back an SSH_MSG_CHANNEL_CLOSE
+  /// unless it has already sent this message for the channel.
   void handleMSG_CHANNEL_CLOSE(MSG_CHANNEL_CLOSE msg) {
     if (tracePrint != null) {
       tracePrint('$hostport: MSG_CHANNEL_CLOSE ${msg.recipientChannel}');
@@ -492,12 +522,14 @@ abstract class SSHTransport with SSHDiffieHellman {
     channels.remove(msg.recipientChannel);
   }
 
+  /// https://tools.ietf.org/html/rfc4254#section-4
   void handleMSG_GLOBAL_REQUEST(MSG_GLOBAL_REQUEST msg) {
     if (tracePrint != null) {
       tracePrint('$hostport: MSG_GLOBAL_REQUEST request=${msg.request}');
     }
   }
 
+  /// The recipient MUST NOT accept any data after receiving MSG_DISCONNECT.
   void handleMSG_DISCONNECT(MSG_DISCONNECT msg) {
     if (tracePrint != null) {
       tracePrint(
@@ -508,18 +540,21 @@ abstract class SSHTransport with SSHDiffieHellman {
     }
   }
 
+  /// MSG_IGNORE can be used as an additional protection measure against advanced traffic analysis techniques.
   void handleMSG_IGNORE(MSG_IGNORE msg) {
     if (tracePrint != null) {
       tracePrint('$hostport: MSG_IGNORE');
     }
   }
 
+  /// All implementations MUST understand MSG_DEBUG, but they are allowed to ignore it.
   void handleMSG_DEBUG(MSG_DEBUG msg) {
     if (tracePrint != null) {
       tracePrint('$hostport: MSG_DEBUG ${msg.message}');
     }
   }
 
+  /// Computes a new exchange hash [exH] given the server key [kS].
   void updateExchangeHash(Uint8List kS) {
     exH = computeExchangeHash(server, kexMethod, kexHash, verC, verS, kexInitC,
         kexInitS, kS, K, dh, ecdh, x25519dh);
@@ -532,6 +567,7 @@ abstract class SSHTransport with SSHDiffieHellman {
     }
   }
 
+  /// Initializes the block cipher used for encrypted transport.
   BlockCipher initCipher(int cipherId, Uint8List IV, Uint8List key, bool dir) {
     BlockCipher cipher = Cipher.cipher(cipherId);
     if (tracePrint != null) {
@@ -549,8 +585,10 @@ abstract class SSHTransport with SSHDiffieHellman {
     return cipher;
   }
 
+  /// Decrypt data using the negotiated block cipher.
   Uint8List readCipher(Uint8List m) => applyBlockCipher(decrypt, m);
 
+  /// Encrypt Binary Packet data using the negotiated block cipher and MAC.
   void writeCipher(SSHMessage msg) {
     sequenceNumberC2s++;
     Uint8List m = msg.toBytes(zwriter, random, encryptBlockSize);
@@ -563,6 +601,8 @@ abstract class SSHTransport with SSHDiffieHellman {
     }
   }
 
+  /// Send a Binary Packet (e.g. KEX_INIT) that is initially sent in the clear,
+  /// but encryped when keys are being renegotiated.
   void writeClearOrEncrypted(SSHMessage msg) {
     if (state > SSHTransportState.FIRST_NEWKEYS) return writeCipher(msg);
     sequenceNumberC2s++;
@@ -572,6 +612,7 @@ abstract class SSHTransport with SSHDiffieHellman {
     }
   }
 
+  // Enable the most recently negotiated encryption algorithms.
   void sendNewKeys() {
     writeClearOrEncrypted(MSG_NEWKEYS());
     if (state == SSHTransportState.FIRST_KEXREPLY) {

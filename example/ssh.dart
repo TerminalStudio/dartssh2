@@ -3,6 +3,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:args/args.dart';
 
@@ -14,6 +15,7 @@ import 'package:dartssh/transport.dart';
 
 Identity identity;
 SSHClient client;
+Channel forwardChannel;
 
 void main(List<String> arguments) async {
   exitCode = 0;
@@ -28,6 +30,7 @@ Future<void> ssh(List<String> arguments, Stream<List<int>> input,
     ..addOption('login', abbr: 'l')
     ..addOption('port', abbr: 'p')
     ..addOption('identity', abbr: 'i')
+    ..addOption('tunnel')
     ..addOption('kex')
     ..addOption('key')
     ..addOption('cipher')
@@ -47,11 +50,18 @@ Future<void> ssh(List<String> arguments, Stream<List<int>> input,
   final String host = args.rest.first,
       port = args['port'],
       login = args['login'],
-      identityFile = args['identity'];
+      identityFile = args['identity'],
+      tunnel = args['tunnel'];
 
   if (login == null || login.isEmpty) {
     print('no login specified');
     exitCode = 1;
+    return;
+  }
+
+  if (tunnel != null && tunnel.split(':').length != 2) {
+    print('tunnel target should be specified host:port');
+    exitCode = 2;
     return;
   }
 
@@ -72,10 +82,26 @@ Future<void> ssh(List<String> arguments, Stream<List<int>> input,
           }
           return identity;
         },
-        disconnected: done);
+        disconnected: done,
+        startShell: tunnel == null,
+        success: tunnel == null
+            ? null
+            : () {
+                List<String> tunnelTarget = tunnel.split(':');
+                forwardChannel = client.openTcpChannel(
+                    '127.0.0.1',
+                    1234,
+                    tunnelTarget[0],
+                    int.parse(tunnelTarget[1]),
+                    (_, Uint8List m) => response(client, utf8.decode(m)));
+              });
 
     await for (String x in input.transform(utf8.decoder)) {
-      client.sendChannelData(utf8.encode(x));
+      if (forwardChannel != null) {
+        client.sendToChannel(forwardChannel, utf8.encode(x));
+      } else {
+        client.sendChannelData(utf8.encode(x));
+      }
     }
   } catch (error, stacktrace) {
     print('ssh: exception: $error: $stacktrace');

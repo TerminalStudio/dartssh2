@@ -9,6 +9,7 @@ import "package:pointycastle/api.dart";
 
 import 'package:dartssh/agent.dart';
 import 'package:dartssh/identity.dart';
+import 'package:dartssh/pem.dart';
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/serializable.dart';
 import 'package:dartssh/socket.dart';
@@ -20,6 +21,7 @@ import 'package:dartssh/transport.dart';
 /// The Secure Shell (SSH) is a protocol for secure remote login and
 /// other secure network services over an insecure network.
 class SSHClient extends SSHTransport with SSHAgentForwarding {
+  // Parameters
   String login, termvar, startupCommand;
   bool agentForwarding, closeOnDisconnect, startShell;
   FingerprintCallback acceptHostFingerprint;
@@ -27,6 +29,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   IdentityFunction loadIdentity;
   VoidCallback success;
 
+  // State
   int loginPrompts = 0, passwordPrompts = 0, userauthFail = 0;
   bool acceptedHostkey = false, loadedPw = false, wrotePw = false;
   Uint8List pw;
@@ -347,9 +350,9 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       // zreader = ArchiveInflateReader();
       throw FormatException('compression not supported');
     }
-    if (success != null) success();
     writeCipher(MSG_CHANNEL_OPEN.create(
         'session', sessionChannel.localId, initialWindowSize, maxPacketSize));
+    if (success != null) success();
   }
 
   void handleMSG_USERAUTH_INFO_REQUEST(MSG_USERAUTH_INFO_REQUEST msg) {
@@ -574,4 +577,65 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
         '',
         false));
   }
+}
+
+/// Implement same [SocketInterface] as actual [Socket] but over [SSHClient] tunnel.
+class SSHTunneledSocketImpl extends SocketInterface {
+  SSHClient client;
+  Identity identity;
+  Channel channel;
+  String tunnelToHost;
+  int tunnelToPort;
+  Function connected, connectError, onError, onDone, onMessage;
+
+  SSHTunneledSocketImpl(String url, String login, String key, String password) {
+    identity = key == null ? null : parsePem(key);
+    client = SSHClient(
+        socketInput: SocketImpl(),
+        hostport: url,
+        login: login,
+        loadIdentity: () => identity,
+        disconnected: () {
+          if (onDone != null) onDone(null);
+        },
+        startShell: false,
+        success: () {
+          if (connected != null) connected(client.socket);
+          connected = connectError = null;
+          channel = client.openTcpChannel('127.0.0.1', 1234, tunnelToHost,
+              tunnelToPort, (_, Uint8List m) => onMessage(m));
+        });
+  }
+
+  @override
+  void close() => client.disconnect('close');
+
+  @override
+  void handleError(Function errorHandler) => onError = errorHandler;
+
+  @override
+  void handleDone(Function doneHandler) => onDone = doneHandler;
+
+  @override
+  void listen(Function messageHandler) => onMessage = messageHandler;
+
+  @override
+  void connect(String address, Function connectHandler, Function errorHandler,
+      {int timeoutSeconds = 15}) {
+    List<String> tunnelTo = address.split(':');
+    tunnelToHost = tunnelTo[tunnelTo.length - 2];
+    tunnelToPort = int.parse(tunnelTo[tunnelTo.length - 1]);
+    connected = connectHandler;
+    connectError = errorHandler;
+    client.socket.connect(client.hostport, client.onConnected, (error) {
+      client.disconnect('connect error');
+      if (connectError != null) connectError(error);
+    });
+  }
+
+  @override
+  void send(String text) => sendRaw(Uint8List.fromList(text.codeUnits));
+
+  @override
+  void sendRaw(Uint8List raw) => client.sendToChannel(channel, raw);
 }

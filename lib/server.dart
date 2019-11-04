@@ -20,6 +20,7 @@ typedef UserAuthRequest = bool Function(MSG_USERAUTH_REQUEST msg);
 typedef GexRequest = MapEntry<BigInt, BigInt> Function(MSG_KEX_DH_GEX_REQUEST);
 
 class SSHServer extends SSHTransport {
+  // Parameters
   UserAuthRequest userAuthRequest;
   ChannelRequest sessionChannelRequest;
   GexRequest gexRequest;

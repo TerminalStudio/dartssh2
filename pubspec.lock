@@ -121,7 +121,7 @@ packages:
     source: hosted
     version: "1.14.12"
   convert:
-    dependency: "direct dev"
+    dependency: "direct main"
     description:
       name: convert
       url: "https://pub.dartlang.org"
