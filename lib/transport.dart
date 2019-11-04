@@ -82,8 +82,8 @@ abstract class SSHTransport with SSHDiffieHellman {
       kexMethod = 0,
       macPrefixC2s = 0,
       macPrefixS2c = 0,
-      macLenC = 0,
-      macLenS = 0,
+      macHashLenC = 0,
+      macHashLenS = 0,
       macIdC2s = 0,
       macIdS2c = 0,
       cipherIdC2s = 0,
@@ -216,8 +216,9 @@ abstract class SSHTransport with SSHDiffieHellman {
       bool encrypted = state > SSHTransportState.FIRST_NEWKEYS;
 
       if (packetLen == 0) {
-        packetMacLen =
-            macLenS != 0 ? (macPrefixS2c != 0 ? macPrefixS2c : macLenS) : 0;
+        packetMacLen = macHashLenS != 0
+            ? (macPrefixS2c != 0 ? macPrefixS2c : macHashLenS)
+            : 0;
         if (readBuffer.data.length < BinaryPacket.headerSize ||
             (encrypted && readBuffer.data.length < decryptBlockSize)) {
           return;
@@ -242,7 +243,7 @@ abstract class SSHTransport with SSHDiffieHellman {
       if (encrypted && packetMacLen != 0) {
         Uint8List mac = computeMAC(
             MAC.mac(macIdS2c),
-            macLenS,
+            macHashLenS,
             viewUint8List(decryptBuf, 0, packetLen - packetMacLen),
             sequenceNumberS2c - 1,
             integrityS2c,
@@ -366,7 +367,7 @@ abstract class SSHTransport with SSHDiffieHellman {
     }
     if (tracePrint != null) {
       tracePrint(
-          '$hostport: blockSize=$encryptBlockSize,$decryptBlockSize, macLen=$macLenC,$macLenS');
+          '$hostport: blockSize=$encryptBlockSize,$decryptBlockSize, macHashLen=$macHashLenC,$macHashLenS');
     }
     sendDiffileHellmanInit();
   }
@@ -385,21 +386,21 @@ abstract class SSHTransport with SSHDiffieHellman {
         cipherIdC2s,
         deriveKey(kexHash, sessionId, exH, K, 'A'.codeUnits[0], 24),
         deriveKey(kexHash, sessionId, exH, K, 'C'.codeUnits[0], keyLenC),
-        true);
+        client ? true : false);
     decrypt = initCipher(
         cipherIdS2c,
         deriveKey(kexHash, sessionId, exH, K, 'B'.codeUnits[0], 24),
         deriveKey(kexHash, sessionId, exH, K, 'D'.codeUnits[0], keyLenS),
-        false);
-    if ((macLenC = MAC.hashSize(macIdC2s)) <= 0) {
+        client ? false : true);
+    if ((macHashLenC = MAC.hashSize(macIdC2s)) <= 0) {
       throw FormatException('$hostport: invalid maclen $encryptBlockSize');
-    } else if ((macLenS = MAC.hashSize(macIdS2c)) <= 0) {
+    } else if ((macHashLenS = MAC.hashSize(macIdS2c)) <= 0) {
       throw FormatException('$hostport: invalid maclen $encryptBlockSize');
     }
     integrityC2s =
-        deriveKey(kexHash, sessionId, exH, K, 'E'.codeUnits[0], macLenC);
+        deriveKey(kexHash, sessionId, exH, K, 'E'.codeUnits[0], macHashLenC);
     integrityS2c =
-        deriveKey(kexHash, sessionId, exH, K, 'F'.codeUnits[0], macLenS);
+        deriveKey(kexHash, sessionId, exH, K, 'F'.codeUnits[0], macHashLenS);
     if (server) {
       BlockCipher tmpBC = encrypt;
       encrypt = decrypt;
@@ -554,7 +555,7 @@ abstract class SSHTransport with SSHDiffieHellman {
     sequenceNumberC2s++;
     Uint8List m = msg.toBytes(zwriter, random, encryptBlockSize);
     Uint8List encM = applyBlockCipher(encrypt, m);
-    Uint8List mac = computeMAC(MAC.mac(macIdC2s), macLenC, m,
+    Uint8List mac = computeMAC(MAC.mac(macIdC2s), macHashLenC, m,
         sequenceNumberC2s - 1, integrityC2s, macPrefixC2s);
     socket.sendRaw(Uint8List.fromList(encM + mac));
     if (tracePrint != null) {

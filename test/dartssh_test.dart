@@ -53,16 +53,30 @@ void main() {
   });
 
   test('suite', () async {
-    int kexIndex = 1, keyIndex = 1, cipherIndex = 1, macIndex = 1;
+    List<String> identities = <String>[
+      'test/id_ed25519',
+      'test/id_ecdsa',
+      'test/id_rsa'
+    ];
+    int kexIndex = 1,
+        keyIndex = 1,
+        cipherIndex = 1,
+        macIndex = 1,
+        identityIndex = 0;
     bool kexLooped = false,
         keyLooped = false,
         cipherLooped = false,
-        macLooped = false;
+        macLooped = false,
+        identityLooped = false;
     KEX.supported = (int id) => id == kexIndex;
     Key.supported = (int id) => id == keyIndex;
     Cipher.supported = (int id) => id == cipherIndex;
     MAC.supported = (int id) => id == macIndex;
-    while (!kexLooped || !keyLooped || !cipherLooped || !macLooped) {
+    while (!kexLooped ||
+        !keyLooped ||
+        !cipherLooped ||
+        !macLooped ||
+        !identityLooped) {
       print(
           '=== suite begin ${KEX.name(kexIndex)}, ${Key.name(keyIndex)}, ${Cipher.name(cipherIndex)}, ${MAC.name(macIndex)} ===');
       String sshResponse = '';
@@ -85,6 +99,8 @@ void main() {
         '127.0.0.1',
         '-p',
         '42022',
+        '-i',
+        identities[identityIndex],
         '--debug',
         '1',
         '--trace',
@@ -112,7 +128,6 @@ void main() {
         keyLooped = true;
         keyIndex = 1;
       }
-      /*
       cipherIndex++;
       if (cipherIndex > Cipher.End) {
         cipherLooped = true;
@@ -122,9 +137,12 @@ void main() {
       if (macIndex > MAC.End) {
         macLooped = true;
         macIndex = 1;
-      }*/
-      cipherLooped = true;
-      macLooped = true;
+      }
+      identityIndex++;
+      if (identityIndex == identities.length) {
+        identityLooped = true;
+        identityIndex = 0;
+      }
     }
   });
 }

@@ -797,5 +797,10 @@ Uint8List computeMAC(
   Uint8List ret = Uint8List(macLen);
   int finalLen = mac.doFinal(ret, 0);
   if (finalLen != macLen) throw FormatException();
-  return ret;
+
+  if (prefix != 0) {
+    return viewUint8List(ret, 0, prefix);
+  } else {
+    return ret;
+  }
 }
