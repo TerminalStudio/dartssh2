@@ -130,8 +130,9 @@ abstract class Serializable {
   /// Interface for intput serialization.
   void deserialize(SerializableInput input);
 
-  Uint8List toRaw() {
-    SerializableOutput ret = SerializableOutput(Uint8List(serializedSize));
+  Uint8List toRaw({Endian endian = Endian.big}) {
+    SerializableOutput ret =
+        SerializableOutput(Uint8List(serializedSize), endian: endian);
     serialize(ret);
     if (!ret.done) {
       throw FormatException('${ret.offset}/${ret.buffer.length}');

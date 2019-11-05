@@ -26,7 +26,7 @@ class SSHServer extends SSHTransport {
   GexRequest gexRequest;
 
   SSHServer(Identity hostkey,
-      {String hostport,
+      {Uri hostport,
       bool compress = false,
       List<Forward> forwardLocal,
       List<Forward> forwardRemote,

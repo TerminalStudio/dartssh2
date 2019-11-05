@@ -65,7 +65,7 @@ class SSHTransportState {
 abstract class SSHTransport with SSHDiffieHellman {
   // Parameters
   Identity identity;
-  String hostport;
+  Uri hostport;
   bool compress;
   Random random;
   SecureRandom secureRandom;

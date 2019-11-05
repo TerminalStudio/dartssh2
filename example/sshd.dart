@@ -55,7 +55,7 @@ Future<void> sshd(List<String> arguments) async {
         final SSHServer server = SSHServer(
           hostkey,
           socket: SocketImpl()..socket = socket,
-          hostport: hostport,
+          hostport: parseUri(hostport),
           print: print,
           debugPrint: (debug ? print : null),
           tracePrint: ((args['trace'] != null) ? print : null),

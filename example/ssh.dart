@@ -18,17 +18,16 @@ SSHClient client;
 Channel forwardChannel;
 
 void main(List<String> arguments) async {
-  exitCode = 0;
   stdin.lineMode = false;
   stdin.echoMode = false;
-  await ssh(arguments, stdin, (_, String v) => stdout.write(v), () => exit(0));
+  exitCode = await ssh(
+      arguments, stdin, (_, String v) => stdout.write(v), () => exit(0));
 }
 
-Future<void> ssh(List<String> arguments, Stream<List<int>> input,
+Future<int> ssh(List<String> arguments, Stream<List<int>> input,
     ResponseCallback response, VoidCallback done) async {
   final argParser = ArgParser()
     ..addOption('login', abbr: 'l')
-    ..addOption('port', abbr: 'p')
     ..addOption('identity', abbr: 'i')
     ..addOption('tunnel')
     ..addOption('kex')
@@ -41,28 +40,24 @@ Future<void> ssh(List<String> arguments, Stream<List<int>> input,
   final ArgResults args = argParser.parse(arguments);
 
   if (args.rest.length != 1) {
-    print('usage: ssh -l login hostname [args]');
+    print('usage: ssh -l login url [args]');
     print(argParser.usage);
-    exitCode = 1;
-    return;
+    return 1;
   }
 
   final String host = args.rest.first,
-      port = args['port'],
       login = args['login'],
       identityFile = args['identity'],
       tunnel = args['tunnel'];
 
   if (login == null || login.isEmpty) {
     print('no login specified');
-    exitCode = 1;
-    return;
+    return 1;
   }
 
   if (tunnel != null && tunnel.split(':').length != 2) {
     print('tunnel target should be specified host:port');
-    exitCode = 2;
-    return;
+    return 2;
   }
 
   applyCipherSuiteOverrides(
@@ -70,7 +65,7 @@ Future<void> ssh(List<String> arguments, Stream<List<int>> input,
 
   try {
     client = SSHClient(
-        hostport: 'ssh://' + host + (port != null ? ':$port' : ':22'),
+        hostport: parseUri(host),
         login: login,
         print: print,
         debugPrint: ((args['debug'] != null) ? print : null),
@@ -105,6 +100,8 @@ Future<void> ssh(List<String> arguments, Stream<List<int>> input,
     }
   } catch (error, stacktrace) {
     print('ssh: exception: $error: $stacktrace');
-    exitCode = -1;
+    return -1;
   }
+
+  return 0;
 }

@@ -17,6 +17,8 @@ import 'package:dartssh/socket_html.dart'
     if (dart.library.io) 'package:dartssh/socket_io.dart';
 import 'package:dartssh/ssh.dart';
 import 'package:dartssh/transport.dart';
+import 'package:dartssh/websocket_html.dart'
+    if (dart.library.io) 'package:dartssh/websocket_io.dart';
 
 /// The Secure Shell (SSH) is a protocol for secure remote login and
 /// other secure network services over an insecure network.
@@ -36,7 +38,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   int termWidth = 80, termHeight = 25;
 
   SSHClient(
-      {String hostport,
+      {Uri hostport,
       this.login,
       this.termvar = '',
       this.startupCommand,
@@ -75,7 +77,11 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       if (debugPrint != null) {
         debugPrint('Connecting to $hostport');
       }
-      socket = SocketImpl();
+      socket = (hostport.hasScheme &&
+              (hostport.scheme == 'ws' || hostport.scheme == 'wss'))
+          ? WebSocketImpl()
+          : SocketImpl();
+
       socket.connect(
           hostport, onConnected, (error) => disconnect('connect error'));
     }
@@ -588,7 +594,7 @@ class SSHTunneledSocketImpl extends SocketInterface {
   int tunnelToPort;
   Function connected, connectError, onError, onDone, onMessage;
 
-  SSHTunneledSocketImpl(String url, String login, String key, String password) {
+  SSHTunneledSocketImpl(Uri url, String login, String key, String password) {
     identity = key == null ? null : parsePem(key);
     client = SSHClient(
         socketInput: SocketImpl(),
@@ -620,11 +626,10 @@ class SSHTunneledSocketImpl extends SocketInterface {
   void listen(Function messageHandler) => onMessage = messageHandler;
 
   @override
-  void connect(String address, Function connectHandler, Function errorHandler,
-      {int timeoutSeconds = 15}) {
-    List<String> tunnelTo = address.split(':');
-    tunnelToHost = tunnelTo[tunnelTo.length - 2];
-    tunnelToPort = int.parse(tunnelTo[tunnelTo.length - 1]);
+  void connect(Uri address, Function connectHandler, Function errorHandler,
+      {int timeoutSeconds = 15, bool ignoreBadCert = false}) {
+    tunnelToHost = address.host;
+    tunnelToPort = address.port;
     connected = connectHandler;
     connectError = errorHandler;
     client.socket.connect(client.hostport, client.onConnected, (error) {

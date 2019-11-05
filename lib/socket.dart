@@ -9,17 +9,17 @@ import 'package:dartssh/socket_html.dart'
 
 /// Interface for connections, e.g. Socket or WebSocket.
 abstract class ConnectionInterface {
-  void close();
+  void listen(Function messageHandler);
   void handleError(Function errorHandler);
   void handleDone(Function doneHandler);
-  void listen(Function messageHandler);
-  void send(String text);
+  void close();
 }
 
-/// Websocket style interface for BSD sockets.
+/// Websocket style interface for BSD sockets and/or RFC6455 WebSockets.
 abstract class SocketInterface extends ConnectionInterface {
-  void connect(String address, Function onConnected, Function onError,
-      {int timeoutSeconds = 15});
+  void connect(Uri uri, Function onConnected, Function onError,
+      {int timeoutSeconds = 15, bool ignoreBadCert = false});
+  void send(String text);
   void sendRaw(Uint8List raw);
 }
 
@@ -33,17 +33,17 @@ mixin TestConnection {
   void handleError(Function errorHandler) => this.errorHandler = errorHandler;
   void handleDone(Function doneHandler) => this.doneHandler = doneHandler;
   void listen(Function messageHandler) => this.messageHandler = messageHandler;
-  void send(String text) => sent.add(text);
 }
 
 /// Shim [Socket] for testing
 class TestSocket extends SocketInterface with TestConnection {
-  void connect(String address, Function onConnected, Function onError,
+  void connect(Uri address, Function onConnected, Function onError,
       {int timeoutSeconds = 15, bool ignoreBadCert = false}) {
     connected = true;
     closed = false;
     onConnected(this);
   }
 
+  void send(String text) => sent.add(text);
   void sendRaw(Uint8List raw) => sent.add(String.fromCharCodes(raw));
 }

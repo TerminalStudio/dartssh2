@@ -28,6 +28,19 @@ import 'package:dartssh/serializable.dart';
 typedef NameFunction = String Function(int);
 typedef SupportedFunction = bool Function(int);
 
+/// Valid URLs include 127.0.0.1, 127.0.0.1:22, wss://webssh.
+Uri parseUri(String uriText) {
+  Uri uri;
+  try {
+    uri = Uri.parse(uriText);
+  } catch (_) {
+    uri = Uri.parse('ssh://$uriText');
+  }
+  if (!uri.hasScheme) uri = uri = Uri.parse('ssh://$uriText');
+  if (uri.scheme == 'ssh' && !uri.hasPort) uri = Uri.parse('$uri:22');
+  return uri;
+}
+
 /// Each of the algorithm name-lists MUST be a comma-separated list of algorithm names.
 /// Each supported (allowed) algorithm MUST be listed in order of preference, from most to least.
 /// https://tools.ietf.org/html/rfc4253#section-7.1

@@ -53,34 +53,42 @@ void main() {
   });
 
   test('suite', () async {
-    List<String> identities = <String>[
-      'test/id_ed25519',
-      'test/id_ecdsa',
-      'test/id_rsa'
-    ];
-    int kexIndex = 1,
-        keyIndex = 1,
-        cipherIndex = 1,
-        macIndex = 1,
-        identityIndex = 0;
+    int kexIndex = 1, keyIndex = 1, cipherIndex = 1, macIndex = 1;
     bool kexLooped = false,
         keyLooped = false,
         cipherLooped = false,
-        macLooped = false,
-        identityLooped = false;
+        macLooped = false;
     KEX.supported = (int id) => id == kexIndex;
     Key.supported = (int id) => id == keyIndex;
     Cipher.supported = (int id) => id == cipherIndex;
     MAC.supported = (int id) => id == macIndex;
-    while (!kexLooped ||
-        !keyLooped ||
-        !cipherLooped ||
-        !macLooped ||
-        !identityLooped) {
+    while (!kexLooped || !keyLooped || !cipherLooped || !macLooped) {
       print(
           '=== suite begin ${KEX.name(kexIndex)}, ${Key.name(keyIndex)}, ${Cipher.name(cipherIndex)}, ${MAC.name(macIndex)} ===');
-      String sshResponse = '';
+
       StreamController<List<int>> sshInput = StreamController<List<int>>();
+      String sshResponse = '', identityFile;
+
+      switch (keyIndex) {
+        case Key.ED25519:
+          identityFile = 'test/id_ed25519';
+          break;
+        case Key.ECDSA_SHA2_NISTP256:
+          identityFile = 'test/id_ecdsa';
+          break;
+        case Key.ECDSA_SHA2_NISTP384:
+          identityFile = 'test/ecdsa-sha2-nistp384/id_ecdsa';
+          break;
+        case Key.ECDSA_SHA2_NISTP521:
+          identityFile = 'test/ecdsa-sha2-nistp521/id_ecdsa';
+          break;
+        case Key.RSA:
+          identityFile = 'test/id_rsa';
+          break;
+        default:
+          throw FormatException('key $keyIndex');
+      }
+
       Future<void> sshdMain = sshd.sshd(<String>[
         '-p 42022',
         '-h',
@@ -93,14 +101,13 @@ void main() {
         '--trace',
         '1'
       ]);
+
       Future<void> sshMain = ssh.ssh(<String>[
         '-l',
         'root',
-        '127.0.0.1',
-        '-p',
-        '42022',
+        '127.0.0.1:42022',
         '-i',
-        identities[identityIndex],
+        identityFile,
         '--debug',
         '1',
         '--trace',
@@ -137,11 +144,6 @@ void main() {
       if (macIndex > MAC.End) {
         macLooped = true;
         macIndex = 1;
-      }
-      identityIndex++;
-      if (identityIndex == identities.length) {
-        identityLooped = true;
-        identityIndex = 0;
       }
     }
   });

@@ -74,7 +74,7 @@ abstract class AgentMessage extends Serializable {
   int id;
   AgentMessage(this.id);
 
-  Uint8List toRaw() {
+  Uint8List toRaw({Endian endian = Endian.big}) {
     Uint8List buffer = Uint8List(5 + serializedSize);
     SerializableOutput output = SerializableOutput(buffer);
     output.addUint32(buffer.length - 4);
