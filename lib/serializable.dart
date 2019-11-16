@@ -66,17 +66,17 @@ class SerializableInput extends SerializableBuffer {
 
   int getUint16() {
     offset += 2;
-    return data.getUint16(offset - 2);
+    return data.getUint16(offset - 2, endian);
   }
 
   int getUint32() {
     offset += 4;
-    return data.getUint32(offset - 4);
+    return data.getUint32(offset - 4, endian);
   }
 
   int getUint64() {
     offset += 8;
-    return data.getUint64(offset - 8);
+    return data.getUint64(offset - 8, endian);
   }
 
   Uint8List getBytes(int length) {

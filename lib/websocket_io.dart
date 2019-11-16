@@ -64,7 +64,8 @@ class WebSocketImpl extends SocketInterface {
   void handleDone(Function doneHandler) => socket.done.then(doneHandler);
 
   @override
-  void listen(Function messageHandler) => socket.listen(messageHandler);
+  void listen(Function messageHandler) =>
+      socket.listen((m) => messageHandler(utf8.encode(m)));
 
   @override
   void send(String text) => socket.addUtf8Text(utf8.encode(text));

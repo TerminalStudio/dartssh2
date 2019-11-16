@@ -48,7 +48,7 @@ class WebSocketImpl extends SocketInterface {
 
   @override
   void listen(Function messageHandler) =>
-      socket.onMessage.listen((e) => messageHandler(e.data));
+      socket.onMessage.listen((e) => messageHandler(utf8.encode(e.data)));
 
   @override
   void send(String text) => socket.sendString(text);

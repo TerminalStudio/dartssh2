@@ -459,8 +459,8 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
           sendToChannel(sessionChannel, utf8.encode(startupCommand));
         }
       }
-    } else if (chan.cb != null) {
-      chan.cb(chan, Uint8List(0));
+    } else if (chan.connected != null) {
+      chan.connected();
     }
   }
 
@@ -594,23 +594,29 @@ class SSHTunneledSocketImpl extends SocketInterface {
   int tunnelToPort;
   Function connected, connectError, onError, onDone, onMessage;
 
-  SSHTunneledSocketImpl(Uri url, String login, String key, String password) {
+  SSHTunneledSocketImpl(Uri url, String login, String key, String password,
+      {StringCallback print, StringCallback debugPrint}) {
     identity = key == null ? null : parsePem(key);
     client = SSHClient(
         socketInput: SocketImpl(),
         hostport: url,
         login: login,
+        getPassword: password == null ? null : () => utf8.encode(password),
         loadIdentity: () => identity,
+        response: (_, m) {},
         disconnected: () {
           if (onDone != null) onDone(null);
         },
         startShell: false,
         success: () {
-          if (connected != null) connected(client.socket);
-          connected = connectError = null;
           channel = client.openTcpChannel('127.0.0.1', 1234, tunnelToHost,
-              tunnelToPort, (_, Uint8List m) => onMessage(m));
-        });
+              tunnelToPort, (_, Uint8List m) => onMessage(m), () {
+            if (connected != null) connected(client.socket);
+            connected = connectError = null;
+          });
+        },
+        print: print,
+        debugPrint: debugPrint);
   }
 
   @override

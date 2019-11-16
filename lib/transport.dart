@@ -45,6 +45,7 @@ class Channel {
   bool opened = true, agentChannel = false, sentEof = false, sentClose = false;
   QueueBuffer buf = QueueBuffer(Uint8List(0));
   ChannelCallback cb;
+  VoidCallback connected;
   Channel([this.localId = 0, this.remoteId = 0]);
 }
 
@@ -645,12 +646,14 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   Channel openTcpChannel(String sourceHost, int sourcePort, String destHost,
-      int destPort, ChannelCallback cb) {
+      int destPort, ChannelCallback cb,
+      [VoidCallback connected]) {
     if (socket == null || state <= SSHTransportState.FIRST_NEWKEYS) return null;
     Channel chan = channels[nextChannelId] = Channel();
     chan.localId = nextChannelId++;
     chan.windowS = initialWindowSize;
     chan.cb = cb;
+    chan.connected = connected;
     nextChannelId++;
     writeCipher(MSG_CHANNEL_OPEN_TCPIP(
         'direct-tcpip',
