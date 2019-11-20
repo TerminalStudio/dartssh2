@@ -21,6 +21,7 @@ import 'package:dartssh/ssh.dart';
 typedef VoidCallback = void Function();
 typedef StringCallback = void Function(String);
 typedef StringFunction = String Function();
+typedef StringFilter = String Function(String);
 typedef Uint8ListFunction = Uint8List Function();
 typedef IdentityFunction = Identity Function();
 typedef FingerprintCallback = bool Function(int, Uint8List);
@@ -623,11 +624,13 @@ abstract class SSHTransport with SSHDiffieHellman {
     }
   }
 
-  void sendToChannel(Channel chan, Uint8List b) {
-    writeCipher(MSG_CHANNEL_DATA(chan.remoteId, b));
-    chan.windowC -= (b.length - 4);
+  /// Sends [data] to [channel].
+  void sendToChannel(Channel channel, Uint8List data) {
+    writeCipher(MSG_CHANNEL_DATA(channel.remoteId, data));
+    channel.windowC -= (data.length - 4);
   }
 
+  /// Accepts [MSG_CHANNEL_OPEN] request to open a new [Channel].
   Channel acceptChannel(MSG_CHANNEL_OPEN msg) {
     Channel channel = channels[nextChannelId] = Channel();
     channel.localId = nextChannelId;
@@ -639,12 +642,14 @@ abstract class SSHTransport with SSHDiffieHellman {
     return channel;
   }
 
-  void closeChannel(Channel chan) {
-    chan.sentEof = chan.sentClose = true;
-    writeCipher(MSG_CHANNEL_EOF(chan.remoteId));
-    writeCipher(MSG_CHANNEL_CLOSE(chan.remoteId));
+  /// Send EOF and close for [channel].
+  void closeChannel(Channel channel) {
+    channel.sentEof = channel.sentClose = true;
+    writeCipher(MSG_CHANNEL_EOF(channel.remoteId));
+    writeCipher(MSG_CHANNEL_CLOSE(channel.remoteId));
   }
 
+  /// Request remote opens a new TCP channel to [destHost]:[destPort].
   Channel openTcpChannel(String sourceHost, int sourcePort, String destHost,
       int destPort, ChannelCallback cb,
       [VoidCallback connected]) {

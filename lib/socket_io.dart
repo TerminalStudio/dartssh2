@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:dartssh/client.dart';
 import 'package:dartssh/socket.dart';
 
 /// dart:io [Socket] based implementation of [SocketInterface].
@@ -51,43 +52,54 @@ class SocketImpl extends SocketInterface {
 
 /// https://github.com/dart-lang/sdk/blob/master/sdk/lib/_internal/vm/bin/socket_patch.dart#L1651
 class SSHTunneledSocket extends Stream<Uint8List> implements Socket {
-  IOSink _sink;
+  StreamController<Uint8List> controller;
+  SSHTunneledSocketImpl impl;
+  SSHTunneledSocket(this.impl);
 
   @override
-  void add(List<int> data) {}
+  Encoding encoding;
 
   @override
-  void write(Object obj) {}
+  void add(List<int> bytes) => impl.sendRaw(Uint8List.fromList(bytes));
 
   @override
-  void writeAll(Iterable objects, [String separator = ""]) {}
+  void write(Object obj) => add(obj.toString().codeUnits);
 
   @override
-  void writeln([Object obj = ""]) {}
+  void writeAll(Iterable objects, [String separator = ""]) {
+    bool wroteObject = false;
+    for (var object in objects) {
+      if (wroteObject && separator.isNotEmpty) write(separator);
+      write(object);
+    }
+  }
 
   @override
-  void writeCharCode(int charCode) {}
+  void writeln([Object obj = ""]) => write(obj.toString() + '\n');
 
   @override
-  void addError(error, [StackTrace stackTrace]) {}
+  void writeCharCode(int charCode) => add(<int>[charCode]);
 
   @override
-  Future addStream(Stream<List<int>> stream) => null;
+  void addError(error, [StackTrace stackTrace]) => null;
 
   @override
-  Future flush() => null;
+  Future addStream(Stream<List<int>> stream) async => null;
 
   @override
-  Future close() => null;
+  Future flush() async {}
 
   @override
-  Future get done => null;
+  Future close() async => impl.close();
 
   @override
-  void destroy() {}
+  Future get done async => impl == null;
 
   @override
-  bool setOption(SocketOption option, bool enabled) => null;
+  void destroy() => close();
+
+  @override
+  bool setOption(SocketOption option, bool enabled) => false;
 
   @override
   Uint8List getRawOption(RawSocketOption option) => null;
@@ -109,12 +121,14 @@ class SSHTunneledSocket extends Stream<Uint8List> implements Socket {
 
   @override
   StreamSubscription<Uint8List> listen(void onData(Uint8List event),
-          {Function onError, void onDone(), bool cancelOnError}) =>
-      null;
-
-  @override
-  Encoding get encoding => _sink.encoding;
-
-  @override
-  set encoding(Encoding value) => _sink.encoding = value;
+      {Function onError, void onDone(), bool cancelOnError}) {
+    if (controller == null) {
+      controller = StreamController<Uint8List>();
+      impl.listen((Uint8List m) => controller.add(m));
+      impl.handleError((error) => controller.addError(error));
+      if (onDone != null) impl.handleDone(onDone);
+    }
+    return controller.stream.listen(onData,
+        onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+  }
 }
