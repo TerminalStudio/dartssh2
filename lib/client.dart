@@ -35,12 +35,14 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   int loginPrompts = 0, passwordPrompts = 0, userauthFail = 0;
   bool acceptedHostkey = false, loadedPw = false, wrotePw = false;
   Uint8List pw;
-  int termWidth = 80, termHeight = 25;
+  int termWidth, termHeight;
 
   SSHClient(
       {Uri hostport,
       this.login,
       this.termvar = '',
+      this.termWidth = 80,
+      this.termHeight = 25,
       this.startupCommand,
       bool compress = false,
       this.agentForwarding = false,
@@ -579,7 +581,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
         'window-change',
         Point(termWidth, termHeight),
         Point(termWidth * 8, termHeight * 12),
-        '',
+        termvar,
         '',
         false));
   }
