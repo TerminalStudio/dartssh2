@@ -15,6 +15,19 @@ Uint8List appendUint8List(Uint8List x, Uint8List y) =>
 Uint8List viewUint8List(Uint8List x, [int offset = 0, int length]) =>
     Uint8List.view(x.buffer, x.offsetInBytes + offset, length ?? x.length);
 
+/// Returns the position of the first match of [needle] in [haystack] or -1.
+int searchUint8List(Uint8List haystack, Uint8List needle) {
+  if (needle.isEmpty) return -1;
+  for (int i = 0; i < haystack.length - needle.length + 1; i++) {
+    int j = 0;
+    while (j < needle.length && haystack[i + j] == needle[j]) {
+      j++;
+    }
+    if (j == needle.length) return i;
+  }
+  return -1;
+}
+
 /// Returns true if [x] and [y] are equivalent.
 bool equalUint8List(Uint8List x, Uint8List y) {
   if (x.length != y.length) return false;

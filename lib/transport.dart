@@ -184,7 +184,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   /// When the connection has been established, both sides MUST send an identification string.
   /// https://tools.ietf.org/html/rfc4253#section-4.2
   void handleConnected() {
-    if (debugPrint != null) debugPrint('handleConnected');
+    if (debugPrint != null) debugPrint('SSHTransport.handleConnected');
     if (state != SSHTransportState.INIT) throw FormatException('$state');
     socket.send(verC + '\r\n');
     if (client) sendKeyExchangeInit(false);

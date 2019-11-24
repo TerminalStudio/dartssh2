@@ -29,7 +29,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   FingerprintCallback acceptHostFingerprint;
   Uint8ListFunction getPassword;
   IdentityFunction loadIdentity;
-  VoidCallback success;
+  List<VoidCallback> success = <VoidCallback>[];
 
   // State
   int loginPrompts = 0, passwordPrompts = 0, userauthFail = 0;
@@ -55,7 +55,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       StringCallback print,
       StringCallback debugPrint,
       StringCallback tracePrint,
-      this.success,
+      VoidCallback success,
       this.acceptHostFingerprint,
       this.loadIdentity,
       this.getPassword,
@@ -75,6 +75,9 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
             socket: socketInput,
             random: random,
             secureRandom: secureRandom) {
+    if (success != null) {
+      this.success.add(success);
+    }
     if (socket == null) {
       if (debugPrint != null) {
         debugPrint('Connecting to $hostport');
@@ -360,7 +363,9 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     }
     writeCipher(MSG_CHANNEL_OPEN.create(
         'session', sessionChannel.localId, initialWindowSize, maxPacketSize));
-    if (success != null) success();
+    for (VoidCallback successCallback in success) {
+      successCallback();
+    }
   }
 
   void handleMSG_USERAUTH_INFO_REQUEST(MSG_USERAUTH_INFO_REQUEST msg) {
@@ -589,6 +594,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
 
 /// Implement same [SocketInterface] as actual [Socket] but over [SSHClient] tunnel.
 class SSHTunneledSocketImpl extends SocketInterface {
+  bool clientOwner;
   SSHClient client;
   Identity identity;
   Channel channel;
@@ -596,8 +602,11 @@ class SSHTunneledSocketImpl extends SocketInterface {
   int tunnelToPort;
   Function connected, connectError, onError, onDone, onMessage;
 
+  SSHTunneledSocketImpl.fromClient(this.client) : clientOwner = false;
+
   SSHTunneledSocketImpl(Uri url, String login, String key, String password,
-      {StringCallback print, StringCallback debugPrint}) {
+      {StringCallback print, StringCallback debugPrint})
+      : clientOwner = true {
     identity = key == null ? null : parsePem(key);
     client = SSHClient(
         socketInput: SocketImpl(),
@@ -610,19 +619,10 @@ class SSHTunneledSocketImpl extends SocketInterface {
           if (onDone != null) onDone(null);
         },
         startShell: false,
-        success: () {
-          channel = client.openTcpChannel('127.0.0.1', 1234, tunnelToHost,
-              tunnelToPort, (_, Uint8List m) => onMessage(m), () {
-            if (connected != null) connected(client.socket);
-            connected = connectError = null;
-          });
-        },
+        success: openTunnel,
         print: print,
         debugPrint: debugPrint);
   }
-
-  @override
-  void close() => client.disconnect('close');
 
   @override
   void handleError(Function errorHandler) => onError = errorHandler;
@@ -634,21 +634,46 @@ class SSHTunneledSocketImpl extends SocketInterface {
   void listen(Function messageHandler) => onMessage = messageHandler;
 
   @override
+  void send(String text) => sendRaw(Uint8List.fromList(text.codeUnits));
+
+  @override
+  void sendRaw(Uint8List raw) => client.sendToChannel(channel, raw);
+
+  @override
+  void close() {
+    if (clientOwner) {
+      client.disconnect('close');
+    } else if (channel != null) {
+      client.closeChannel(channel);
+    }
+  }
+
+  @override
   void connect(Uri address, Function connectHandler, Function errorHandler,
       {int timeoutSeconds = 15, bool ignoreBadCert = false}) {
     tunnelToHost = address.host;
     tunnelToPort = address.port;
     connected = connectHandler;
     connectError = errorHandler;
-    client.socket.connect(client.hostport, client.onConnected, (error) {
-      client.disconnect('connect error');
-      if (connectError != null) connectError(error);
-    });
+    if (clientOwner) {
+      client.socket.connect(client.hostport, client.onConnected, (error) {
+        client.disconnect('connect error');
+        if (connectError != null) connectError(error);
+      });
+    } else {
+      if (client.sessionChannel == null) {
+        client.success.add(openTunnel);
+      } else {
+        openTunnel();
+      }
+    }
   }
 
-  @override
-  void send(String text) => sendRaw(Uint8List.fromList(text.codeUnits));
-
-  @override
-  void sendRaw(Uint8List raw) => client.sendToChannel(channel, raw);
+  void openTunnel() {
+    channel = client.openTcpChannel('127.0.0.1', 1234, tunnelToHost,
+        tunnelToPort, (_, Uint8List m) => onMessage(m), () {
+      if (connected != null) connected();
+      connected = connectError = null;
+    });
+  }
 }
