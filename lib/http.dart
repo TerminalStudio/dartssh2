@@ -34,7 +34,8 @@ abstract class HttpClient {
   StringCallback debugPrint;
   HttpClient([this.debugPrint]);
 
-  Future<HttpResponse> request(String url, {String method, String data});
+  Future<HttpResponse> request(String url,
+      {String method, String data, Map<String, String> headers});
 }
 
 /// Shim [HttpClient] for testing
@@ -42,7 +43,8 @@ class TestHttpClient extends HttpClient {
   Queue<HttpRequest> requests = Queue<HttpRequest>();
 
   @override
-  Future<HttpResponse> request(String url, {String method, String data}) {
+  Future<HttpResponse> request(String url,
+      {String method, String data, Map<String, String> headers}) {
     HttpRequest httpRequest = HttpRequest(url, method, data);
     requests.add(httpRequest);
     return httpRequest.completer.future;
@@ -60,7 +62,8 @@ class HttpClientImpl extends HttpClient {
   }
 
   @override
-  Future<HttpResponse> request(String url, {String method, String data}) async {
+  Future<HttpResponse> request(String url,
+      {String method, String data, Map<String, String> headers}) async {
     numOutstanding++;
     if (debugPrint != null) debugPrint('HTTP Request: $url');
 
@@ -68,11 +71,11 @@ class HttpClientImpl extends HttpClient {
     var uriResponse;
     switch (method) {
       case 'POST':
-        uriResponse = await client.post(url, body: data);
+        uriResponse = await client.post(url, body: data, headers: headers);
         break;
 
       default:
-        uriResponse = await client.get(url);
+        uriResponse = await client.get(url, headers: headers);
         break;
     }
 
@@ -129,21 +132,77 @@ class SSHTunneledBaseClient extends http.BaseClient {
     String connectError = await connectCompleter.future;
     if (connectError != null) throw FormatException(connectError);
 
-    String headers;
-    Completer<String> readHeadersCompleter = Completer<String>();
+    String headerText;
+    List<String> statusLine;
+    Map<String, String> headers;
+    int contentLength, contentRead = 0;
     QueueBuffer buffer = QueueBuffer(Uint8List(0));
-    socket.handleDone(() => readHeadersCompleter.complete('done'));
-    socket.handleError((error) => readHeadersCompleter.complete('$error'));
+    Completer<String> readHeadersCompleter = Completer<String>();
+    StreamController<List<int>> contentController =
+        StreamController<List<int>>();
+
+    socket.handleDone(() {
+      if (client.debugPrint != null) {
+        client.debugPrint('SSHTunneledBaseClient.socket.handleDone');
+      }
+      socket.close();
+      contentController.close();
+      if (headerText == null) readHeadersCompleter.complete('done');
+    });
+    socket.handleError((error) {
+      if (client.debugPrint != null) {
+        client.debugPrint('SSHTunneledBaseClient.socket.handleError');
+      }
+      socket.close();
+      contentController.close();
+      if (headerText == null) readHeadersCompleter.complete('$error');
+    });
     socket.listen((Uint8List m) {
-      buffer.add(m);
-      if (headers == null) {
+      if (client.debugPrint != null) {
+        client.debugPrint(
+            'SSHTunneledBaseClient.socket.listen: read ${m.length} bytes');
+      }
+      if (headerText == null) {
+        buffer.add(m);
         int headersEnd = searchUint8List(
             buffer.data, Uint8List.fromList('\r\n\r\n'.codeUnits));
         if (headersEnd != -1) {
-          headers = utf8.decode(viewUint8List(buffer.data, 0, headersEnd));
+          headerText = utf8.decode(viewUint8List(buffer.data, 0, headersEnd));
           buffer.flush(headersEnd + 4);
+          var lines = LineSplitter.split(headerText);
+          statusLine = lines.first.split(' ');
+          headers = Map<String, String>.fromIterable(lines.skip(1),
+              key: (h) => h.substring(0, h.indexOf(': ')),
+              value: (h) => h.substring(h.indexOf(': ') + 2).trim());
+          headers.forEach((key, value) {
+            if (key.toLowerCase() == 'content-length') {
+              contentLength = int.parse(value);
+            }
+          });
+
           readHeadersCompleter.complete(null);
+          if ((contentLength ?? 0) == 0) {
+            if (client.debugPrint != null) {
+              client.debugPrint(
+                  'SSHTunneledBaseClient.socket.listen: Content-Length: 0');
+            }
+            socket.close();
+            contentController.close();
+            return;
+          }
+          if (buffer.data.isEmpty) return;
+          m = buffer.data;
         }
+      }
+      contentController.add(m);
+      contentRead += m.length;
+      if (contentRead >= contentLength) {
+        if (client.debugPrint != null) {
+          client.debugPrint(
+              'SSHTunneledBaseClient.socket.listen: done $contentRead / $contentLength');
+        }
+        socket.close();
+        contentController.close();
       }
     });
 
@@ -160,15 +219,21 @@ class SSHTunneledBaseClient extends http.BaseClient {
     if (request.method == 'POST') socket.sendRaw(body);
 
     await readHeadersCompleter.future;
-    print('got headers $headers');
 
     return http.StreamedResponse(
-      Stream.empty(),
-      200,
-      contentLength: 0,
+      contentController.stream,
+      int.parse(statusLine[1]),
+      contentLength: contentLength ?? 0,
       request: request,
-      headers: {'Content-Length': '0'},
-      reasonPhrase: 'OK',
+      headers: headers,
+      reasonPhrase: statusLine.sublist(2).join(' '),
     );
   }
+}
+
+Map<String, String> addBasicAuthenticationHeader(
+    Map<String, String> headers, String username, String password) {
+  headers['authorization'] =
+      'Basic ' + base64.encode(utf8.encode('$username:$password'));
+  return headers;
 }

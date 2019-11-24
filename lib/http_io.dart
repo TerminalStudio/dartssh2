@@ -19,7 +19,8 @@ class HttpClientImpl extends HttpClient {
   }
 
   @override
-  Future<HttpResponse> request(String url, {String method, String data}) async {
+  Future<HttpResponse> request(String url,
+      {String method, String data, Map<String, String> headers}) async {
     numOutstanding++;
 
     Uri uri = Uri.parse(url);
@@ -32,6 +33,11 @@ class HttpClientImpl extends HttpClient {
       default:
         request = await client.getUrl(uri);
         break;
+    }
+
+    if (headers != null) {
+      headers
+          .forEach((String key, String value) => request.headers[key] = value);
     }
 
     if (debugPrint != null) debugPrint('HTTP Request: ${request.uri}');
