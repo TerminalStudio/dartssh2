@@ -199,6 +199,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     }
   }
 
+  /// Initialize a shared-secret negotiation culminating with [MSG_NEWKEYS].
   @override
   void sendDiffileHellmanInit() {
     initializeDiffieHellman(kexMethod, random);
@@ -263,6 +264,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     sendNewKeys();
   }
 
+  /// Completes X25519 key exchange.
   Uint8List handleX25519MSG_KEX_ECDH_REPLY(MSG_KEX_ECDH_REPLY msg) {
     Uint8List fingerprint;
     if (tracePrint != null) {
@@ -278,6 +280,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     return fingerprint;
   }
 
+  /// Completes Elliptic-curve Diffie–Hellman key exchange.
   Uint8List handleEcDhMSG_KEX_ECDH_REPLY(MSG_KEX_ECDH_REPLY msg) {
     Uint8List fingerprint;
     if (tracePrint != null) {
@@ -293,6 +296,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     return fingerprint;
   }
 
+  /// Completes Diffie-Hellman Group Exchange and begins key exchange.
   void handleDhGroupMSG_KEX_DH_GEX_GROUP(MSG_KEX_DH_GEX_GROUP msg) {
     if (tracePrint != null) {
       tracePrint('$hostport: MSG_KEX_DH_GEX_GROUP');
@@ -301,6 +305,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     writeClearOrEncrypted(MSG_KEX_DH_GEX_INIT(dh.e));
   }
 
+  /// Completes Diffie-Hellman key exchange.
   Uint8List handleDhMSG_KEXDH_REPLY(MSG_KEXDH_REPLY msg) {
     Uint8List fingerprint;
     if (tracePrint != null) {
@@ -316,6 +321,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     return fingerprint;
   }
 
+  /// Handle accepted [MSG_SERVICE_REQUEST] sent in response to [MSG_NEWKEYS].
   void handleMSG_SERVICE_ACCEPT() {
     if (tracePrint != null) tracePrint('$hostport: MSG_SERVICE_ACCEPT');
     if (login == null || login.isEmpty) {
@@ -328,6 +334,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     sendAuthenticationRequest();
   }
 
+  /// If key authentication failed, then try password authentication.
   void handleMSG_USERAUTH_FAILURE(MSG_USERAUTH_FAILURE msg) {
     if (tracePrint != null) {
       tracePrint(
@@ -344,6 +351,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     }
   }
 
+  /// After successfull authentication, open the session channel and start compression.
   void handleMSG_USERAUTH_SUCCESS() {
     if (tracePrint != null) {
       tracePrint('$hostport: MSG_USERAUTH_SUCCESS');
@@ -368,6 +376,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     }
   }
 
+  /// The server can optionally request authentication information from the client.
   void handleMSG_USERAUTH_INFO_REQUEST(MSG_USERAUTH_INFO_REQUEST msg) {
     if (tracePrint != null) {
       tracePrint(
@@ -395,6 +404,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     }
   }
 
+  /// Logs any (unhandled) channel specific requests from server.
   void handleMSG_CHANNEL_REQUEST(MSG_CHANNEL_REQUEST msg) {
     if (tracePrint != null) {
       tracePrint(
@@ -402,6 +412,8 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     }
   }
 
+  /// Handles server-initiated [Channel] to client.  e.g. for remote port forwarding,
+  /// or SSH agent request.
   void handleMSG_CHANNEL_OPEN(MSG_CHANNEL_OPEN msg, SerializableInput packetS) {
     if (tracePrint != null) {
       tracePrint('$hostport: MSG_CHANNEL_OPEN type=${msg.channelType}');
@@ -436,41 +448,50 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     }
   }
 
-  void handleChannelOpenConfirmation(Channel chan) {
-    if (chan == sessionChannel) {
-      if (agentForwarding) {
-        writeCipher(MSG_CHANNEL_REQUEST.exec(
-            chan.remoteId, 'auth-agent-req@openssh.com', '', true));
-      }
-
-      if (forwardRemote != null) {
-        for (Forward forward in forwardRemote) {
-          writeCipher(MSG_GLOBAL_REQUEST_TCPIP('', forward.port));
-          forwardingRemote[forward.port] = forward;
-        }
-      }
-
-      if (startShell) {
-        writeCipher(MSG_CHANNEL_REQUEST.ptyReq(
-            chan.remoteId,
-            'pty-req',
-            Point(termWidth, termHeight),
-            Point(termWidth * 8, termHeight * 12),
-            termvar,
-            '',
-            true));
-
-        writeCipher(MSG_CHANNEL_REQUEST.exec(chan.remoteId, 'shell', '', true));
-
-        if ((startupCommand ?? '').isNotEmpty) {
-          sendToChannel(sessionChannel, utf8.encode(startupCommand));
-        }
-      }
-    } else if (chan.connected != null) {
-      chan.connected();
+  /// Handles successfully opened client-initiated [Channel].
+  void handleChannelOpenConfirmation(Channel channel) {
+    if (channel == sessionChannel) {
+      handleSessionStarted();
+    } else if (channel.connected != null) {
+      channel.connected();
     }
   }
 
+  /// After the session is established, initialize channel state.
+  void handleSessionStarted() {
+    if (agentForwarding) {
+      writeCipher(MSG_CHANNEL_REQUEST.exec(
+          sessionChannel.remoteId, 'auth-agent-req@openssh.com', '', true));
+    }
+
+    if (forwardRemote != null) {
+      for (Forward forward in forwardRemote) {
+        writeCipher(MSG_GLOBAL_REQUEST_TCPIP('', forward.port));
+        forwardingRemote[forward.port] = forward;
+      }
+    }
+
+    if (startShell) {
+      writeCipher(MSG_CHANNEL_REQUEST.ptyReq(
+          sessionChannel.remoteId,
+          'pty-req',
+          Point(termWidth, termHeight),
+          Point(termWidth * 8, termHeight * 12),
+          termvar,
+          '',
+          true));
+
+      writeCipher(
+          MSG_CHANNEL_REQUEST.exec(sessionChannel.remoteId, 'shell', '', true));
+
+      if ((startupCommand ?? '').isNotEmpty) {
+        sendToChannel(sessionChannel, utf8.encode(startupCommand));
+      }
+    }
+  }
+
+  /// Handles all [Channel] data for this session.
+  @override
   void handleChannelData(Channel chan, Uint8List data) {
     if (chan == sessionChannel) {
       response(this, utf8.decode(data));
@@ -481,6 +502,8 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     }
   }
 
+  /// Handles [Channel] closed by server.
+  @override
   void handleChannelClose(Channel chan) {
     if (chan == sessionChannel) {
       writeCipher(MSG_DISCONNECT());
@@ -491,6 +514,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     }
   }
 
+  /// Updates [exH] and verifies [kS]'s [hSig].  On success [MSG_NEWKEYS] is sent.
   bool computeExchangeHashAndVerifyHostKey(Uint8List kS, Uint8List hSig) {
     updateExchangeHash(kS);
     return verifyHostKey(exH, hostkeyType, kS, hSig);

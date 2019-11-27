@@ -73,3 +73,5 @@ class WebSocketImpl extends SocketInterface {
   @override
   void sendRaw(Uint8List raw) => socket.add(raw);
 }
+
+class SSHTunneledWebSocketImpl extends WebSocketImpl {}

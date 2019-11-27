@@ -26,11 +26,20 @@ class SocketImpl extends SocketInterface {
   @override
   void connect(Uri uri, Function onConnected, Function onError,
       {int timeoutSeconds = 15, bool ignoreBadCert = false}) {
-    if (socket != null) throw FormatException();
-    Socket.connect(uri.host, uri.port,
-            timeout: Duration(seconds: timeoutSeconds))
-        .then(
-            (Socket x) => x == null ? onError(null) : onConnected(socket = x));
+    if (socket != null) {
+      if (socket is SSHTunneledSocket) {
+        SSHTunneledSocket tunneledSocket = socket;
+        tunneledSocket.impl.connect(uri, onConnected, onError,
+            timeoutSeconds: timeoutSeconds, ignoreBadCert: ignoreBadCert);
+      } else {
+        throw FormatException();
+      }
+    } else {
+      Socket.connect(uri.host, uri.port,
+              timeout: Duration(seconds: timeoutSeconds))
+          .then((Socket x) =>
+              x == null ? onError(null) : onConnected(socket = x));
+    }
   }
 
   @override
