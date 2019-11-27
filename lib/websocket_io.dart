@@ -6,8 +6,11 @@ import 'dart:io' as io;
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:dartssh/client.dart';
+import 'package:dartssh/http.dart';
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/socket.dart';
+import 'package:dartssh/socket_io.dart';
 
 /// dart:io [WebSocket] implementation.
 class WebSocketImpl extends SocketInterface {
@@ -74,4 +77,30 @@ class WebSocketImpl extends SocketInterface {
   void sendRaw(Uint8List raw) => socket.add(raw);
 }
 
-class SSHTunneledWebSocketImpl extends WebSocketImpl {}
+class SSHTunneledWebSocketImpl extends WebSocketImpl {
+  SSHTunneledSocketImpl tunneledSocket;
+  SSHTunneledWebSocketImpl(this.tunneledSocket);
+
+  @override
+  void connect(Uri uri, Function onConnected, Function onError,
+      {int timeoutSeconds = 15, bool ignoreBadCert = false}) async {
+    HttpResponse response = await tunneledHttpRequest(
+      Uri.parse('http' + '$uri'.substring(2)),
+      'GET',
+      tunneledSocket,
+      requestHeaders: <String, String>{
+        'Connection': 'upgrade',
+        'Upgrade': 'websocket',
+        'sec-websocket-version': '13',
+        'sec-websocket-key': base64.encode(randBytes(Random.secure(), 8))
+      },
+      debugPrint: tunneledSocket.client.debugPrint,
+    );
+    if (response.status != 200) {
+      throw FormatException('status ${response.status}');
+    }
+    socket = io.WebSocket.fromUpgradedSocket(SSHTunneledSocket(tunneledSocket),
+        serverSide: false);
+    onConnected(socket);
+  }
+}

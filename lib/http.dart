@@ -138,11 +138,12 @@ class SSHTunneledBaseClient extends http.BaseClient {
     }
 
     HttpResponse response = await tunneledHttpRequest(
-      client,
       request.url,
       request.method,
+      SSHTunneledSocketImpl.fromClient(client),
       requestHeaders: request.headers,
       body: await request.finalize().toBytes(),
+      debugPrint: client.debugPrint,
     );
 
     return http.StreamedResponse(
@@ -169,11 +170,12 @@ Map<String, String> addBasicAuthenticationHeader(
 
 /// Makes HTTP request over [SSHTunneledSocketImpl] carried by [client].
 Future<HttpResponse> tunneledHttpRequest(
-    SSHClient client, Uri uri, String method,
-    {Map<String, String> requestHeaders, Uint8List body}) async {
+    Uri uri, String method, SSHTunneledSocketImpl socket,
+    {Map<String, String> requestHeaders,
+    Uint8List body,
+    StringCallback debugPrint}) async {
   /// Ask the remote to open an SSH tunnel to [uri].
   Completer<String> connectCompleter = Completer<String>();
-  SSHTunneledSocketImpl socket = SSHTunneledSocketImpl.fromClient(client);
   socket.connect(uri, () => connectCompleter.complete(null),
       (error) => connectCompleter.complete('$error'));
   String connectError = await connectCompleter.future;
@@ -189,8 +191,8 @@ Future<HttpResponse> tunneledHttpRequest(
   StreamController<List<int>> contentController = StreamController<List<int>>();
 
   socket.handleDone(() {
-    if (client.debugPrint != null) {
-      client.debugPrint('SSHTunneledBaseClient.socket.handleDone');
+    if (debugPrint != null) {
+      debugPrint('SSHTunneledBaseClient.socket.handleDone');
     }
     socket.close();
     contentController.close();
@@ -198,8 +200,8 @@ Future<HttpResponse> tunneledHttpRequest(
   });
 
   socket.handleError((error) {
-    if (client.debugPrint != null) {
-      client.debugPrint('SSHTunneledBaseClient.socket.handleError');
+    if (debugPrint != null) {
+      debugPrint('SSHTunneledBaseClient.socket.handleError');
     }
     socket.close();
     contentController.close();
@@ -207,9 +209,8 @@ Future<HttpResponse> tunneledHttpRequest(
   });
 
   socket.listen((Uint8List m) {
-    if (client.debugPrint != null) {
-      client.debugPrint(
-          'SSHTunneledBaseClient.socket.listen: read ${m.length} bytes');
+    if (debugPrint != null) {
+      debugPrint('SSHTunneledBaseClient.socket.listen: read ${m.length} bytes');
     }
     if (headerText == null) {
       buffer.add(m);
@@ -234,8 +235,8 @@ Future<HttpResponse> tunneledHttpRequest(
 
         /// If there's no content then we're already done.
         if ((contentLength ?? 0) == 0) {
-          if (client.debugPrint != null) {
-            client.debugPrint(
+          if (debugPrint != null) {
+            debugPrint(
                 'SSHTunneledBaseClient.socket.listen: Content-Length: 0');
           }
           socket.close();
@@ -253,8 +254,8 @@ Future<HttpResponse> tunneledHttpRequest(
     contentController.add(m);
     contentRead += m.length;
     if (contentRead >= contentLength) {
-      if (client.debugPrint != null) {
-        client.debugPrint(
+      if (debugPrint != null) {
+        debugPrint(
             'SSHTunneledBaseClient.socket.listen: done $contentRead / $contentLength');
       }
       socket.close();

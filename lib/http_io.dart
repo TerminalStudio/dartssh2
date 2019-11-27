@@ -14,7 +14,7 @@ class HttpClientImpl extends HttpClient {
   io.HttpClient client = io.HttpClient();
 
   HttpClientImpl({StringCallback debugPrint, StringFilter userAgent})
-      : super(debugPrint) {
+      : super(debugPrint: debugPrint) {
     if (userAgent != null) client.userAgent = userAgent(client.userAgent);
   }
 

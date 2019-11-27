@@ -345,7 +345,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     if (userauthFail == 1 && !wrotePw) {
       response(this, 'Password:');
       passwordPrompts = 1;
-      loadPassword();
+      getThenSendPassword();
     } else {
       throw FormatException('$hostport: authorization failed');
     }
@@ -398,7 +398,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
 
     if (msg.prompts.isNotEmpty) {
       passwordPrompts = msg.prompts.length;
-      loadPassword();
+      getThenSendPassword();
     } else {
       writeCipher(MSG_USERAUTH_INFO_RESPONSE(List<Uint8List>()));
     }
@@ -520,10 +520,12 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     return verifyHostKey(exH, hostkeyType, kS, hSig);
   }
 
-  void loadPassword() {
+  /// Calls [sendPassword()] if [getPassword] succeeds.
+  void getThenSendPassword() {
     if (getPassword != null && (pw = getPassword()) != null) sendPassword();
   }
 
+  /// "Securely" clears the local password storage.
   void clearPassword() {
     if (pw == null) return;
     for (int i = 0; i < pw.length; i++) {
@@ -532,6 +534,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     pw = null;
   }
 
+  /// Sends [MSG_USERAUTH_REQUEST] with password [pw].
   void sendPassword() {
     response(this, '\r\n');
     wrotePw = true;
@@ -548,6 +551,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     clearPassword();
   }
 
+  /// Sends [MSG_USERAUTH_REQUEST] optionally using [identity] or keyboard-interactive.
   void sendAuthenticationRequest() {
     if (identity == null) {
       writeCipher(MSG_USERAUTH_REQUEST(login, 'ssh-connection',
@@ -578,6 +582,8 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     }
   }
 
+  /// Sends channel data [b] on [sessionChannel].
+  /// Optionally [b] is captured by [loginPrompts] or [passwordPrompts].
   @override
   void sendChannelData(Uint8List b) {
     if (loginPrompts != 0) {
@@ -601,6 +607,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     }
   }
 
+  /// Sends window-change [MSG_CHANNEL_REQUEST].
   void setTerminalWindowSize(int w, int h) {
     termWidth = w;
     termHeight = h;
@@ -672,6 +679,7 @@ class SSHTunneledSocketImpl extends SocketInterface {
     }
   }
 
+  /// Connects to [address] over SSH tunnel provided by [client].
   @override
   void connect(Uri address, Function connectHandler, Function errorHandler,
       {int timeoutSeconds = 15, bool ignoreBadCert = false}) {
@@ -693,6 +701,7 @@ class SSHTunneledSocketImpl extends SocketInterface {
     }
   }
 
+  /// Sends [MSG_CHANNEL_OPEN_TCPIP] for [tunnelToHost]:[tunnelToPort].
   void openTunnel() {
     channel = client.openTcpChannel('127.0.0.1', 1234, tunnelToHost,
         tunnelToPort, (_, Uint8List m) => onMessage(m), () {

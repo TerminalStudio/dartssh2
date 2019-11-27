@@ -11,7 +11,7 @@ import 'package:dartssh/transport.dart';
 class HttpClientImpl extends HttpClient {
   static const String type = 'html';
   HttpClientImpl({StringCallback debugPrint, StringFilter userAgent})
-      : super(debugPrint);
+      : super(debugPrint: debugPrint);
 
   @override
   Future<HttpResponse> request(String url,
@@ -21,7 +21,7 @@ class HttpClientImpl extends HttpClient {
     html.HttpRequest.request(url, method: method, requestHeaders: headers)
         .then((r) {
       numOutstanding--;
-      completer.complete(HttpResponse(r.status, r.responseText));
+      completer.complete(HttpResponse(r.status, text: r.responseText));
     });
     return completer.future;
   }

@@ -10,10 +10,11 @@ Cipher: AES-CTR, AES-CBC.
 MAC: MD5, SHA.  
 Compression: not yet supported.  
 Forwarding: TCP/IP, Agent.  
+Tunneling: dart:io Socket, dart:io WebSocket, package:http BaseClient.
 
 ## Example
 
-See [example/ssh.dart](example/ssh.dart).
+See [example/lib/ssh.dart](example/lib/ssh.dart).
 
 ## Build
 
