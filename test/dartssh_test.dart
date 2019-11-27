@@ -15,8 +15,8 @@ import 'package:dartssh/protocol.dart';
 import 'package:dartssh/serializable.dart';
 import 'package:dartssh/ssh.dart';
 
-import '../example/lib/ssh.dart' as ssh;
-import '../example/lib/sshd.dart' as sshd;
+import '../example/dartssh.dart' as ssh;
+import '../example/dartsshd.dart' as sshd;
 
 void main() {
   /// https://www.ietf.org/rfc/rfc4251.txt

@@ -14,7 +14,7 @@ Tunneling: dart:io Socket, dart:io WebSocket, package:http BaseClient.
 
 ## Example
 
-See [example/lib/ssh.dart](example/lib/ssh.dart).
+See [example/dartssh.dart](example/dartssh.dart).
 
 ## Build
 

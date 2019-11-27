@@ -6,3 +6,7 @@
 
 - Add SSHTunneledSocketImpl, SSHTunneledWebSocketImpl, and SSHTunneledBaseClient.
 
+## 1.0.2+2
+
+- Add example/README.md
+
