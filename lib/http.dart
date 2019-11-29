@@ -144,6 +144,7 @@ class SSHTunneledBaseClient extends http.BaseClient {
       requestHeaders: request.headers,
       body: await request.finalize().toBytes(),
       debugPrint: client.debugPrint,
+      persistentConnection: request.persistentConnection,
     );
 
     return http.StreamedResponse(
@@ -173,7 +174,8 @@ Future<HttpResponse> tunneledHttpRequest(
     Uri uri, String method, SSHTunneledSocketImpl socket,
     {Map<String, String> requestHeaders,
     Uint8List body,
-    StringCallback debugPrint}) async {
+    StringCallback debugPrint,
+    bool persistentConnection = true}) async {
   /// Ask the remote to open an SSH tunnel to [uri].
   Completer<String> connectCompleter = Completer<String>();
   socket.connect(uri, () => connectCompleter.complete(null),
@@ -190,7 +192,7 @@ Future<HttpResponse> tunneledHttpRequest(
   Completer<String> readHeadersCompleter = Completer<String>();
   StreamController<List<int>> contentController = StreamController<List<int>>();
 
-  socket.handleDone(() {
+  socket.handleDone((String reason) {
     if (debugPrint != null) {
       debugPrint('SSHTunneledBaseClient.socket.handleDone');
     }
@@ -239,8 +241,10 @@ Future<HttpResponse> tunneledHttpRequest(
             debugPrint(
                 'SSHTunneledBaseClient.socket.listen: Content-Length: 0');
           }
-          socket.close();
           contentController.close();
+          if (!persistentConnection) {
+            socket.close();
+          }
           return;
         }
 
@@ -258,11 +262,14 @@ Future<HttpResponse> tunneledHttpRequest(
         debugPrint(
             'SSHTunneledBaseClient.socket.listen: done $contentRead / $contentLength');
       }
-      socket.close();
       contentController.close();
+      if (!persistentConnection || contentRead > contentLength) {
+        socket.close();
+      }
     }
   });
 
+  requestHeaders['Host'] = '${uri.host}';
   if (method == 'POST') {
     requestHeaders['Content-Length'] = '${body.length}';
   }

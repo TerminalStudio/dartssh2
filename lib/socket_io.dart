@@ -8,11 +8,12 @@ import 'dart:typed_data';
 
 import 'package:dartssh/client.dart';
 import 'package:dartssh/socket.dart';
+import 'package:dartssh/transport.dart';
 
 /// dart:io [Socket] based implementation of [SocketInterface].
 class SocketImpl extends SocketInterface {
   Socket socket;
-  Function onError, onDone;
+  StringCallback onError, onDone;
   SocketImpl([this.socket]);
 
   @override
@@ -24,7 +25,7 @@ class SocketImpl extends SocketInterface {
   }
 
   @override
-  void connect(Uri uri, Function onConnected, Function onError,
+  void connect(Uri uri, VoidCallback onConnected, StringCallback onError,
       {int timeoutSeconds = 15, bool ignoreBadCert = false}) {
     if (socket != null) {
       if (socket is SSHTunneledSocket) {
@@ -37,20 +38,29 @@ class SocketImpl extends SocketInterface {
     } else {
       Socket.connect(uri.host, uri.port,
               timeout: Duration(seconds: timeoutSeconds))
-          .then((Socket x) =>
-              x == null ? onError(null) : onConnected(socket = x));
+          .then((Socket x) {
+        if (x == null) {
+          onError(null);
+        } else {
+          socket = x;
+          onConnected();
+        }
+      });
     }
   }
 
   @override
-  void handleError(Function errorHandler) => onError = errorHandler;
+  void handleError(StringCallback errorHandler) => onError = errorHandler;
 
   @override
-  void handleDone(Function doneHandler) => onDone = doneHandler;
+  void handleDone(StringCallback doneHandler) => onDone = doneHandler;
 
   @override
-  void listen(Function messageHandler) => socket.listen(messageHandler,
-      onDone: onDone != null ? () => onDone(null) : null, onError: onError);
+  void listen(Uint8ListCallback messageHandler) => socket.listen(messageHandler,
+      onDone: onDone == null ? null : () => onDone(null),
+      onError: onError == null
+          ? null
+          : (error, stacktrace) => onError('$error: $stacktrace'));
 
   @override
   void send(String text) => sendRaw(Uint8List.fromList(text.codeUnits));
@@ -61,51 +71,64 @@ class SocketImpl extends SocketInterface {
 
 /// https://github.com/dart-lang/sdk/blob/master/sdk/lib/_internal/vm/bin/socket_patch.dart#L1651
 class SSHTunneledSocket extends Stream<Uint8List> implements Socket {
-  StreamController<Uint8List> controller;
   SSHTunneledSocketImpl impl;
-  SSHTunneledSocket(this.impl);
+  StreamController<Uint8List> controller;
+  SSHTunneledSocketStreamConsumer consumer;
+  IOSink sink;
 
-  @override
-  Encoding encoding;
-
-  @override
-  void add(List<int> bytes) => impl.sendRaw(Uint8List.fromList(bytes));
-
-  @override
-  void write(Object obj) => add(obj.toString().codeUnits);
-
-  @override
-  void writeAll(Iterable objects, [String separator = ""]) {
-    bool wroteObject = false;
-    for (var object in objects) {
-      if (wroteObject && separator.isNotEmpty) write(separator);
-      write(object);
-    }
+  SSHTunneledSocket(this.impl) {
+    controller = StreamController<Uint8List>(sync: true);
+    consumer = SSHTunneledSocketStreamConsumer(this);
+    sink = IOSink(consumer);
+    impl.listen((Uint8List m) => controller.add(m));
+    impl.handleError((error) => controller.addError(error));
+    impl.handleDone((String reason) => controller.addError(reason));
   }
 
   @override
-  void writeln([Object obj = ""]) => write(obj.toString() + '\n');
+  Encoding get encoding => sink.encoding;
+
+  @override set encoding(Encoding value) => sink.encoding = value;
 
   @override
-  void writeCharCode(int charCode) => add(<int>[charCode]);
+  void add(List<int> bytes) => sink.add(bytes);
 
   @override
-  void addError(error, [StackTrace stackTrace]) => null;
+  void write(Object obj) => sink.write(obj);
 
   @override
-  Future addStream(Stream<List<int>> stream) async => null;
+  void writeAll(Iterable objects, [String separator = ""]) =>
+      sink.writeAll(objects, separator);
 
   @override
-  Future flush() async {}
+  void writeln([Object obj = ""]) => sink.writeln(obj);
 
   @override
-  Future close() async => impl.close();
+  void writeCharCode(int charCode) => sink.writeCharCode(charCode);
 
   @override
-  Future get done async => impl == null;
+  void addError(error, [StackTrace stackTrace]) {
+    throw UnsupportedError("Cannot send errors on sockets");
+  }
 
   @override
-  void destroy() => close();
+  Future<Socket> addStream(Stream<List<int>> stream) => sink.addStream(stream);
+
+  @override
+  Future flush() => sink.flush();
+
+  @override
+  Future close() => sink.close();
+
+  @override
+  Future get done => sink.done;
+
+  @override
+  void destroy() {
+    consumer.stop();
+    impl.close();
+    controller.close();
+  }
 
   @override
   bool setOption(SocketOption option, bool enabled) => false;
@@ -117,27 +140,80 @@ class SSHTunneledSocket extends Stream<Uint8List> implements Socket {
   void setRawOption(RawSocketOption option) {}
 
   @override
-  int get port => null;
+  int get port => impl.sourcePort;
 
   @override
-  int get remotePort => null;
+  int get remotePort => impl.tunnelToPort;
 
   @override
-  InternetAddress get address => null;
+  InternetAddress get address => InternetAddress(impl.sourceHost);
 
   @override
-  InternetAddress get remoteAddress => null;
+  InternetAddress get remoteAddress => InternetAddress(impl.tunnelToHost);
 
   @override
   StreamSubscription<Uint8List> listen(void onData(Uint8List event),
       {Function onError, void onDone(), bool cancelOnError}) {
-    if (controller == null) {
-      controller = StreamController<Uint8List>();
-      impl.listen((Uint8List m) => controller.add(m));
-      impl.handleError((error) => controller.addError(error));
-      if (onDone != null) impl.handleDone(onDone);
+    if (impl.client.debugPrint != null) {
+      impl.client.debugPrint('SSHTunneledSocket.listen $remoteAddress:$remotePort');
     }
     return controller.stream.listen(onData,
         onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+  }
+}
+
+/// Copied from https://github.com/dart-lang/sdk/blob/master/sdk/lib/_internal/vm/bin/socket_patch.dart
+class SSHTunneledSocketStreamConsumer extends StreamConsumer<List<int>> {
+  StreamSubscription subscription;
+  final SSHTunneledSocket socket;
+  Completer streamCompleter;
+  SSHTunneledSocketStreamConsumer(this.socket);
+
+  Future<Socket> addStream(Stream<List<int>> stream) {
+    //socket._ensureRawSocketSubscription();
+    streamCompleter = Completer<Socket>();
+    if (socket.impl != null) {
+      subscription = stream.listen((data) {
+        try {
+          if (subscription != null) {
+            assert(data != null);
+            socket.impl.sendRaw(data);
+          }
+        } catch (e) {
+          socket.destroy();
+          stop();
+          done(e);
+        }
+      }, onError: (error, [stackTrace]) {
+        socket.destroy();
+        done(error, stackTrace);
+      }, onDone: () {
+        //done();
+      }, cancelOnError: true);
+    }
+    return streamCompleter.future;
+  }
+
+  Future<Socket> close() {
+    //socket._consumerDone();
+    return Future.value(socket);
+  }
+
+  void done([error, stackTrace]) {
+    if (streamCompleter != null) {
+      if (error != null) {
+        streamCompleter.completeError(error, stackTrace);
+      } else {
+        streamCompleter.complete(socket);
+      }
+      streamCompleter = null;
+    }
+  }
+
+  void stop() {
+    if (subscription == null) return;
+    subscription.cancel();
+    subscription = null;
+    //socket._disableWriteEvent();
   }
 }

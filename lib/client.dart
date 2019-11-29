@@ -146,6 +146,11 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
             MSG_CHANNEL_OPEN_CONFIRMATION()..deserialize(packetS));
         break;
 
+      case MSG_CHANNEL_OPEN_FAILURE.ID:
+        handleMSG_CHANNEL_OPEN_FAILURE(
+            MSG_CHANNEL_OPEN_FAILURE()..deserialize(packetS));
+        break;
+
       case MSG_CHANNEL_WINDOW_ADJUST.ID:
         handleMSG_CHANNEL_WINDOW_ADJUST(
             MSG_CHANNEL_WINDOW_ADJUST()..deserialize(packetS));
@@ -504,13 +509,17 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
 
   /// Handles [Channel] closed by server.
   @override
-  void handleChannelClose(Channel chan) {
+  void handleChannelClose(Channel chan, [String description]) {
     if (chan == sessionChannel) {
       writeCipher(MSG_DISCONNECT());
       sessionChannel = null;
     } else if (chan.cb != null) {
       chan.opened = false;
-      chan.cb(chan, Uint8List(0));
+      if (chan.error != null) {
+        chan.error(description);
+      } else {
+        chan.cb(chan, Uint8List(0));
+      }
     }
   }
 
@@ -629,9 +638,11 @@ class SSHTunneledSocketImpl extends SocketInterface {
   SSHClient client;
   Identity identity;
   Channel channel;
-  String tunnelToHost;
-  int tunnelToPort;
-  Function connected, connectError, onError, onDone, onMessage;
+  String sourceHost, tunnelToHost;
+  int sourcePort, tunnelToPort;
+  VoidCallback connected;
+  StringCallback connectError, onError, onDone;
+  Uint8ListCallback onMessage;
 
   SSHTunneledSocketImpl.fromClient(this.client) : clientOwner = false;
 
@@ -647,7 +658,7 @@ class SSHTunneledSocketImpl extends SocketInterface {
         loadIdentity: () => identity,
         response: (_, m) {},
         disconnected: () {
-          if (onDone != null) onDone(null);
+          if (onDone != null) onDone('SSHTunnelledSocketImpl.client disconnected');
         },
         startShell: false,
         success: openTunnel,
@@ -656,19 +667,22 @@ class SSHTunneledSocketImpl extends SocketInterface {
   }
 
   @override
-  void handleError(Function errorHandler) => onError = errorHandler;
+  void handleError(StringCallback errorHandler) => onError = errorHandler;
 
   @override
-  void handleDone(Function doneHandler) => onDone = doneHandler;
+  void handleDone(StringCallback doneHandler) => onDone = doneHandler;
 
   @override
-  void listen(Function messageHandler) => onMessage = messageHandler;
+  void listen(Uint8ListCallback messageHandler) => onMessage = messageHandler;
 
   @override
-  void send(String text) => sendRaw(Uint8List.fromList(text.codeUnits));
+  void send(String text) => sendRaw(utf8.encode(text));
 
   @override
-  void sendRaw(Uint8List raw) => client.sendToChannel(channel, raw);
+  void sendRaw(Uint8List raw) {
+    //print('SSHTunneledSocketImpl.send: ${String.fromCharCodes(raw)}');
+    client.sendToChannel(channel, raw);
+  }
 
   @override
   void close() {
@@ -681,7 +695,7 @@ class SSHTunneledSocketImpl extends SocketInterface {
 
   /// Connects to [address] over SSH tunnel provided by [client].
   @override
-  void connect(Uri address, Function connectHandler, Function errorHandler,
+  void connect(Uri address, VoidCallback connectHandler, StringCallback errorHandler,
       {int timeoutSeconds = 15, bool ignoreBadCert = false}) {
     tunnelToHost = address.host;
     tunnelToPort = address.port;
@@ -702,10 +716,22 @@ class SSHTunneledSocketImpl extends SocketInterface {
   }
 
   /// Sends [MSG_CHANNEL_OPEN_TCPIP] for [tunnelToHost]:[tunnelToPort].
-  void openTunnel() {
-    channel = client.openTcpChannel('127.0.0.1', 1234, tunnelToHost,
-        tunnelToPort, (_, Uint8List m) => onMessage(m), () {
+  void openTunnel([String sourceHost = '127.0.0.1', int sourcePort = 1234]) {
+    this.sourceHost = sourceHost;
+    this.sourcePort = sourcePort;
+    channel = client.openTcpChannel(
+        sourceHost, sourcePort, tunnelToHost, tunnelToPort, (_, Uint8List m) {
+      //print('SSHTunneledSocketImpl.recv: ${utf8.decode(m)}');
+      onMessage(m);
+    }, connected: () {
       if (connected != null) connected();
+      connected = connectError = null;
+    }, error: (String description) {
+      if (connectError != null) {
+        connectError(description);
+      } else {
+        onError(description);
+      }
       connected = connectError = null;
     });
   }

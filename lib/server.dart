@@ -55,7 +55,7 @@ class SSHServer extends SSHTransport {
             socket: socket,
             random: random,
             secureRandom: secureRandom) {
-    onConnected(socket);
+    onConnected();
   }
 
   /// Does nothing.  The client initializes Diffie Hellman.
@@ -266,7 +266,7 @@ class SSHServer extends SSHTransport {
   }
 
   @override
-  void handleChannelClose(Channel chan) {
+  void handleChannelClose(Channel chan, [String description]) {
     if (chan == sessionChannel) {
       sessionChannel = null;
     } else if (chan.cb != null) {

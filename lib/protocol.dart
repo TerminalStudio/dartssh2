@@ -859,7 +859,7 @@ class MSG_CHANNEL_OPEN_CONFIRMATION extends SSHMessage {
 
 /// The client MAY show the 'description' string to the user.
 class MSG_CHANNEL_OPEN_FAILURE extends SSHMessage {
-  static const int ID = 91;
+  static const int ID = 92;
   int recipientChannel = 0, reason = 0;
   String description, language;
   MSG_CHANNEL_OPEN_FAILURE(

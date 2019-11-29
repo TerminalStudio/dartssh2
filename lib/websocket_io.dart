@@ -11,6 +11,7 @@ import 'package:dartssh/http.dart';
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/socket.dart';
 import 'package:dartssh/socket_io.dart';
+import 'package:dartssh/transport.dart';
 
 /// dart:io [WebSocket] implementation.
 class WebSocketImpl extends SocketInterface {
@@ -24,13 +25,15 @@ class WebSocketImpl extends SocketInterface {
   }
 
   @override
-  void connect(Uri uri, Function onConnected, Function onError,
+  void connect(Uri uri, VoidCallback onConnected, StringCallback onError,
       {int timeoutSeconds = 15, bool ignoreBadCert = false}) async {
     if (!ignoreBadCert || !uri.hasScheme || uri.scheme != 'wss') {
       return io.WebSocket.connect('$uri')
           .timeout(Duration(seconds: timeoutSeconds))
-          .then((io.WebSocket x) => onConnected((socket = x)),
-              onError: (error, _) => onError(error));
+          .then((io.WebSocket x) {
+        socket = x;
+        onConnected();
+      }, onError: (error, _) => onError(error));
     }
 
     io.HttpClient client = io.HttpClient();
@@ -53,22 +56,32 @@ class WebSocketImpl extends SocketInterface {
 
       socket = io.WebSocket.fromUpgradedSocket(await response.detachSocket(),
           serverSide: false);
-      onConnected(socket);
+      onConnected();
     } catch (error) {
       onError(error);
     }
   }
 
   @override
-  void handleError(Function errorHandler) =>
-      socket.handleError((error, _) => errorHandler(error));
+  void handleError(StringCallback errorHandler) {
+    socket.handleError((error, _) {
+      errorHandler(error);
+    });
+  }
 
   @override
-  void handleDone(Function doneHandler) => socket.done.then(doneHandler);
+  void handleDone(StringCallback doneHandler) {
+    socket.done.then((_) {
+      doneHandler('WebSocketImpl.handleDone: ${socket.closeCode} ${socket.closeReason}');
+      return null;
+    });
+  }
 
   @override
-  void listen(Function messageHandler) =>
-      socket.listen((m) => messageHandler(utf8.encode(m)));
+  void listen(Uint8ListCallback messageHandler) => socket.listen((m) {
+    //print("WebSocketImpl.read: $m");
+    messageHandler(utf8.encode(m));
+  });
 
   @override
   void send(String text) => socket.addUtf8Text(utf8.encode(text));
@@ -82,7 +95,7 @@ class SSHTunneledWebSocketImpl extends WebSocketImpl {
   SSHTunneledWebSocketImpl(this.tunneledSocket);
 
   @override
-  void connect(Uri uri, Function onConnected, Function onError,
+  void connect(Uri uri, VoidCallback onConnected, StringCallback onError,
       {int timeoutSeconds = 15, bool ignoreBadCert = false}) async {
     HttpResponse response = await tunneledHttpRequest(
       Uri.parse('http' + '$uri'.substring(2)),
@@ -96,11 +109,11 @@ class SSHTunneledWebSocketImpl extends WebSocketImpl {
       },
       debugPrint: tunneledSocket.client.debugPrint,
     );
-    if (response.status != 200) {
-      throw FormatException('status ${response.status}');
+    if (response.status != 101) {
+      throw FormatException('status ${response.status} ${response.reason}');
     }
     socket = io.WebSocket.fromUpgradedSocket(SSHTunneledSocket(tunneledSocket),
         serverSide: false);
-    onConnected(socket);
+    onConnected();
   }
 }

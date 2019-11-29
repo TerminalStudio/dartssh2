@@ -22,6 +22,7 @@ typedef VoidCallback = void Function();
 typedef StringCallback = void Function(String);
 typedef StringFunction = String Function();
 typedef StringFilter = String Function(String);
+typedef Uint8ListCallback = void Function(Uint8List);
 typedef Uint8ListFunction = Uint8List Function();
 typedef IdentityFunction = Identity Function();
 typedef FingerprintCallback = bool Function(int, Uint8List);
@@ -46,6 +47,7 @@ class Channel {
   bool opened = true, agentChannel = false, sentEof = false, sentClose = false;
   QueueBuffer buf = QueueBuffer(Uint8List(0));
   ChannelCallback cb;
+  StringCallback error;
   VoidCallback connected;
   Channel([this.localId = 0, this.remoteId = 0]);
 }
@@ -154,7 +156,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   void handlePacket(Uint8List packet);
   void handleChannelOpenConfirmation(Channel chan);
   void handleChannelData(Channel chan, Uint8List data);
-  void handleChannelClose(Channel chan);
+  void handleChannelClose(Channel chan, [String description]);
 
   /// Whether we've initiated the connection.
   bool get client => !server;
@@ -169,12 +171,14 @@ abstract class SSHTransport with SSHDiffieHellman {
   /// If anything goes wrong, disconnect with [reason].
   void disconnect(String reason) {
     socket.close();
-    if (debugPrint != null) debugPrint('disconnected: ' + reason);
+    if (debugPrint != null) {
+      debugPrint('SSHTransport.disconnected: $reason');
+    }
     if (disconnected != null) disconnected();
   }
 
   /// Callback supplied to [socket.connect].
-  void onConnected(dynamic x) {
+  void onConnected() {
     socket.handleError((error) => disconnect('socket error: $error'));
     socket.handleDone((v) => disconnect('socket done'));
     socket.listen(handleRead);
@@ -454,6 +458,22 @@ abstract class SSHTransport with SSHDiffieHellman {
     handleChannelOpenConfirmation(chan);
   }
 
+  /// If the remote side can't open the channel, it responds with SSH_MSG_CHANNEL_OPEN_FAILURE.
+  void handleMSG_CHANNEL_OPEN_FAILURE(MSG_CHANNEL_OPEN_FAILURE msg) {
+    if (tracePrint != null) {
+      tracePrint(
+          '$hostport: MSG_CHANNEL_OPEN_FAILURE local_id=${msg.recipientChannel}');
+    }
+
+    Channel chan = channels[msg.recipientChannel];
+    if (chan == null || chan.remoteId == null) {
+      throw FormatException('$hostport: fail invalid channel');
+    }
+
+    handleChannelClose(chan, msg.description);
+    channels.remove(msg.recipientChannel);
+  }
+
   /// After receiving this message, the recipient MAY send the given number of bytes
   /// more than it was previously allowed to send; the window size is incremented.
   void handleMSG_CHANNEL_WINDOW_ADJUST(MSG_CHANNEL_WINDOW_ADJUST msg) {
@@ -518,7 +538,7 @@ abstract class SSHTransport with SSHDiffieHellman {
     if (!alreadySentClose) {
       chan.sentClose = true;
       writeCipher(MSG_CHANNEL_CLOSE(chan.remoteId));
-      handleChannelClose(chan);
+      handleChannelClose(chan, 'MSG_CHANNEL_CLOSE');
     }
 
     channels.remove(msg.recipientChannel);
@@ -652,13 +672,15 @@ abstract class SSHTransport with SSHDiffieHellman {
   /// Request remote opens a new TCP channel to [destHost]:[destPort].
   Channel openTcpChannel(String sourceHost, int sourcePort, String destHost,
       int destPort, ChannelCallback cb,
-      [VoidCallback connected]) {
+      {VoidCallback connected, StringCallback error}) {
     if (socket == null || state <= SSHTransportState.FIRST_NEWKEYS) return null;
-    Channel chan = channels[nextChannelId] = Channel();
-    chan.localId = nextChannelId++;
-    chan.windowS = initialWindowSize;
-    chan.cb = cb;
-    chan.connected = connected;
+    if (debugPrint != null) debugPrint('openTcpChannel to $destHost:$destPort');
+    Channel chan = channels[nextChannelId] = Channel()
+      ..localId = nextChannelId++
+      ..windowS = initialWindowSize
+      ..cb = cb
+      ..error = error
+      ..connected = connected;
     nextChannelId++;
     writeCipher(MSG_CHANNEL_OPEN_TCPIP(
         'direct-tcpip',
