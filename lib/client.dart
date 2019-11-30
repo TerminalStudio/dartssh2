@@ -634,7 +634,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
 
 /// Implement same [SocketInterface] as actual [Socket] but over [SSHClient] tunnel.
 class SSHTunneledSocketImpl extends SocketInterface {
-  bool clientOwner;
+  bool clientOwner, shutdownSend = false, shutdownRecv = false;
   SSHClient client;
   Identity identity;
   Channel channel;
@@ -682,7 +682,8 @@ class SSHTunneledSocketImpl extends SocketInterface {
 
   @override
   void sendRaw(Uint8List raw) {
-    // print('DEBUG SSHTunneledSocketImpl.send: ${String.fromCharCodes(raw)}');
+    if (shutdownSend) return;
+    //client.debugPrint('DEBUG SSHTunneledSocketImpl.send: ${String.fromCharCodes(raw)}');
     client.sendToChannel(channel, raw);
   }
 
@@ -724,7 +725,8 @@ class SSHTunneledSocketImpl extends SocketInterface {
     this.sourcePort = sourcePort;
     channel = client.openTcpChannel(
         sourceHost, sourcePort, tunnelToHost, tunnelToPort, (_, Uint8List m) {
-      // print('DEBUG SSHTunneledSocketImpl.recv: ${String.fromCharCodes(m)}');
+      //client.debugPrint('DEBUG SSHTunneledSocketImpl.recv: ${String.fromCharCodes(m)}');
+      //client.debugPrint('DEBUG SSHTunneledSocketImpl.recvRaw(${m.length}) = $m');
       onMessage(m);
     }, connected: () {
       if (connected != null) connected();

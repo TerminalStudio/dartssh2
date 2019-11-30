@@ -67,16 +67,43 @@ class SSHTransportState {
 /// SSH Transport Layer Protocol implementation providing KEX, ciphers, and MAC.
 /// https://tools.ietf.org/html/rfc4253
 abstract class SSHTransport with SSHDiffieHellman {
-  // Parameters
+  /// Parameter for public key authentication
   Identity identity;
+
+  /// Remote endpoint of SSH connection.  Parameter on client-side.
   Uri hostport;
+
+  /// Whether compression is supported.
   bool compress;
+
+  /// Source of randomness, e.g [Random.secure()].
   Random random;
+
+  /// Pointycastle's random interface.
   SecureRandom secureRandom;
+
+  /// Parameter invoked on connection close.
   VoidCallback disconnected;
+
+  /// Parameter invoked with session channel data (and optionally UI prompts).
   ResponseCallback response;
-  StringCallback print, debugPrint, tracePrint;
-  List<Forward> forwardLocal, forwardRemote;
+
+  /// Parameter invoked with ERROR and INFO loggging.
+  StringCallback print;
+
+  /// Paramtgegr invoked with debug logging.
+  StringCallback debugPrint;
+
+  /// Paramtger invoked with trace logging.
+  StringCallback tracePrint;
+
+  /// Parameter describing local ports to forward over SSH tunnel.
+  List<Forward> forwardLocal;
+
+  /// Parameter describing remote ports to forward over SSH tunnel.
+  List<Forward> forwardRemote;
+
+  /// Paramter invoked upon connection to forwarded remote port.
   RemoteForwardCallback remoteForward;
 
   // State
@@ -179,8 +206,8 @@ abstract class SSHTransport with SSHDiffieHellman {
 
   /// Callback supplied to [socket.connect].
   void onConnected() {
-    socket.handleError((error) => disconnect('socket error: $error'));
-    socket.handleDone((v) => disconnect('socket done'));
+    socket.handleError((error) => disconnect('SSHTransport.error: $error'));
+    socket.handleDone((v) => disconnect('SSHTransport.done: $v'));
     socket.listen(handleRead);
     handleConnected();
   }

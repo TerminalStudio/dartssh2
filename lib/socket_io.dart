@@ -159,8 +159,10 @@ class SSHTunneledSocket extends Stream<Uint8List> implements Socket {
       impl.client
           .debugPrint('SSHTunneledSocket.listen $remoteAddress:$remotePort');
     }
-    return controller.stream.listen(onData,
-        onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+    return controller.stream.listen((m) {
+      //impl.client.debugPrint('DEBUG SSHTunneledSocket.read $m');
+      onData(m);
+    }, onError: onError, onDone: onDone, cancelOnError: cancelOnError);
   }
 }
 
@@ -190,7 +192,7 @@ class SSHTunneledSocketStreamConsumer extends StreamConsumer<List<int>> {
         socket.destroy();
         done(error, stackTrace);
       }, onDone: () {
-        //done();
+        done();
       }, cancelOnError: true);
     }
     return streamCompleter.future;

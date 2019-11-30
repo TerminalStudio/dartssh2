@@ -21,7 +21,10 @@ class WebSocketImpl extends SocketInterface {
 
   @override
   void close() {
-    if (socket != null) socket.close();
+    if (socket != null) {
+      socket.close();
+      socket == null;
+    }
   }
 
   @override
@@ -114,11 +117,13 @@ class SSHTunneledWebSocketImpl extends WebSocketImpl {
       debugPrint: tunneledSocket.client.debugPrint,
     );
     if (response.status == 101) {
-      socket = io.WebSocket.fromUpgradedSocket(SSHTunneledSocket(tunneledSocket),
+      socket = io.WebSocket.fromUpgradedSocket(
+          SSHTunneledSocket(tunneledSocket),
           serverSide: false);
       onConnected();
     } else {
       onError('status ${response.status} ${response.reason}');
     }
+    tunneledSocket = null;
   }
 }

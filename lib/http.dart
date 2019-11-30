@@ -239,7 +239,7 @@ Future<HttpResponse> tunneledHttpRequest(
         if ((contentLength ?? 0) == 0) {
           if (debugPrint != null) {
             debugPrint(
-                'SSHTunneledBaseClient.socket.listen: Content-Length: 0');
+                'SSHTunneledBaseClient.socket.listen: Content-Length: 0, remaining=${buffer.data.length}');
           }
           contentController.close();
           if (!persistentConnection) {
