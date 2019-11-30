@@ -10,17 +10,29 @@ import 'package:dartssh/transport.dart';
 
 /// Interface for connections, e.g. Socket or WebSocket.
 abstract class ConnectionInterface {
+  /// Invokes [messageHandler] upon reading input from the connection.
   void listen(Uint8ListCallback messageHandler);
+
+  /// Invokes [errorHandler] if a connection error occurs.
   void handleError(StringCallback errorHandler);
+
+  /// Involes [handleDone] if the connection is closed normally.
   void handleDone(StringCallback doneHandler);
+
+  /// Closed the connection.
   void close();
 }
 
 /// Websocket style interface for BSD sockets and/or RFC6455 WebSockets.
 abstract class SocketInterface extends ConnectionInterface {
+  /// Connects the socket to [uri] then invokes [onConnected] or [onError].
   void connect(Uri uri, VoidCallback onConnected, StringCallback onError,
       {int timeoutSeconds = 15, bool ignoreBadCert = false});
+
+  /// Sends [text] over the socket.
   void send(String text);
+
+  /// Sends [raw] over the socket.
   void sendRaw(Uint8List raw);
 }
 

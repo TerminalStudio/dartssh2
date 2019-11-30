@@ -658,7 +658,9 @@ class SSHTunneledSocketImpl extends SocketInterface {
         loadIdentity: () => identity,
         response: (_, m) {},
         disconnected: () {
-          if (onDone != null) onDone('SSHTunnelledSocketImpl.client disconnected');
+          if (onDone != null) {
+            onDone('SSHTunnelledSocketImpl.client disconnected');
+          }
         },
         startShell: false,
         success: openTunnel,
@@ -680,7 +682,7 @@ class SSHTunneledSocketImpl extends SocketInterface {
 
   @override
   void sendRaw(Uint8List raw) {
-    //print('SSHTunneledSocketImpl.send: ${String.fromCharCodes(raw)}');
+    // print('DEBUG SSHTunneledSocketImpl.send: ${String.fromCharCodes(raw)}');
     client.sendToChannel(channel, raw);
   }
 
@@ -695,7 +697,8 @@ class SSHTunneledSocketImpl extends SocketInterface {
 
   /// Connects to [address] over SSH tunnel provided by [client].
   @override
-  void connect(Uri address, VoidCallback connectHandler, StringCallback errorHandler,
+  void connect(
+      Uri address, VoidCallback connectHandler, StringCallback errorHandler,
       {int timeoutSeconds = 15, bool ignoreBadCert = false}) {
     tunnelToHost = address.host;
     tunnelToPort = address.port;
@@ -721,7 +724,7 @@ class SSHTunneledSocketImpl extends SocketInterface {
     this.sourcePort = sourcePort;
     channel = client.openTcpChannel(
         sourceHost, sourcePort, tunnelToHost, tunnelToPort, (_, Uint8List m) {
-      //print('SSHTunneledSocketImpl.recv: ${utf8.decode(m)}');
+      // print('DEBUG SSHTunneledSocketImpl.recv: ${String.fromCharCodes(m)}');
       onMessage(m);
     }, connected: () {
       if (connected != null) connected();

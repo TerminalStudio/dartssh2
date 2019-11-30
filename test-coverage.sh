@@ -1,4 +1,5 @@
 #!/bin/bash
+set -x
 OBS_PORT=9292
 
 dart --disable-service-auth-codes \

@@ -13,7 +13,7 @@ import 'package:dartssh/socket.dart';
 import 'package:dartssh/socket_io.dart';
 import 'package:dartssh/transport.dart';
 
-/// dart:io [WebSocket] implementation.
+/// dart:io [WebSocket] based implementation of [SocketInterface].
 class WebSocketImpl extends SocketInterface {
   static const String type = 'io';
 
@@ -72,16 +72,17 @@ class WebSocketImpl extends SocketInterface {
   @override
   void handleDone(StringCallback doneHandler) {
     socket.done.then((_) {
-      doneHandler('WebSocketImpl.handleDone: ${socket.closeCode} ${socket.closeReason}');
+      doneHandler(
+          'WebSocketImpl.handleDone: ${socket.closeCode} ${socket.closeReason}');
       return null;
     });
   }
 
   @override
   void listen(Uint8ListCallback messageHandler) => socket.listen((m) {
-    //print("WebSocketImpl.read: $m");
-    messageHandler(utf8.encode(m));
-  });
+        //print("WebSocketImpl.read: $m");
+        messageHandler(utf8.encode(m));
+      });
 
   @override
   void send(String text) => socket.addUtf8Text(utf8.encode(text));
@@ -90,6 +91,9 @@ class WebSocketImpl extends SocketInterface {
   void sendRaw(Uint8List raw) => socket.add(raw);
 }
 
+/// The initial [SSHTunneledSocketImpl] (which implements same [SocketInteface]
+/// as [SSHTunneledWebSocketImpl]), is bridged via [SSHTunneledSocket] adaptor
+/// to initialize [io.WebSocket.fromUpgradedSocket()].
 class SSHTunneledWebSocketImpl extends WebSocketImpl {
   SSHTunneledSocketImpl tunneledSocket;
   SSHTunneledWebSocketImpl(this.tunneledSocket);
@@ -109,11 +113,12 @@ class SSHTunneledWebSocketImpl extends WebSocketImpl {
       },
       debugPrint: tunneledSocket.client.debugPrint,
     );
-    if (response.status != 101) {
-      throw FormatException('status ${response.status} ${response.reason}');
+    if (response.status == 101) {
+      socket = io.WebSocket.fromUpgradedSocket(SSHTunneledSocket(tunneledSocket),
+          serverSide: false);
+      onConnected();
+    } else {
+      onError('status ${response.status} ${response.reason}');
     }
-    socket = io.WebSocket.fromUpgradedSocket(SSHTunneledSocket(tunneledSocket),
-        serverSide: false);
-    onConnected();
   }
 }

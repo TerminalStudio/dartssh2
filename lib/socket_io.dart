@@ -63,7 +63,7 @@ class SocketImpl extends SocketInterface {
           : (error, stacktrace) => onError('$error: $stacktrace'));
 
   @override
-  void send(String text) => sendRaw(Uint8List.fromList(text.codeUnits));
+  void send(String text) => sendRaw(utf8.encode(text));
 
   @override
   void sendRaw(Uint8List raw) => socket.add(raw);
@@ -88,7 +88,8 @@ class SSHTunneledSocket extends Stream<Uint8List> implements Socket {
   @override
   Encoding get encoding => sink.encoding;
 
-  @override set encoding(Encoding value) => sink.encoding = value;
+  @override
+  set encoding(Encoding value) => sink.encoding = value;
 
   @override
   void add(List<int> bytes) => sink.add(bytes);
@@ -155,7 +156,8 @@ class SSHTunneledSocket extends Stream<Uint8List> implements Socket {
   StreamSubscription<Uint8List> listen(void onData(Uint8List event),
       {Function onError, void onDone(), bool cancelOnError}) {
     if (impl.client.debugPrint != null) {
-      impl.client.debugPrint('SSHTunneledSocket.listen $remoteAddress:$remotePort');
+      impl.client
+          .debugPrint('SSHTunneledSocket.listen $remoteAddress:$remotePort');
     }
     return controller.stream.listen(onData,
         onError: onError, onDone: onDone, cancelOnError: cancelOnError);
