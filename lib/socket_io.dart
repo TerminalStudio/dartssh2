@@ -80,7 +80,8 @@ class SSHTunneledSocket extends Stream<Uint8List> implements Socket {
     controller = StreamController<Uint8List>(sync: true);
     consumer = SSHTunneledSocketStreamConsumer(this);
     sink = IOSink(consumer);
-    impl.listen((Uint8List m) => controller.add(m));
+    /// https://github.com/dart-lang/sdk/issues/39589
+    impl.listen((Uint8List m) => controller.add(Uint8List.fromList(m)));
     impl.handleError((error) => controller.addError(error));
     impl.handleDone((String reason) => controller.addError(reason));
   }

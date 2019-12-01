@@ -10,6 +10,7 @@ import 'package:dartssh/transport.dart';
 
 /// Mixin providing SSH Agent forwarding.
 mixin SSHAgentForwarding on SSHTransport {
+  /// Frames SSH Agent [channel] data into packets.
   void handleAgentRead(Channel channel, Uint8List msg) {
     channel.buf.add(msg);
     while (channel.buf.data.length > 4) {
@@ -22,6 +23,7 @@ mixin SSHAgentForwarding on SSHTransport {
     }
   }
 
+  // Dispatches SSH Agent messages to handlers.
   void handleAgentPacket(Channel channel, SerializableInput agentPacketS) {
     int agentPacketId = agentPacketS.getUint8();
     switch (agentPacketId) {
@@ -42,6 +44,7 @@ mixin SSHAgentForwarding on SSHTransport {
     }
   }
 
+  /// Responds with any identities we're forwarding.
   void handleAGENTC_REQUEST_IDENTITIES(Channel channel) {
     if (tracePrint != null) {
       tracePrint('$hostport: agent channel: AGENTC_REQUEST_IDENTITIES');
@@ -53,6 +56,7 @@ mixin SSHAgentForwarding on SSHTransport {
     sendToChannel(channel, reply.toRaw());
   }
 
+  /// Signs challenge authenticating a descendent channel.
   void handleAGENTC_SIGN_REQUEST(Channel channel, AGENTC_SIGN_REQUEST msg) {
     if (tracePrint != null) {
       tracePrint('$hostport: agent channel: AGENTC_SIGN_REQUEST');

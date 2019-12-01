@@ -42,7 +42,10 @@ class QueueBuffer {
   Uint8List data;
   QueueBuffer(this.data);
 
+  /// Appends [x] to [data].
   void add(Uint8List x) => data = Uint8List.fromList((data ?? []) + x);
+
+  /// Removes [0..x] of [data].
   void flush(int x) => data = data.sublist(x);
 }
 
@@ -143,6 +146,7 @@ abstract class Serializable {
   /// Interface for intput serialization.
   void deserialize(SerializableInput input);
 
+  /// Serializes this [Serializable] to a [Uint8List].
   Uint8List toRaw({Endian endian = Endian.big}) {
     SerializableOutput ret =
         SerializableOutput(Uint8List(serializedSize), endian: endian);
@@ -153,6 +157,7 @@ abstract class Serializable {
     return ret.buffer;
   }
 
+  /// Deserializes this [Serializable] from a [SerializableInput].
   void fromRaw(SerializableInput input) {
     deserialize(input);
     if (!input.done) {

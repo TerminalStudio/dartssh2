@@ -18,7 +18,7 @@ before_install:
   - git clone https://github.com/flutter/flutter.git -b stable --depth 1 ${HOME}/flutter
   - ${HOME}/flutter/bin/flutter doctor -v
   - ${HOME}/flutter/bin/flutter packages get
-  - ${HOME}/flutter/bin/flutter pub global activate coverage
+  - ${HOME}/flutter/bin/flutter pub global activate coverage 0.13.3
 
 script:
   - ${HOME}/flutter/bin/flutter pub run test
