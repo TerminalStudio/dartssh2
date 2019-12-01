@@ -13,11 +13,21 @@ class WebSocketImpl extends SocketInterface {
   static const String type = 'html';
 
   html.WebSocket socket;
+  Uint8ListCallback messageHandler;
+  StringCallback errorHandler, doneHandler;
   VoidCallback connectCallback;
   StreamSubscription connectErrorSubscription;
 
   @override
-  void close() => socket.close();
+  void close() {
+    messageHandler = null;
+    errorHandler = null;
+    doneHandler = null;
+    if (socket != null) {
+      socket.close();
+      socket == null;
+    }
+  }
 
   @override
   void connect(Uri uri, VoidCallback onConnected, StringCallback onError,
@@ -27,7 +37,7 @@ class WebSocketImpl extends SocketInterface {
     try {
       connectCallback = onConnected;
       socket = html.WebSocket('$uri');
-      socket.onOpen.listen(this.onConnected);
+      socket.onOpen.listen(connectSucceeded);
       connectErrorSubscription =
           socket.onError.listen((error) => onError('$error'));
     } catch (error) {
@@ -35,23 +45,42 @@ class WebSocketImpl extends SocketInterface {
     }
   }
 
-  void onConnected(dynamic x) {
+  void connectSucceeded(dynamic x) {
     connectErrorSubscription.cancel();
     connectErrorSubscription = null;
+
+    socket.onError.listen((error) {
+      if (errorHandler != null) {
+        errorHandler('$error');
+      }
+    });
+
+    socket.onClose.listen((closeEvent) {
+      if (doneHandler != null) {
+        doneHandler('$closeEvent');
+      }
+    });
+
+    socket.onMessage.listen((e) {
+      if (messageHandler != null) {
+        messageHandler(e.data);
+      }
+    });
+
     connectCallback();
   }
 
   @override
-  void handleError(StringCallback errorHandler) =>
-      socket.onError.listen((error) => errorHandler('$error'));
+  void handleError(StringCallback newErrorHandler) =>
+      errorHandler = newErrorHandler;
 
   @override
-  void handleDone(StringCallback doneHandler) =>
-      socket.onClose.listen((closeEvent) => doneHandler('$closeEvent'));
+  void handleDone(StringCallback newDoneHandler) =>
+      doneHandler = newDoneHandler;
 
   @override
-  void listen(Uint8ListCallback messageHandler) =>
-      socket.onMessage.listen((e) => messageHandler(e.data));
+  void listen(Uint8ListCallback newMessageHandler) =>
+      messageHandler = newMessageHandler;
 
   @override
   void send(String text) => socket.sendString(text);

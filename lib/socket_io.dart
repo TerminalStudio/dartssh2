@@ -13,11 +13,19 @@ import 'package:dartssh/transport.dart';
 /// dart:io [Socket] based implementation of [SocketInterface].
 class SocketImpl extends SocketInterface {
   Socket socket;
+  StreamSubscription messageSubscription;
+  Uint8ListCallback messageHandler;
   StringCallback onError, onDone;
   SocketImpl([this.socket]);
 
   @override
   void close() {
+    messageHandler = null;
+    onError = onDone = null;
+    if (messageSubscription != null) {
+      messageSubscription.cancel();
+      messageSubscription = null;
+    }
     if (socket != null) {
       socket.close();
       socket = null;
@@ -30,7 +38,8 @@ class SocketImpl extends SocketInterface {
     if (socket != null) {
       if (socket is SSHTunneledSocket) {
         SSHTunneledSocket tunneledSocket = socket;
-        tunneledSocket.impl.connect(uri, onConnected, onError,
+        tunneledSocket.impl.connect(
+            uri, () => connectSucceeded(onConnected), onError,
             timeoutSeconds: timeoutSeconds, ignoreBadCert: ignoreBadCert);
       } else {
         throw FormatException();
@@ -43,10 +52,14 @@ class SocketImpl extends SocketInterface {
           onError(null);
         } else {
           socket = x;
-          onConnected();
+          connectSucceeded(onConnected);
         }
       });
     }
+  }
+
+  void connectSucceeded(VoidCallback onConnected) {
+    onConnected();
   }
 
   @override
@@ -56,11 +69,24 @@ class SocketImpl extends SocketInterface {
   void handleDone(StringCallback doneHandler) => onDone = doneHandler;
 
   @override
-  void listen(Uint8ListCallback messageHandler) => socket.listen(messageHandler,
-      onDone: onDone == null ? null : () => onDone(null),
-      onError: onError == null
-          ? null
-          : (error, stacktrace) => onError('$error: $stacktrace'));
+  void listen(Uint8ListCallback newMessageHandler) {
+    messageHandler = newMessageHandler;
+    if (messageSubscription == null) {
+      messageSubscription = socket.listen((Uint8List m) {
+        if (messageHandler != null) {
+          messageHandler(m);
+        }
+      }, onDone: () {
+        if (onDone != null) {
+          onDone(null);
+        }
+      }, onError: (error, stacktrace) {
+        if (onError != null) {
+          onError('$error: $stacktrace');
+        }
+      });
+    }
+  }
 
   @override
   void send(String text) => sendRaw(utf8.encode(text));
@@ -80,6 +106,7 @@ class SSHTunneledSocket extends Stream<Uint8List> implements Socket {
     controller = StreamController<Uint8List>(sync: true);
     consumer = SSHTunneledSocketStreamConsumer(this);
     sink = IOSink(consumer);
+
     /// https://github.com/dart-lang/sdk/issues/39589
     impl.listen((Uint8List m) => controller.add(Uint8List.fromList(m)));
     impl.handleError((error) => controller.addError(error));
@@ -87,10 +114,29 @@ class SSHTunneledSocket extends Stream<Uint8List> implements Socket {
   }
 
   @override
+  InternetAddress get address => InternetAddress(impl.sourceHost);
+
+  @override
+  InternetAddress get remoteAddress => InternetAddress(impl.tunnelToHost);
+
+  @override
+  int get port => impl.sourcePort;
+
+  @override
+  int get remotePort => impl.tunnelToPort;
+
+  @override
   Encoding get encoding => sink.encoding;
 
   @override
   set encoding(Encoding value) => sink.encoding = value;
+
+  @override
+  void destroy() {
+    consumer.stop();
+    impl.close();
+    controller.close();
+  }
 
   @override
   void add(List<int> bytes) => sink.add(bytes);
@@ -126,13 +172,6 @@ class SSHTunneledSocket extends Stream<Uint8List> implements Socket {
   Future get done => sink.done;
 
   @override
-  void destroy() {
-    consumer.stop();
-    impl.close();
-    controller.close();
-  }
-
-  @override
   bool setOption(SocketOption option, bool enabled) => false;
 
   @override
@@ -140,18 +179,6 @@ class SSHTunneledSocket extends Stream<Uint8List> implements Socket {
 
   @override
   void setRawOption(RawSocketOption option) {}
-
-  @override
-  int get port => impl.sourcePort;
-
-  @override
-  int get remotePort => impl.tunnelToPort;
-
-  @override
-  InternetAddress get address => InternetAddress(impl.sourceHost);
-
-  @override
-  InternetAddress get remoteAddress => InternetAddress(impl.tunnelToHost);
 
   @override
   StreamSubscription<Uint8List> listen(void onData(Uint8List event),
@@ -174,8 +201,26 @@ class SSHTunneledSocketStreamConsumer extends StreamConsumer<List<int>> {
   Completer streamCompleter;
   SSHTunneledSocketStreamConsumer(this.socket);
 
+  Future<Socket> close() => Future.value(socket);
+
+  void stop() {
+    if (subscription == null) return;
+    subscription.cancel();
+    subscription = null;
+  }
+
+  void done([error, stackTrace]) {
+    if (streamCompleter != null) {
+      if (error != null) {
+        streamCompleter.completeError(error, stackTrace);
+      } else {
+        streamCompleter.complete(socket);
+      }
+      streamCompleter = null;
+    }
+  }
+
   Future<Socket> addStream(Stream<List<int>> stream) {
-    //socket._ensureRawSocketSubscription();
     streamCompleter = Completer<Socket>();
     if (socket.impl != null) {
       subscription = stream.listen((data) {
@@ -197,28 +242,5 @@ class SSHTunneledSocketStreamConsumer extends StreamConsumer<List<int>> {
       }, cancelOnError: true);
     }
     return streamCompleter.future;
-  }
-
-  Future<Socket> close() {
-    //socket._consumerDone();
-    return Future.value(socket);
-  }
-
-  void done([error, stackTrace]) {
-    if (streamCompleter != null) {
-      if (error != null) {
-        streamCompleter.completeError(error, stackTrace);
-      } else {
-        streamCompleter.complete(socket);
-      }
-      streamCompleter = null;
-    }
-  }
-
-  void stop() {
-    if (subscription == null) return;
-    subscription.cancel();
-    subscription = null;
-    //socket._disableWriteEvent();
   }
 }

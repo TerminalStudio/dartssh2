@@ -91,10 +91,10 @@ abstract class SSHTransport with SSHDiffieHellman {
   /// Parameter invoked with ERROR and INFO loggging.
   StringCallback print;
 
-  /// Paramtgegr invoked with debug logging.
+  /// Parameter invoked with debug logging.
   StringCallback debugPrint;
 
-  /// Paramtger invoked with trace logging.
+  /// Parameter invoked with trace logging.
   StringCallback tracePrint;
 
   /// Parameter describing local ports to forward over SSH tunnel.

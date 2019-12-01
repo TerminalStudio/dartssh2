@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:convert/convert.dart';
@@ -14,6 +15,7 @@ import 'package:dartssh/pem.dart';
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/serializable.dart';
 import 'package:dartssh/ssh.dart';
+import 'package:dartssh/websocket_io.dart';
 
 import '../example/dartssh.dart' as ssh;
 import '../example/dartsshd.dart' as sshd;
@@ -52,7 +54,7 @@ void main() {
     expect(rsa1.rsaPublic.exponent, rsa2.rsaPublic.exponent);
   });
 
-  test('suite', () async {
+  test('cipher suite', () async {
     int kexIndex = 1, keyIndex = 1, cipherIndex = 1, macIndex = 1;
     bool kexLooped = false,
         keyLooped = false,
@@ -147,4 +149,34 @@ void main() {
       }
     }
   });
+
+  test('websocket test', () async {
+    expect(websocketEchoTest(WebSocketImpl(), proto: 'ws'),
+        completion(equals(true)));
+    expect(websocketEchoTest(WebSocketImpl(), ignoreBadCert: true),
+        completion(equals(true)));
+  });
+}
+
+Future<bool> websocketEchoTest(WebSocketImpl websocket,
+    {bool ignoreBadCert = false, String proto = 'wss'}) async {
+  final Completer<String> connectCompleter = Completer<String>();
+  websocket.connect(
+      Uri.parse('$proto://echo.websocket.org'),
+      () => connectCompleter.complete(null),
+      (String error) => connectCompleter.complete(error),
+      ignoreBadCert: ignoreBadCert);
+  final String error = await connectCompleter.future;
+  if (error != null) return false;
+
+  final Completer<String> responseCompleter = Completer<String>();
+  final String challenge =
+      'websocketEchoTest ${base64.encode(randBytes(Random.secure(), 16))}';
+  websocket.listen((Uint8List m) => responseCompleter.complete(utf8.decode(m)));
+  websocket.handleError((String m) => responseCompleter.complete(m));
+  websocket.handleDone((String m) => responseCompleter.complete(m));
+  websocket.send(challenge);
+  final String response = await responseCompleter.future;
+  websocket.close();
+  return response == challenge;
 }

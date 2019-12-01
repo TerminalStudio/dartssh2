@@ -10,3 +10,7 @@
 
 - Add example/README.md
 
+## 1.0.3+3
+
+- Fix tunneled WebSocket issue.
+

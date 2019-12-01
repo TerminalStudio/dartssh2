@@ -1,6 +1,7 @@
 // Copyright 2019 dartssh developers
 // Use of this source code is governed by a MIT-style license that can be found in the LICENSE file.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' as io;
 import 'dart:math';
@@ -18,9 +19,15 @@ class WebSocketImpl extends SocketInterface {
   static const String type = 'io';
 
   io.WebSocket socket;
+  Uint8ListCallback messageHandler;
+  StringCallback errorHandler, doneHandler;
+  StreamSubscription messageSubscription;
 
   @override
   void close() {
+    messageHandler = null;
+    errorHandler = null;
+    doneHandler = null;
     if (socket != null) {
       socket.close();
       socket == null;
@@ -35,7 +42,7 @@ class WebSocketImpl extends SocketInterface {
           .timeout(Duration(seconds: timeoutSeconds))
           .then((io.WebSocket x) {
         socket = x;
-        onConnected();
+        connectSucceeded(onConnected);
       }, onError: (error, _) => onError(error));
     }
 
@@ -59,33 +66,48 @@ class WebSocketImpl extends SocketInterface {
 
       socket = io.WebSocket.fromUpgradedSocket(await response.detachSocket(),
           serverSide: false);
-      onConnected();
+      connectSucceeded(onConnected);
     } catch (error) {
       onError(error);
     }
   }
 
-  @override
-  void handleError(StringCallback errorHandler) {
-    socket.handleError((error, _) {
-      errorHandler(error);
+  void connectSucceeded(VoidCallback onConnected) {
+    socket.listen((m) {
+      //print("WebSocketImpl.read: $m");
+      if (messageHandler != null) {
+        messageHandler(utf8.encode(m));
+      }
     });
-  }
 
-  @override
-  void handleDone(StringCallback doneHandler) {
     socket.done.then((_) {
-      doneHandler(
-          'WebSocketImpl.handleDone: ${socket.closeCode} ${socket.closeReason}');
+      if (doneHandler != null) {
+        doneHandler(
+            'WebSocketImpl.handleDone: ${socket.closeCode} ${socket.closeReason}');
+      }
       return null;
     });
+
+    socket.handleError((error, _) {
+      if (errorHandler != null) {
+        errorHandler(error);
+      }
+    });
+
+    onConnected();
   }
 
   @override
-  void listen(Uint8ListCallback messageHandler) => socket.listen((m) {
-        //print("WebSocketImpl.read: $m");
-        messageHandler(utf8.encode(m));
-      });
+  void handleError(StringCallback newErrorHandler) =>
+      errorHandler = newErrorHandler;
+
+  @override
+  void handleDone(StringCallback newDoneHandler) =>
+      doneHandler = newDoneHandler;
+
+  @override
+  void listen(Uint8ListCallback newMessageHandler) =>
+      messageHandler = newMessageHandler;
 
   @override
   void send(String text) => socket.addUtf8Text(utf8.encode(text));
