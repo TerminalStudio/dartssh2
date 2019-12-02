@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:args/args.dart';
 import 'package:stack_trace/stack_trace.dart';
@@ -15,6 +16,8 @@ import 'package:dartssh/socket_io.dart';
 import 'package:dartssh/server.dart';
 import 'package:dartssh/ssh.dart';
 import 'package:dartssh/transport.dart';
+
+SSHServer server;
 
 void main(List<String> arguments) async {
   exitCode = 0;
@@ -30,17 +33,23 @@ Future<void> sshd(List<String> arguments) async {
     ..addOption('key')
     ..addOption('cipher')
     ..addOption('mac')
-    ..addOption('debug')
-    ..addOption('trace');
+    ..addFlag('debug')
+    ..addFlag('trace')
+    ..addFlag('forwardTcp');
 
   final ArgResults args = argParser.parse(arguments);
   final int port = int.parse(args['port'] ?? '22');
   final String config = args['config'];
-  final bool debug = args['debug'] != null;
+  final bool debug = args['debug'], forwardTcp = args['forwardTcp'];
   final Identity hostkey = loadHostKey(path: args['hostkey']);
 
   applyCipherSuiteOverrides(
       args['kex'], args['key'], args['cipher'], args['mac']);
+
+  if (forwardTcp) {
+    print(
+        'WARNING: Forwarding TCP connections is in effect running an open proxy.');
+  }
 
   try {
     await Chain.capture(() async {
@@ -52,13 +61,13 @@ Future<void> sshd(List<String> arguments) async {
         print('accepted $hostport');
         StreamController<String> input = StreamController<String>();
 
-        final SSHServer server = SSHServer(
+        server = SSHServer(
           hostkey,
           socket: SocketImpl()..socket = socket,
           hostport: parseUri(hostport),
           print: print,
-          debugPrint: (debug ? print : null),
-          tracePrint: ((args['trace'] != null) ? print : null),
+          debugPrint: debug ? print : null,
+          tracePrint: args['trace'] ? print : null,
           response: (SSHTransport server, String v) {
             input.add(v);
             server.sendChannelData(utf8.encode(v));
@@ -82,8 +91,8 @@ Future<void> sshd(List<String> arguments) async {
               listener.close();
             }
           },
+          directTcpRequest: forwardTcp ? forwardTcpChannel : null,
         );
-
         input.stream.transform(LineSplitter()).listen((String line) {
           if (line == 'exit') server.closeChannel(server.sessionChannel);
         });
@@ -117,4 +126,28 @@ Identity loadHostKey({StringFunction getPassword, String path}) {
     print('open ${path}rsa_key failed');
   }
   return hostkey;
+}
+
+Future<String> forwardTcpChannel(Channel channel, String sourceHost,
+    int sourcePort, String targetHost, int targetPort) async {
+  SocketImpl tunneledSocket = SocketImpl();
+  Completer<String> connectCompleter = Completer<String>();
+  tunneledSocket.connect(
+      Uri.parse('tcp://$targetHost:$targetPort'),
+      () => connectCompleter.complete(null),
+      (String error) => connectCompleter.complete('$error'));
+  String connectError = await connectCompleter.future;
+  if (connectError != null) return connectError;
+
+  StringCallback closeTunneledSocket = (String error) {
+    tunneledSocket.close();
+    server.closeChannel(channel);
+  };
+  tunneledSocket.listen((Uint8List m) => server.sendToChannel(channel, m));
+  tunneledSocket.handleError(closeTunneledSocket);
+  tunneledSocket.handleDone(closeTunneledSocket);
+
+  channel.cb = (_, Uint8List m) => tunneledSocket.sendRaw(m);
+  channel.error = closeTunneledSocket;
+  return null;
 }

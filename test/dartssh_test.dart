@@ -10,6 +10,7 @@ import 'dart:typed_data';
 import 'package:convert/convert.dart';
 import 'package:test/test.dart';
 
+import 'package:dartssh/client.dart';
 import 'package:dartssh/identity.dart';
 import 'package:dartssh/pem.dart';
 import 'package:dartssh/protocol.dart';
@@ -99,9 +100,7 @@ void main() {
             ? 'test/${Key.name(keyIndex)}/ssh_host_'
             : 'test/ssh_host_',
         '--debug',
-        '1',
         '--trace',
-        '1'
       ]);
 
       Future<void> sshMain = ssh.ssh(<String>[
@@ -111,9 +110,7 @@ void main() {
         '-i',
         identityFile,
         '--debug',
-        '1',
         '--trace',
-        '1'
       ], sshInput.stream, (_, String v) => sshResponse += v,
           () => sshInput.close());
 
@@ -153,8 +150,47 @@ void main() {
   test('websocket test', () async {
     expect(websocketEchoTest(WebSocketImpl(), proto: 'ws'),
         completion(equals(true)));
+
     expect(websocketEchoTest(WebSocketImpl(), ignoreBadCert: true),
         completion(equals(true)));
+
+    KEX.supported =
+        Key.supported = Cipher.supported = MAC.supported = (_) => true;
+    Future<void> sshdMain = sshd.sshd(<String>[
+      '-p 42022',
+      '-h',
+      'test/ssh_host_',
+      '--debug',
+      '--trace',
+      '--forwardTcp',
+    ]);
+
+    String sshResponse = '';
+    StreamController<List<int>> sshInput = StreamController<List<int>>();
+    Future<void> sshMain = ssh.ssh(<String>[
+      '-l',
+      'root',
+      '127.0.0.1:42022',
+      '-i',
+      'test/id_ed25519',
+      '--debug',
+      '--trace',
+    ], sshInput.stream, (_, String v) => sshResponse += v,
+        () => sshInput.close());
+
+    while (ssh.client.sessionChannel == null) {
+      await Future.delayed(const Duration(seconds: 1));
+    }
+
+    bool tunneledWebsocketTest = await websocketEchoTest(
+        SSHTunneledWebSocketImpl(SSHTunneledSocketImpl.fromClient(ssh.client)),
+        proto: 'ws');
+    expect(tunneledWebsocketTest, true);
+
+    ssh.client.sendChannelData(utf8.encode('exit\n'));
+    await sshMain;
+    await sshdMain;
+    expect(sshResponse, '\$ exit\n');
   });
 }
 

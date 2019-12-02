@@ -28,7 +28,7 @@ typedef IdentityFunction = Identity Function();
 typedef FingerprintCallback = bool Function(int, Uint8List);
 typedef ChannelCallback = void Function(Channel, Uint8List);
 typedef ResponseCallback = void Function(SSHTransport, String);
-typedef RemoteForwardCallback = void Function(
+typedef RemoteForwardCallback = Future<String> Function(
     Channel, String, int, String, int);
 
 /// When a connection comes to a port for which forwarding has been

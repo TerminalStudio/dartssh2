@@ -19,9 +19,9 @@ class WebSocketImpl extends SocketInterface {
   static const String type = 'io';
 
   io.WebSocket socket;
+  StreamSubscription messageSubscription;
   Uint8ListCallback messageHandler;
   StringCallback errorHandler, doneHandler;
-  StreamSubscription messageSubscription;
 
   @override
   void close() {
@@ -42,7 +42,7 @@ class WebSocketImpl extends SocketInterface {
           .timeout(Duration(seconds: timeoutSeconds))
           .then((io.WebSocket x) {
         socket = x;
-        connectSucceeded(onConnected);
+        onConnected();
       }, onError: (error, _) => onError(error));
     }
 
@@ -66,35 +66,10 @@ class WebSocketImpl extends SocketInterface {
 
       socket = io.WebSocket.fromUpgradedSocket(await response.detachSocket(),
           serverSide: false);
-      connectSucceeded(onConnected);
+      onConnected();
     } catch (error) {
       onError(error);
     }
-  }
-
-  void connectSucceeded(VoidCallback onConnected) {
-    socket.listen((m) {
-      //print("WebSocketImpl.read: $m");
-      if (messageHandler != null) {
-        messageHandler(utf8.encode(m));
-      }
-    });
-
-    socket.done.then((_) {
-      if (doneHandler != null) {
-        doneHandler(
-            'WebSocketImpl.handleDone: ${socket.closeCode} ${socket.closeReason}');
-      }
-      return null;
-    });
-
-    socket.handleError((error, _) {
-      if (errorHandler != null) {
-        errorHandler(error);
-      }
-    });
-
-    onConnected();
   }
 
   @override
@@ -106,8 +81,32 @@ class WebSocketImpl extends SocketInterface {
       doneHandler = newDoneHandler;
 
   @override
-  void listen(Uint8ListCallback newMessageHandler) =>
-      messageHandler = newMessageHandler;
+  void listen(Uint8ListCallback newMessageHandler) {
+    messageHandler = newMessageHandler;
+
+    if (messageSubscription == null) {
+      messageSubscription = socket.listen((m) {
+        //print("WebSocketImpl.read: $m");
+        if (messageHandler != null) {
+          messageHandler(utf8.encode(m));
+        }
+      });
+
+      socket.done.then((_) {
+        if (doneHandler != null) {
+          doneHandler(
+              'WebSocketImpl.handleDone: ${socket.closeCode} ${socket.closeReason}');
+        }
+        return null;
+      });
+
+      socket.handleError((error, _) {
+        if (errorHandler != null) {
+          errorHandler(error);
+        }
+      });
+    }
+  }
 
   @override
   void send(String text) => socket.addUtf8Text(utf8.encode(text));

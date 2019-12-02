@@ -38,8 +38,7 @@ class SocketImpl extends SocketInterface {
     if (socket != null) {
       if (socket is SSHTunneledSocket) {
         SSHTunneledSocket tunneledSocket = socket;
-        tunneledSocket.impl.connect(
-            uri, () => connectSucceeded(onConnected), onError,
+        tunneledSocket.impl.connect(uri, onConnected, onError,
             timeoutSeconds: timeoutSeconds, ignoreBadCert: ignoreBadCert);
       } else {
         throw FormatException();
@@ -52,14 +51,10 @@ class SocketImpl extends SocketInterface {
           onError(null);
         } else {
           socket = x;
-          connectSucceeded(onConnected);
+          onConnected();
         }
       });
     }
-  }
-
-  void connectSucceeded(VoidCallback onConnected) {
-    onConnected();
   }
 
   @override
@@ -117,7 +112,13 @@ class SSHTunneledSocket extends Stream<Uint8List> implements Socket {
   InternetAddress get address => InternetAddress(impl.sourceHost);
 
   @override
-  InternetAddress get remoteAddress => InternetAddress(impl.tunnelToHost);
+  InternetAddress get remoteAddress {
+    try {
+      return InternetAddress(impl.tunnelToHost);
+    } catch (error) {
+      return null;
+    }
+  }
 
   @override
   int get port => impl.sourcePort;

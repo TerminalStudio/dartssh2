@@ -21,6 +21,7 @@ typedef GexRequest = MapEntry<BigInt, BigInt> Function(MSG_KEX_DH_GEX_REQUEST);
 
 class SSHServer extends SSHTransport {
   // Parameters
+  RemoteForwardCallback directTcpRequest;
   UserAuthRequest userAuthRequest;
   ChannelRequest sessionChannelRequest;
   GexRequest gexRequest;
@@ -38,6 +39,7 @@ class SSHServer extends SSHTransport {
       SocketInterface socket,
       Random random,
       SecureRandom secureRandom,
+      this.directTcpRequest,
       this.userAuthRequest,
       this.sessionChannelRequest,
       this.gexRequest})
@@ -226,6 +228,20 @@ class SSHServer extends SSHTransport {
       sessionChannel = acceptChannel(msg);
       writeCipher(MSG_CHANNEL_OPEN_CONFIRMATION(sessionChannel.remoteId,
           sessionChannel.localId, sessionChannel.windowS, maxPacketSize));
+    } else if (msg.channelType == 'direct-tcpip' && directTcpRequest != null) {
+      MSG_CHANNEL_OPEN_TCPIP tcpip = MSG_CHANNEL_OPEN_TCPIP()
+        ..deserialize(packetS);
+      Channel tcpipChannel = acceptChannel(msg);
+      directTcpRequest(tcpipChannel, tcpip.srcHost, tcpip.srcPort,
+              tcpip.dstHost, tcpip.dstPort)
+          .then((String error) {
+        if (error == null) {
+          writeCipher(MSG_CHANNEL_OPEN_CONFIRMATION(tcpipChannel.remoteId,
+              tcpipChannel.localId, tcpipChannel.windowS, maxPacketSize));
+        } else {
+          writeCipher(MSG_CHANNEL_OPEN_FAILURE(msg.senderChannel, 0, '', ''));
+        }
+      });
     } else {
       if (print != null) {
         print('unknown channel open ${msg.channelType}');

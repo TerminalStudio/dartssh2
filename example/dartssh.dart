@@ -20,12 +20,31 @@ Channel forwardChannel;
 void main(List<String> arguments) async {
   stdin.lineMode = false;
   stdin.echoMode = false;
+  ProcessSignal.sigint.watch().listen((_) {
+    if (client != null) send(Uint8List.fromList(<int>[3]));
+  });
+  ProcessSignal.sigwinch.watch().listen((_) {
+    if (client != null) {
+      client.setTerminalWindowSize(
+          stdout.terminalColumns, stdout.terminalLines);
+    }
+  });
   exitCode = await ssh(
-      arguments, stdin, (_, String v) => stdout.write(v), () => exit(0));
+      arguments, stdin, (_, String v) => stdout.write(v), () => exit(0),
+      termWidth: stdout.terminalColumns, termHeight: stdout.terminalLines);
+}
+
+void send(Uint8List x) {
+  if (forwardChannel != null) {
+    client.sendToChannel(forwardChannel, x);
+  } else {
+    client.sendChannelData(x);
+  }
 }
 
 Future<int> ssh(List<String> arguments, Stream<List<int>> input,
-    ResponseCallback response, VoidCallback done) async {
+    ResponseCallback response, VoidCallback done,
+    {int termWidth = 80, int termHeight = 25}) async {
   final argParser = ArgParser()
     ..addOption('login', abbr: 'l')
     ..addOption('identity', abbr: 'i')
@@ -68,6 +87,9 @@ Future<int> ssh(List<String> arguments, Stream<List<int>> input,
         hostport: parseUri(host),
         login: login,
         print: print,
+        termWidth: termWidth,
+        termHeight: termHeight,
+        termvar: Platform.environment['TERM'] ?? 'xterm',
         debugPrint: ((args['debug'] != null) ? print : null),
         tracePrint: ((args['trace'] != null) ? print : null),
         response: response,
@@ -92,11 +114,7 @@ Future<int> ssh(List<String> arguments, Stream<List<int>> input,
               });
 
     await for (String x in input.transform(utf8.decoder)) {
-      if (forwardChannel != null) {
-        client.sendToChannel(forwardChannel, utf8.encode(x));
-      } else {
-        client.sendChannelData(utf8.encode(x));
-      }
+      send(utf8.encode(x));
     }
   } catch (error, stacktrace) {
     print('ssh: exception: $error: $stacktrace');

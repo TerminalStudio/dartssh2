@@ -16,13 +16,28 @@ class WebSocketImpl extends SocketInterface {
   Uint8ListCallback messageHandler;
   StringCallback errorHandler, doneHandler;
   VoidCallback connectCallback;
-  StreamSubscription connectErrorSubscription;
+  StreamSubscription connectErrorSubscription,
+      messageSubscription,
+      errorSubscription,
+      doneSubscription;
 
   @override
   void close() {
     messageHandler = null;
     errorHandler = null;
     doneHandler = null;
+    if (errorSubscription != null) {
+      errorSubscription.cancel();
+      errorSubscription = null;
+    }
+    if (doneSubscription != null) {
+      doneSubscription.cancel();
+      doneSubscription = null;
+    }
+    if (messageSubscription != null) {
+      messageSubscription.cancel();
+      messageSubscription = null;
+    }
     if (socket != null) {
       socket.close();
       socket == null;
@@ -48,25 +63,6 @@ class WebSocketImpl extends SocketInterface {
   void connectSucceeded(dynamic x) {
     connectErrorSubscription.cancel();
     connectErrorSubscription = null;
-
-    socket.onError.listen((error) {
-      if (errorHandler != null) {
-        errorHandler('$error');
-      }
-    });
-
-    socket.onClose.listen((closeEvent) {
-      if (doneHandler != null) {
-        doneHandler('$closeEvent');
-      }
-    });
-
-    socket.onMessage.listen((e) {
-      if (messageHandler != null) {
-        messageHandler(e.data);
-      }
-    });
-
     connectCallback();
   }
 
@@ -79,8 +75,33 @@ class WebSocketImpl extends SocketInterface {
       doneHandler = newDoneHandler;
 
   @override
-  void listen(Uint8ListCallback newMessageHandler) =>
-      messageHandler = newMessageHandler;
+  void listen(Uint8ListCallback newMessageHandler) {
+    messageHandler = newMessageHandler;
+
+    if (errorSubscription == null) {
+      errorSubscription = socket.onError.listen((error) {
+        if (errorHandler != null) {
+          errorHandler('$error');
+        }
+      });
+    }
+
+    if (doneSubscription == null) {
+      doneSubscription = socket.onClose.listen((closeEvent) {
+        if (doneHandler != null) {
+          doneHandler('$closeEvent');
+        }
+      });
+    }
+
+    if (messageSubscription == null) {
+      messageSubscription = socket.onMessage.listen((e) {
+        if (messageHandler != null) {
+          messageHandler(e.data);
+        }
+      });
+    }
+  }
 
   @override
   void send(String text) => socket.sendString(text);
