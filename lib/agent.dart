@@ -11,14 +11,20 @@ import 'package:dartssh/transport.dart';
 /// Mixin providing SSH Agent forwarding.
 mixin SSHAgentForwarding on SSHTransport {
   /// Frames SSH Agent [channel] data into packets.
-  void handleAgentRead(Channel channel, Uint8List msg) {
+  void handleAgentRead(Channel channel, Uint8List msg) =>
+      dispatchAgentRead(channel, msg, handleAgentPacket);
+
+  static void dispatchAgentRead(
+      Channel channel, Uint8List msg, ChannelInputCallback handleAgentPacket) {
     channel.buf.add(msg);
     while (channel.buf.data.length > 4) {
       SerializableInput input = SerializableInput(channel.buf.data);
       int agentPacketLen = input.getUint32();
       if (input.remaining < agentPacketLen) break;
-      handleAgentPacket(channel,
-          SerializableInput(input.viewOffset(input.offset, agentPacketLen)));
+      handleAgentPacket(
+          channel,
+          SerializableInput(
+              input.viewOffset(input.offset, input.offset + agentPacketLen)));
       channel.buf.flush(agentPacketLen + 4);
     }
   }
@@ -110,8 +116,21 @@ class AGENT_FAILURE extends AgentMessage {
 }
 
 /// https://tools.ietf.org/html/draft-miller-ssh-agent-03#section-4.4
-class AGENTC_REQUEST_IDENTITIES {
+class AGENTC_REQUEST_IDENTITIES extends AgentMessage {
   static const int ID = 11;
+  AGENTC_REQUEST_IDENTITIES() : super(ID);
+
+  @override
+  int get serializedHeaderSize => 0;
+
+  @override
+  int get serializedSize => serializedHeaderSize;
+
+  @override
+  void deserialize(SerializableInput input) {}
+
+  @override
+  void serialize(SerializableOutput output) {}
 }
 
 /// https://tools.ietf.org/html/draft-miller-ssh-agent-03#section-4.4
@@ -128,7 +147,14 @@ class AGENT_IDENTITIES_ANSWER extends AgentMessage {
       serializedHeaderSize, (v, e) => v + 8 + e.key.length + e.value.length);
 
   @override
-  void deserialize(SerializableInput input) {}
+  void deserialize(SerializableInput input) {
+    keys.clear();
+    int length = input.getUint32();
+    for (int i = 0; i < length; i++) {
+      Uint8List key = deserializeStringBytes(input);
+      keys.add(MapEntry<Uint8List, String>(key, deserializeString(input)));
+    }
+  }
 
   @override
   void serialize(SerializableOutput output) {
@@ -145,7 +171,7 @@ class AGENTC_SIGN_REQUEST extends AgentMessage {
   static const int ID = 13;
   Uint8List key, data;
   int flags;
-  AGENTC_SIGN_REQUEST() : super(ID);
+  AGENTC_SIGN_REQUEST([this.key, this.data, this.flags = 0]) : super(ID);
 
   @override
   int get serializedHeaderSize => 4 * 3;
@@ -161,14 +187,18 @@ class AGENTC_SIGN_REQUEST extends AgentMessage {
   }
 
   @override
-  void serialize(SerializableOutput output) {}
+  void serialize(SerializableOutput output) {
+    serializeString(output, key);
+    serializeString(output, data);
+    output.addUint32(flags);
+  }
 }
 
 /// On success, the agent shall reply with:
 class AGENT_SIGN_RESPONSE extends AgentMessage {
   static const int ID = 14;
   Uint8List sig;
-  AGENT_SIGN_RESPONSE(this.sig) : super(ID);
+  AGENT_SIGN_RESPONSE([this.sig]) : super(ID);
 
   @override
   int get serializedHeaderSize => 4;

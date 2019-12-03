@@ -19,6 +19,7 @@ import 'package:dartssh/socket.dart';
 import 'package:dartssh/ssh.dart';
 
 typedef VoidCallback = void Function();
+typedef FutureFunction = Future Function();
 typedef StringCallback = void Function(String);
 typedef StringFunction = String Function();
 typedef StringFilter = String Function(String);
@@ -27,6 +28,7 @@ typedef Uint8ListFunction = Uint8List Function();
 typedef IdentityFunction = Identity Function();
 typedef FingerprintCallback = bool Function(int, Uint8List);
 typedef ChannelCallback = void Function(Channel, Uint8List);
+typedef ChannelInputCallback = void Function(Channel, SerializableInput);
 typedef ResponseCallback = void Function(SSHTransport, String);
 typedef RemoteForwardCallback = Future<String> Function(
     Channel, String, int, String, int);
@@ -43,13 +45,20 @@ class Forward {
 /// [Channel]s are flow-controlled.  No data may be sent to a channel until
 /// a message is received to indicate that window space is available.
 class Channel {
-  int localId, remoteId, windowC = 0, windowS = 0;
+  int localId, remoteId, windowC, windowS;
   bool opened = true, agentChannel = false, sentEof = false, sentClose = false;
   QueueBuffer buf = QueueBuffer(Uint8List(0));
   ChannelCallback cb;
   StringCallback error;
   VoidCallback connected;
-  Channel([this.localId = 0, this.remoteId = 0]);
+  Channel(
+      {this.localId = 0,
+      this.remoteId = 0,
+      this.windowC = 0,
+      this.windowS = 0,
+      this.cb,
+      this.error,
+      this.connected});
 }
 
 /// It is RECOMMENDED that the keys be changed after each gigabyte of transmitted
@@ -229,9 +238,19 @@ abstract class SSHTransport with SSHDiffieHellman {
         macPref = MAC.preferenceCsv(),
         compressPref = Compression.preferenceCsv(compress ? 0 : 1);
     sequenceNumberC2s++;
-    Uint8List kexInit = MSG_KEXINIT
-        .create(randBytes(random, 16), kexPref, keyPref, cipherPref, cipherPref,
-            macPref, macPref, compressPref, compressPref, '', '', guess)
+    Uint8List kexInit = MSG_KEXINIT(
+            randBytes(random, 16),
+            kexPref,
+            keyPref,
+            cipherPref,
+            cipherPref,
+            macPref,
+            macPref,
+            compressPref,
+            compressPref,
+            '',
+            '',
+            guess)
         .toBytes(null, random, 8);
     if (client) {
       kexInitC = kexInit;
@@ -702,12 +721,12 @@ abstract class SSHTransport with SSHDiffieHellman {
       {VoidCallback connected, StringCallback error}) {
     if (socket == null || state <= SSHTransportState.FIRST_NEWKEYS) return null;
     if (debugPrint != null) debugPrint('openTcpChannel to $destHost:$destPort');
-    Channel chan = channels[nextChannelId] = Channel()
-      ..localId = nextChannelId++
-      ..windowS = initialWindowSize
-      ..cb = cb
-      ..error = error
-      ..connected = connected;
+    Channel chan = channels[nextChannelId] = Channel(
+        localId: nextChannelId++,
+        windowS: initialWindowSize,
+        cb: cb,
+        error: error,
+        connected: connected);
     nextChannelId++;
     writeCipher(MSG_CHANNEL_OPEN_TCPIP(
         'direct-tcpip',

@@ -48,6 +48,7 @@ Future<int> ssh(List<String> arguments, Stream<List<int>> input,
   final argParser = ArgParser()
     ..addOption('login', abbr: 'l')
     ..addOption('identity', abbr: 'i')
+    ..addFlag('agentForwarding', abbr: 'A')
     ..addOption('tunnel')
     ..addOption('kex')
     ..addOption('key')
@@ -90,6 +91,7 @@ Future<int> ssh(List<String> arguments, Stream<List<int>> input,
         termWidth: termWidth,
         termHeight: termHeight,
         termvar: Platform.environment['TERM'] ?? 'xterm',
+        agentForwarding: args['agentForwarding'],
         debugPrint: ((args['debug'] != null) ? print : null),
         tracePrint: ((args['trace'] != null) ? print : null),
         response: response,

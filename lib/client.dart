@@ -361,8 +361,8 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     if (tracePrint != null) {
       tracePrint('$hostport: MSG_USERAUTH_SUCCESS');
     }
-    sessionChannel = Channel(nextChannelId);
-    sessionChannel.windowS = initialWindowSize;
+    sessionChannel =
+        Channel(localId: nextChannelId, windowS: initialWindowSize);
     channels[nextChannelId] = sessionChannel;
     nextChannelId++;
 
@@ -374,7 +374,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       // zreader = ArchiveInflateReader();
       throw FormatException('compression not supported');
     }
-    writeCipher(MSG_CHANNEL_OPEN.create(
+    writeCipher(MSG_CHANNEL_OPEN(
         'session', sessionChannel.localId, initialWindowSize, maxPacketSize));
     for (VoidCallback successCallback in success) {
       successCallback();

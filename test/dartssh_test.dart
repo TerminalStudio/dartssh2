@@ -104,6 +104,7 @@ void main() {
       ]);
 
       Future<void> sshMain = ssh.ssh(<String>[
+        '-A',
         '-l',
         'root',
         '127.0.0.1:42022',
@@ -117,10 +118,10 @@ void main() {
       while (ssh.client.sessionChannel == null) {
         await Future.delayed(const Duration(seconds: 1));
       }
-      ssh.client.sendChannelData(utf8.encode('exit\n'));
+      ssh.client.sendChannelData(utf8.encode('testAgent\nexit\n'));
       await sshMain;
       await sshdMain;
-      expect(sshResponse, '\$ exit\n');
+      expect(sshResponse, '\$ testAgent\nexit\nsuccess\n');
 
       print(
           '=== suite end ${KEX.name(kexIndex)}, ${Key.name(keyIndex)}, ${Cipher.name(cipherIndex)}, ${MAC.name(macIndex)} ===');
@@ -147,7 +148,9 @@ void main() {
     }
   });
 
-  test('websocket test', () async {
+  test('tunneled http test', () async {});
+
+  test('tunneled websocket test', () async {
     expect(websocketEchoTest(WebSocketImpl(), proto: 'ws'),
         completion(equals(true)));
 

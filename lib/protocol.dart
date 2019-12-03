@@ -234,9 +234,8 @@ class MSG_KEXINIT extends SSHMessage {
       languagesServerToClient;
   bool firstKexPacketFollows = false;
 
-  MSG_KEXINIT() : super(ID);
-  MSG_KEXINIT.create(
-      this.cookie,
+  MSG_KEXINIT(
+      [this.cookie,
       this.kexAlgorithms,
       this.serverHostKeyAlgorithms,
       this.encryptionAlgorithmsClientToServer,
@@ -247,7 +246,7 @@ class MSG_KEXINIT extends SSHMessage {
       this.compressionAlgorithmsServerToClient,
       this.languagesClientToServer,
       this.languagesServerToClient,
-      this.firstKexPacketFollows)
+      this.firstKexPacketFollows])
       : super(ID);
 
   @override
@@ -742,9 +741,11 @@ class MSG_CHANNEL_OPEN extends SSHMessage {
   static const int ID = 90;
   String channelType;
   int senderChannel = 0, initialWinSize = 0, maximumPacketSize = 0;
-  MSG_CHANNEL_OPEN() : super(ID);
-  MSG_CHANNEL_OPEN.create(this.channelType, this.senderChannel,
-      this.initialWinSize, this.maximumPacketSize)
+  MSG_CHANNEL_OPEN(
+      [this.channelType,
+      this.senderChannel,
+      this.initialWinSize,
+      this.maximumPacketSize])
       : super(ID);
 
   @override

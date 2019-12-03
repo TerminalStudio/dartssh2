@@ -107,6 +107,11 @@ class SSHServer extends SSHTransport {
         handleMSG_CHANNEL_REQUEST(MSG_CHANNEL_REQUEST()..deserialize(packetS));
         break;
 
+      case MSG_CHANNEL_OPEN_CONFIRMATION.ID:
+        handleMSG_CHANNEL_OPEN_CONFIRMATION(
+            MSG_CHANNEL_OPEN_CONFIRMATION()..deserialize(packetS));
+        break;
+
       case MSG_CHANNEL_DATA.ID:
         handleMSG_CHANNEL_DATA(MSG_CHANNEL_DATA()..deserialize(packetS));
         break;
@@ -270,24 +275,28 @@ class SSHServer extends SSHTransport {
   }
 
   @override
-  void handleChannelOpenConfirmation(Channel chan) {}
-
-  @override
-  void handleChannelData(Channel chan, Uint8List data) {
-    if (chan == sessionChannel) {
-      response(this, utf8.decode(data));
-    } else if (chan.cb != null) {
-      chan.cb(chan, data);
+  void handleChannelOpenConfirmation(Channel channel) {
+    if (channel.connected != null) {
+      channel.connected();
     }
   }
 
   @override
-  void handleChannelClose(Channel chan, [String description]) {
-    if (chan == sessionChannel) {
+  void handleChannelData(Channel channel, Uint8List data) {
+    if (channel == sessionChannel) {
+      response(this, utf8.decode(data));
+    } else if (channel.cb != null) {
+      channel.cb(channel, data);
+    }
+  }
+
+  @override
+  void handleChannelClose(Channel channel, [String description]) {
+    if (channel == sessionChannel) {
       sessionChannel = null;
-    } else if (chan.cb != null) {
-      chan.opened = false;
-      chan.cb(chan, Uint8List(0));
+    } else if (channel.cb != null) {
+      channel.opened = false;
+      channel.cb(channel, Uint8List(0));
     }
   }
 
@@ -296,5 +305,22 @@ class SSHServer extends SSHTransport {
     if (sessionChannel != null) {
       sendToChannel(sessionChannel, b);
     }
+  }
+
+  Channel openAgentChannel(ChannelCallback cb,
+      {VoidCallback connected, StringCallback error}) {
+    if (debugPrint != null) debugPrint('openAgentChannel');
+    if (socket == null || state <= SSHTransportState.FIRST_NEWKEYS) return null;
+    Channel chan = channels[nextChannelId] = Channel(
+        localId: nextChannelId++,
+        windowS: initialWindowSize,
+        cb: cb,
+        error: error,
+        connected: connected)
+      ..agentChannel = true;
+    nextChannelId++;
+    writeCipher(MSG_CHANNEL_OPEN(
+        'auth-agent@openssh.com', chan.localId, chan.windowS, maxPacketSize));
+    return chan;
   }
 }

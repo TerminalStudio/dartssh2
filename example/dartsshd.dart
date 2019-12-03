@@ -4,14 +4,17 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:args/args.dart';
 import 'package:stack_trace/stack_trace.dart';
 
+import 'package:dartssh/agent.dart';
 import 'package:dartssh/identity.dart';
 import 'package:dartssh/pem.dart';
 import 'package:dartssh/protocol.dart';
+import 'package:dartssh/serializable.dart';
 import 'package:dartssh/socket_io.dart';
 import 'package:dartssh/server.dart';
 import 'package:dartssh/ssh.dart';
@@ -60,6 +63,8 @@ Future<void> sshd(List<String> arguments) async {
             '${socket.remoteAddress.host}:${socket.remotePort}';
         print('accepted $hostport');
         StreamController<String> input = StreamController<String>();
+        bool done = false;
+        Future pending;
 
         server = SSHServer(
           hostkey,
@@ -93,8 +98,16 @@ Future<void> sshd(List<String> arguments) async {
           },
           directTcpRequest: forwardTcp ? forwardTcpChannel : null,
         );
+
         input.stream.transform(LineSplitter()).listen((String line) {
-          if (line == 'exit') server.closeChannel(server.sessionChannel);
+          if (done) return;
+          if (line == 'exit') {
+            done = true;
+            pending = chainWork(pending,
+                () async => server.closeChannel(server.sessionChannel));
+          } else if (line == 'testAgent') {
+            pending = chainWork(pending, () => testAgentForwarding());
+          }
         });
       }
     });
@@ -103,6 +116,9 @@ Future<void> sshd(List<String> arguments) async {
     exitCode = -1;
   }
 }
+
+Future chainWork(Future chain, FutureFunction x) =>
+    chain == null ? x() : chain.then((_) async => await x());
 
 Identity loadHostKey({StringFunction getPassword, String path}) {
   Identity hostkey = Identity();
@@ -150,4 +166,51 @@ Future<String> forwardTcpChannel(Channel channel, String sourceHost,
   channel.cb = (_, Uint8List m) => tunneledSocket.sendRaw(m);
   channel.error = closeTunneledSocket;
   return null;
+}
+
+Future testAgentForwarding() async {
+  Channel agentChannel;
+  Uint8List key, challenge;
+  Completer<String> openCompleter = Completer<String>();
+  Completer<String> doneCompleter = Completer<String>();
+  agentChannel = server.openAgentChannel(
+    (_, Uint8List read) => SSHAgentForwarding.dispatchAgentRead(
+        agentChannel, read, (_, agentPacketS) {
+      int agentPacketId = agentPacketS.getUint8();
+      switch (agentPacketId) {
+        case AGENT_IDENTITIES_ANSWER.ID:
+          AGENT_IDENTITIES_ANSWER msg = AGENT_IDENTITIES_ANSWER()
+            ..deserialize(agentPacketS);
+          assert(msg.keys.isNotEmpty);
+          key = msg.keys.first.key;
+          challenge = randBytes(Random.secure(), 16);
+          server.sendToChannel(
+              agentChannel, AGENTC_SIGN_REQUEST(key, challenge).toRaw());
+          break;
+
+        case AGENT_SIGN_RESPONSE.ID:
+          AGENT_SIGN_RESPONSE msg = AGENT_SIGN_RESPONSE()
+            ..deserialize(agentPacketS);
+          doneCompleter.complete(null);
+          break;
+
+        default:
+          break;
+      }
+    }),
+    connected: () => openCompleter.complete(null),
+    error: (String error) => openCompleter.complete('$error'),
+  );
+  String openError = await openCompleter.future;
+  if (openError != null) {
+    server.sendChannelData(utf8.encode('error: $openError\n'));
+    return;
+  }
+  server.sendToChannel(agentChannel, AGENTC_REQUEST_IDENTITIES().toRaw());
+  String doneError = await doneCompleter.future;
+  if (doneError == null) {
+    server.sendChannelData(utf8.encode('success\n'));
+  } else {
+    server.sendChannelData(utf8.encode('error: $doneError\n'));
+  }
 }
