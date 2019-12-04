@@ -25,6 +25,12 @@ abstract class ConnectionInterface {
 
 /// Websocket style interface for BSD sockets and/or RFC6455 WebSockets.
 abstract class SocketInterface extends ConnectionInterface {
+  // True if this socket is connected.
+  bool get connected;
+
+  // True if this socket is connecting.
+  bool get connecting;
+
   /// Connects the socket to [uri] then invokes [onConnected] or [onError].
   void connect(Uri uri, VoidCallback onConnected, StringCallback onError,
       {int timeoutSeconds = 15, bool ignoreBadCert = false});
@@ -38,7 +44,7 @@ abstract class SocketInterface extends ConnectionInterface {
 
 /// Mixin for testing with shim [ConnectionInterface]s.
 mixin TestConnection {
-  bool connected = false, closed = false;
+  bool connected = false, connecting = false, closed = false;
   Uint8ListCallback messageHandler;
   StringCallback errorHandler, doneHandler;
   Queue<String> sent = Queue<String>();

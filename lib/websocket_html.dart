@@ -22,6 +22,12 @@ class WebSocketImpl extends SocketInterface {
       doneSubscription;
 
   @override
+  bool get connected => socket != null && !connecting;
+
+  @override
+  bool get connecting => connectErrorSubscription != null;
+
+  @override
   void close() {
     messageHandler = null;
     errorHandler = null;
@@ -47,6 +53,7 @@ class WebSocketImpl extends SocketInterface {
   @override
   void connect(Uri uri, VoidCallback onConnected, StringCallback onError,
       {int timeoutSeconds = 15, bool ignoreBadCert = false}) {
+    assert(!connecting);
     /// No way to allow self-signed certificates.
     assert(!ignoreBadCert);
     try {

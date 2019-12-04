@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:dartssh/client.dart';
 import 'package:dartssh/serializable.dart';
+import 'package:dartssh/socket.dart';
 import 'package:dartssh/transport.dart';
 
 typedef HttpClientFactory = http.Client Function();
@@ -137,7 +138,7 @@ class SSHTunneledBaseClient extends http.BaseClient {
       request.headers['user-agent'] = userAgent;
     }
 
-    HttpResponse response = await tunneledHttpRequest(
+    HttpResponse response = await httpRequest(
       request.url,
       request.method,
       SSHTunneledSocketImpl.fromClient(client),
@@ -169,19 +170,20 @@ Map<String, String> addBasicAuthenticationHeader(
   return headers;
 }
 
-/// Makes HTTP request over [SSHTunneledSocketImpl] carried by [client].
-Future<HttpResponse> tunneledHttpRequest(
-    Uri uri, String method, SSHTunneledSocketImpl socket,
+/// Makes HTTP request over [SocketInterface], e.g. [SSHTunneledSocketImpl].
+Future<HttpResponse> httpRequest(Uri uri, String method, SocketInterface socket,
     {Map<String, String> requestHeaders,
     Uint8List body,
     StringCallback debugPrint,
     bool persistentConnection = true}) async {
-  /// Ask the remote to open an SSH tunnel to [uri].
-  Completer<String> connectCompleter = Completer<String>();
-  socket.connect(uri, () => connectCompleter.complete(null),
-      (error) => connectCompleter.complete('$error'));
-  String connectError = await connectCompleter.future;
-  if (connectError != null) throw FormatException(connectError);
+  if (!socket.connected && !socket.connecting) {
+    /// We might be asking the remote to open an SSH tunnel to [uri].
+    Completer<String> connectCompleter = Completer<String>();
+    socket.connect(uri, () => connectCompleter.complete(null),
+        (error) => connectCompleter.complete('$error'));
+    String connectError = await connectCompleter.future;
+    if (connectError != null) throw FormatException(connectError);
+  }
 
   /// Initialize connection state.
   String headerText;

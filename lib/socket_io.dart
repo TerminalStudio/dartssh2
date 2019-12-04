@@ -6,7 +6,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:dartssh/client.dart';
 import 'package:dartssh/socket.dart';
 import 'package:dartssh/transport.dart';
 
@@ -16,10 +15,18 @@ class SocketImpl extends SocketInterface {
   StreamSubscription messageSubscription;
   Uint8ListCallback messageHandler;
   StringCallback onError, onDone;
+
+  @override
+  bool get connected => socket != null;
+
+  @override
+  bool connecting = false;
+
   SocketImpl([this.socket]);
 
   @override
   void close() {
+    connecting = false;
     messageHandler = null;
     onError = onDone = null;
     if (messageSubscription != null) {
@@ -35,10 +42,12 @@ class SocketImpl extends SocketInterface {
   @override
   void connect(Uri uri, VoidCallback onConnected, StringCallback onError,
       {int timeoutSeconds = 15, bool ignoreBadCert = false}) {
+    assert(!connecting);
+    connecting = true;
     if (socket != null) {
-      if (socket is SSHTunneledSocket) {
-        SSHTunneledSocket tunneledSocket = socket;
-        tunneledSocket.impl.connect(uri, onConnected, onError,
+      if (socket is SocketAdaptor) {
+        (socket as SocketAdaptor).impl.connect(
+            uri, () => connectSucceeded(onConnected), onError,
             timeoutSeconds: timeoutSeconds, ignoreBadCert: ignoreBadCert);
       } else {
         throw FormatException();
@@ -51,10 +60,15 @@ class SocketImpl extends SocketInterface {
           onError(null);
         } else {
           socket = x;
-          onConnected();
+          connectSucceeded(onConnected);
         }
       });
     }
+  }
+
+  void connectSucceeded(VoidCallback onConnected) {
+    connecting = false;
+    onConnected();
   }
 
   @override
@@ -91,15 +105,39 @@ class SocketImpl extends SocketInterface {
 }
 
 /// https://github.com/dart-lang/sdk/blob/master/sdk/lib/_internal/vm/bin/socket_patch.dart#L1651
-class SSHTunneledSocket extends Stream<Uint8List> implements Socket {
-  SSHTunneledSocketImpl impl;
+class SocketAdaptor extends Stream<Uint8List> implements Socket {
+  SocketInterface impl;
   StreamController<Uint8List> controller;
-  SSHTunneledSocketStreamConsumer consumer;
+  SocketAdaptorStreamConsumer consumer;
   IOSink sink;
+  StringCallback debugPrint;
 
-  SSHTunneledSocket(this.impl) {
+  @override
+  InternetAddress address;
+
+  @override
+  InternetAddress remoteAddress;
+
+  @override
+  int port;
+
+  @override
+  int remotePort;
+
+  @override
+  Encoding get encoding => sink.encoding;
+
+  @override
+  set encoding(Encoding value) => sink.encoding = value;
+
+  SocketAdaptor(this.impl,
+      {this.address,
+      this.remoteAddress,
+      this.port,
+      this.remotePort,
+      this.debugPrint}) {
     controller = StreamController<Uint8List>(sync: true);
-    consumer = SSHTunneledSocketStreamConsumer(this);
+    consumer = SocketAdaptorStreamConsumer(this);
     sink = IOSink(consumer);
 
     /// https://github.com/dart-lang/sdk/issues/39589
@@ -107,30 +145,6 @@ class SSHTunneledSocket extends Stream<Uint8List> implements Socket {
     impl.handleError((error) => controller.addError(error));
     impl.handleDone((String reason) => controller.addError(reason));
   }
-
-  @override
-  InternetAddress get address => InternetAddress(impl.sourceHost);
-
-  @override
-  InternetAddress get remoteAddress {
-    try {
-      return InternetAddress(impl.tunnelToHost);
-    } catch (error) {
-      return null;
-    }
-  }
-
-  @override
-  int get port => impl.sourcePort;
-
-  @override
-  int get remotePort => impl.tunnelToPort;
-
-  @override
-  Encoding get encoding => sink.encoding;
-
-  @override
-  set encoding(Encoding value) => sink.encoding = value;
 
   @override
   void destroy() {
@@ -184,23 +198,20 @@ class SSHTunneledSocket extends Stream<Uint8List> implements Socket {
   @override
   StreamSubscription<Uint8List> listen(void onData(Uint8List event),
       {Function onError, void onDone(), bool cancelOnError}) {
-    if (impl.client.debugPrint != null) {
-      impl.client
-          .debugPrint('SSHTunneledSocket.listen $remoteAddress:$remotePort');
-    }
+    //debugPrint('DEBUG SocketAdaptor.listen $remoteAddress:$remotePort');
     return controller.stream.listen((m) {
-      //impl.client.debugPrint('DEBUG SSHTunneledSocket.read $m');
+      //debugPrint('DEBUG SocketAdaptor.read $m');
       onData(m);
     }, onError: onError, onDone: onDone, cancelOnError: cancelOnError);
   }
 }
 
 /// Copied from https://github.com/dart-lang/sdk/blob/master/sdk/lib/_internal/vm/bin/socket_patch.dart
-class SSHTunneledSocketStreamConsumer extends StreamConsumer<List<int>> {
+class SocketAdaptorStreamConsumer extends StreamConsumer<List<int>> {
   StreamSubscription subscription;
-  final SSHTunneledSocket socket;
+  final SocketAdaptor socket;
   Completer streamCompleter;
-  SSHTunneledSocketStreamConsumer(this.socket);
+  SocketAdaptorStreamConsumer(this.socket);
 
   Future<Socket> close() => Future.value(socket);
 
@@ -243,5 +254,13 @@ class SSHTunneledSocketStreamConsumer extends StreamConsumer<List<int>> {
       }, cancelOnError: true);
     }
     return streamCompleter.future;
+  }
+}
+
+InternetAddress tryParseInternetAddress(String x) {
+  try {
+    return InternetAddress(x);
+  } catch (error) {
+    return null;
   }
 }

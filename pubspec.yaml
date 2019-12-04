@@ -1,6 +1,6 @@
 name: dartssh
 version: 1.0.3+3
-description: Library providing a pure Dart SSH implementation with tunneling.
+description: Dart SSH package providing First-class tunnelling primitives.
 author: Green Appers, Inc. <greenappers@gmail.com>
 homepage: https://github.com/GreenAppers/dartssh
 

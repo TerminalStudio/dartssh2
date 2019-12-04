@@ -24,7 +24,14 @@ class WebSocketImpl extends SocketInterface {
   StringCallback errorHandler, doneHandler;
 
   @override
+  bool get connected => socket != null;
+
+  @override
+  bool connecting = false;
+
+  @override
   void close() {
+    connecting = false;
     messageHandler = null;
     errorHandler = null;
     doneHandler = null;
@@ -37,12 +44,15 @@ class WebSocketImpl extends SocketInterface {
   @override
   void connect(Uri uri, VoidCallback onConnected, StringCallback onError,
       {int timeoutSeconds = 15, bool ignoreBadCert = false}) async {
+    assert(!connecting);
+    connecting = true;
+
     if (!ignoreBadCert || !uri.hasScheme || uri.scheme != 'wss') {
       return io.WebSocket.connect('$uri')
           .timeout(Duration(seconds: timeoutSeconds))
           .then((io.WebSocket x) {
         socket = x;
-        onConnected();
+        connectSucceeded(onConnected);
       }, onError: (error, _) => onError(error));
     }
 
@@ -66,10 +76,15 @@ class WebSocketImpl extends SocketInterface {
 
       socket = io.WebSocket.fromUpgradedSocket(await response.detachSocket(),
           serverSide: false);
-      onConnected();
+      connectSucceeded(onConnected);
     } catch (error) {
       onError(error);
     }
+  }
+
+  void connectSucceeded(VoidCallback onConnected) {
+    connecting = false;
+    onConnected();
   }
 
   @override
@@ -125,7 +140,7 @@ class SSHTunneledWebSocketImpl extends WebSocketImpl {
   @override
   void connect(Uri uri, VoidCallback onConnected, StringCallback onError,
       {int timeoutSeconds = 15, bool ignoreBadCert = false}) async {
-    HttpResponse response = await tunneledHttpRequest(
+    HttpResponse response = await httpRequest(
       Uri.parse('http' + '$uri'.substring(2)),
       'GET',
       tunneledSocket,
@@ -139,7 +154,14 @@ class SSHTunneledWebSocketImpl extends WebSocketImpl {
     );
     if (response.status == 101) {
       socket = io.WebSocket.fromUpgradedSocket(
-          SSHTunneledSocket(tunneledSocket),
+          SocketAdaptor(
+            tunneledSocket,
+            address: tryParseInternetAddress(tunneledSocket.sourceHost),
+            remoteAddress: tryParseInternetAddress(tunneledSocket.tunnelToHost),
+            port: tunneledSocket.sourcePort,
+            remotePort: tunneledSocket.tunnelToPort,
+            debugPrint: tunneledSocket.client.debugPrint,
+          ),
           serverSide: false);
       onConnected();
     } else {

@@ -640,7 +640,7 @@ class SSHTunneledSocketImpl extends SocketInterface {
   Channel channel;
   String sourceHost, tunnelToHost;
   int sourcePort, tunnelToPort;
-  VoidCallback connected;
+  VoidCallback connectHandler;
   StringCallback connectError, onError, onDone;
   Uint8ListCallback onMessage;
 
@@ -667,6 +667,12 @@ class SSHTunneledSocketImpl extends SocketInterface {
         print: print,
         debugPrint: debugPrint);
   }
+
+  @override
+  bool get connected => channel != null;
+
+  @override
+  bool get connecting => connectHandler != null;
 
   @override
   void handleError(StringCallback errorHandler) => onError = errorHandler;
@@ -699,11 +705,11 @@ class SSHTunneledSocketImpl extends SocketInterface {
   /// Connects to [address] over SSH tunnel provided by [client].
   @override
   void connect(
-      Uri address, VoidCallback connectHandler, StringCallback errorHandler,
+      Uri address, VoidCallback connectCallback, StringCallback errorHandler,
       {int timeoutSeconds = 15, bool ignoreBadCert = false}) {
     tunnelToHost = address.host;
     tunnelToPort = address.port;
-    connected = connectHandler;
+    connectHandler = connectCallback;
     connectError = errorHandler;
     if (clientOwner) {
       client.socket.connect(client.hostport, client.onConnected, (error) {
@@ -729,15 +735,17 @@ class SSHTunneledSocketImpl extends SocketInterface {
       //client.debugPrint('DEBUG SSHTunneledSocketImpl.recvRaw(${m.length}) = $m');
       onMessage(m);
     }, connected: () {
-      if (connected != null) connected();
-      connected = connectError = null;
+      if (connectHandler != null) connectHandler();
+      connectHandler = null;
+      connectError = null;
     }, error: (String description) {
       if (connectError != null) {
         connectError(description);
       } else {
         onError(description);
       }
-      connected = connectError = null;
+      connectHandler = null;
+      connectError = null;
     });
   }
 }

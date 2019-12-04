@@ -11,6 +11,7 @@ import 'package:convert/convert.dart';
 import 'package:test/test.dart';
 
 import 'package:dartssh/client.dart';
+import 'package:dartssh/http.dart';
 import 'package:dartssh/identity.dart';
 import 'package:dartssh/pem.dart';
 import 'package:dartssh/protocol.dart';
@@ -148,7 +149,9 @@ void main() {
     }
   });
 
-  test('tunneled http test', () async {});
+  test('tunneled http test', () async {
+    expect(httpTest(HttpClientImpl()), completion(equals(true)));
+  });
 
   test('tunneled websocket test', () async {
     expect(websocketEchoTest(WebSocketImpl(), proto: 'ws'),
@@ -195,6 +198,11 @@ void main() {
     await sshdMain;
     expect(sshResponse, '\$ exit\n');
   });
+}
+
+Future<bool> httpTest(HttpClient httpClient, {String proto = 'https'}) async {
+  var response = await httpClient.request('$proto://www.greenappers.com/');
+  return response != null && response.text.indexOf('support@greenappers.com') != -1;
 }
 
 Future<bool> websocketEchoTest(WebSocketImpl websocket,
