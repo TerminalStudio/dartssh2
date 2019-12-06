@@ -54,6 +54,7 @@ class WebSocketImpl extends SocketInterface {
   void connect(Uri uri, VoidCallback onConnected, StringCallback onError,
       {int timeoutSeconds = 15, bool ignoreBadCert = false}) {
     assert(!connecting);
+
     /// No way to allow self-signed certificates.
     assert(!ignoreBadCert);
     try {

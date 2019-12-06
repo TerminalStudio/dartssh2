@@ -4,8 +4,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:dartssh/serializable.dart';
 import 'package:dartssh/socket.dart';
 import 'package:dartssh/transport.dart';
 
@@ -111,6 +113,7 @@ class SocketAdaptor extends Stream<Uint8List> implements Socket {
   SocketAdaptorStreamConsumer consumer;
   IOSink sink;
   StringCallback debugPrint;
+  var _detachReady;
 
   @override
   InternetAddress address;
@@ -204,16 +207,47 @@ class SocketAdaptor extends Stream<Uint8List> implements Socket {
       onData(m);
     }, onError: onError, onDone: onDone, cancelOnError: cancelOnError);
   }
+
+  /*void _consumerDone() {
+    if (_detachReady != null) {
+      _detachReady.complete(null);
+    } else {
+      if (impl != null) {
+        impl.shutdown(ConnectionDirection.send);
+      }
+    }
+  }*/
+
+  /*Future _detachRaw() {
+    _detachReady = new Completer();
+    sink.close();
+    return _detachReady.future.then((_) {
+      var raw = impl;
+      impl = null;
+      return [
+        RawSocketAdaptor(raw,
+            address: address,
+            remoteAddress: remoteAddress,
+            port: port,
+            remotePort: remotePort,
+            debugPrint: debugPrint),
+        null
+      ];
+    });
+  }*/
 }
 
 /// Copied from https://github.com/dart-lang/sdk/blob/master/sdk/lib/_internal/vm/bin/socket_patch.dart
 class SocketAdaptorStreamConsumer extends StreamConsumer<List<int>> {
-  StreamSubscription subscription;
   final SocketAdaptor socket;
+  StreamSubscription subscription;
   Completer streamCompleter;
   SocketAdaptorStreamConsumer(this.socket);
 
-  Future<Socket> close() => Future.value(socket);
+  Future<Socket> close() {
+    //socket._consumerDone();
+    return Future.value(socket);
+  }
 
   void stop() {
     if (subscription == null) return;
@@ -256,6 +290,146 @@ class SocketAdaptorStreamConsumer extends StreamConsumer<List<int>> {
     return streamCompleter.future;
   }
 }
+
+/// https://github.com/dart-lang/sdk/blob/master/sdk/lib/_internal/vm/bin/socket_patch.dart#L1651
+/*
+class RawSocketAdaptor extends Stream<RawSocketEvent> implements RawSocket {
+  final SocketInterface socket;
+  StreamController<RawSocketEvent> controller;
+  QueueBuffer readBuffer = QueueBuffer(Uint8List(0));
+  StringCallback debugPrint;
+  bool _readEventsEnabled = true;
+  bool _writeEventsEnabled = true;
+  bool _paused = false;
+
+  @override
+  InternetAddress address;
+
+  @override
+  InternetAddress remoteAddress;
+
+  @override
+  int port;
+
+  @override
+  int remotePort;
+
+  RawSocketAdaptor(this.socket,
+      {this.address,
+      this.remoteAddress,
+      this.port,
+      this.remotePort,
+      this.debugPrint}) {
+    controller = StreamController(
+        sync: true,
+        onListen: _onSubscriptionStateChange,
+        onCancel: _onSubscriptionStateChange,
+        onPause: _onPauseStateChange,
+        onResume: _onPauseStateChange);
+
+    socket.listen((Uint8List m) {
+      readBuffer.add(m);
+      if (!_paused && _readEventsEnabled) {
+        controller.add(RawSocketEvent.read);
+      }
+    });
+
+    socket.handleDone((String reason) {
+      controller.add(RawSocketEvent.readClosed);
+      //controller.add(RawSocketEvent.closed);
+      //controller.close();
+    });
+
+    socket.handleError((error) => controller.addError(error));
+  }
+
+  @override
+  StreamSubscription<RawSocketEvent> listen(void onData(RawSocketEvent event),
+      {Function onError, void onDone(), bool cancelOnError}) {
+    return controller.stream.listen(onData,
+        onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+  }
+
+  @override
+  int available() => readBuffer.data.length;
+
+  @override
+  Uint8List read([int len]) {
+    int readSize = len != null ? min(len, available()) : available();
+    if (readSize == null) return null;
+    Uint8List data = readBuffer.data.sublist(0, readSize);
+    readBuffer.flush(readSize);
+    return data;
+  }
+
+  @override
+  int write(List<int> buffer, [int offset, int count]) {
+    socket.sendRaw(Uint8List.fromList((offset == null && count == null)
+        ? buffer
+        : buffer.sublist(offset, offset + count)));
+    return count ?? buffer.length;
+  }
+
+  @override
+  Future<RawSocket> close() {
+    socket.close();
+    return Future.value(this);
+  }
+
+  @override
+  void shutdown(SocketDirection direction) {}
+
+  @override
+  bool get readEventsEnabled => _readEventsEnabled;
+
+  @override
+  set readEventsEnabled(bool value) {
+    if (value != _readEventsEnabled) {
+      _readEventsEnabled = value;
+      if (!controller.isPaused) _resume();
+    }
+  }
+
+  @override
+  bool get writeEventsEnabled => _writeEventsEnabled;
+
+  @override
+  set writeEventsEnabled(bool value) {
+    if (value != _writeEventsEnabled) {
+      _writeEventsEnabled = value;
+      if (!controller.isPaused) _resume();
+    }
+  }
+
+  @override
+  bool setOption(SocketOption option, bool enabled) => false;
+
+  @override
+  Uint8List getRawOption(RawSocketOption option) => null;
+
+  @override
+  void setRawOption(RawSocketOption option) {}
+
+  void _onPauseStateChange() {
+    if (controller.isPaused) {
+      _pause();
+    } else {
+      _resume();
+    }
+  }
+
+  void _onSubscriptionStateChange() {
+    if (controller.hasListener) {
+      _resume();
+    } else {
+      socket.close();
+    }
+  }
+
+  void _pause() => _paused = true;
+  void _resume() => _paused = false;
+}
+*/
 
 InternetAddress tryParseInternetAddress(String x) {
   try {

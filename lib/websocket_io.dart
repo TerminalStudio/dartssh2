@@ -140,8 +140,18 @@ class SSHTunneledWebSocketImpl extends WebSocketImpl {
   @override
   void connect(Uri uri, VoidCallback onConnected, StringCallback onError,
       {int timeoutSeconds = 15, bool ignoreBadCert = false}) async {
+    uri = '$uri'.startsWith('wss')
+        ? Uri.parse('https' + '$uri'.substring(3))
+        : Uri.parse('http' + '$uri'.substring(2));
+
+    if (!tunneledSocket.connected && !tunneledSocket.connecting) {
+      tunneledSocket = await connectUri(uri, tunneledSocket,
+          secureUpgrade: (SocketInterface x) async =>
+              SocketImpl(await io.SecureSocket.secure(SocketAdaptor(x))));
+    }
+
     HttpResponse response = await httpRequest(
-      Uri.parse('http' + '$uri'.substring(2)),
+      uri,
       'GET',
       tunneledSocket,
       requestHeaders: <String, String>{

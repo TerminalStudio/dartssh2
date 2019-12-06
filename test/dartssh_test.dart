@@ -202,7 +202,7 @@ void main() {
 
 Future<bool> httpTest(HttpClient httpClient, {String proto = 'https'}) async {
   var response = await httpClient.request('$proto://www.greenappers.com/');
-  return response != null && response.text.indexOf('support@greenappers.com') != -1;
+  return response != null && response.text.contains('support@greenappers.com');
 }
 
 Future<bool> websocketEchoTest(WebSocketImpl websocket,

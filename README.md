@@ -10,7 +10,7 @@ Cipher: AES-CTR, AES-CBC.
 MAC: MD5, SHA.  
 Compression: not yet supported.  
 Forwarding: TCP/IP, Agent.  
-Tunneling drop-ins for: Socket, SecureSocket, WebSocket, package:http.
+Tunneling drop-ins for: Socket, WebSocket, package:http.
 
 ## Example
 

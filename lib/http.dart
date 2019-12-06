@@ -14,6 +14,7 @@ import 'package:dartssh/socket.dart';
 import 'package:dartssh/transport.dart';
 
 typedef HttpClientFactory = http.Client Function();
+typedef SocketFilter = Future<SocketInterface> Function(SocketInterface);
 
 /// Asynchronous HTTP request
 class HttpRequest {
@@ -170,21 +171,30 @@ Map<String, String> addBasicAuthenticationHeader(
   return headers;
 }
 
+Future<SocketInterface> connectUri(Uri uri, SocketInterface socket,
+    {SocketFilter secureUpgrade}) async {
+  /// We might be asking the remote to open an SSH tunnel to [uri].
+  Completer<String> connectCompleter = Completer<String>();
+  socket.connect(uri, () => connectCompleter.complete(null),
+      (error) => connectCompleter.complete('$error'));
+  String connectError = await connectCompleter.future;
+  if (connectError != null) throw FormatException(connectError);
+
+  if (secureUpgrade != null &&
+      uri.hasScheme &&
+      (uri.scheme == 'https' || uri.scheme == 'wss')) {
+    socket = await secureUpgrade(socket);
+  }
+
+  return socket;
+}
+
 /// Makes HTTP request over [SocketInterface], e.g. [SSHTunneledSocketImpl].
 Future<HttpResponse> httpRequest(Uri uri, String method, SocketInterface socket,
     {Map<String, String> requestHeaders,
     Uint8List body,
     StringCallback debugPrint,
     bool persistentConnection = true}) async {
-  if (!socket.connected && !socket.connecting) {
-    /// We might be asking the remote to open an SSH tunnel to [uri].
-    Completer<String> connectCompleter = Completer<String>();
-    socket.connect(uri, () => connectCompleter.complete(null),
-        (error) => connectCompleter.complete('$error'));
-    String connectError = await connectCompleter.future;
-    if (connectError != null) throw FormatException(connectError);
-  }
-
   /// Initialize connection state.
   String headerText;
   List<String> statusLine;
@@ -194,6 +204,9 @@ Future<HttpResponse> httpRequest(Uri uri, String method, SocketInterface socket,
   Completer<String> readHeadersCompleter = Completer<String>();
   StreamController<List<int>> contentController = StreamController<List<int>>();
 
+  if (!socket.connected && !socket.connecting) {
+    socket = await connectUri(uri, socket);
+  }
   socket.handleDone((String reason) {
     if (debugPrint != null) {
       debugPrint('SSHTunneledBaseClient.socket.handleDone');

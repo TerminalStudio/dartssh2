@@ -8,6 +8,8 @@ import 'package:dartssh/socket_html.dart'
     if (dart.library.io) 'package:dartssh/socket_io.dart';
 import 'package:dartssh/transport.dart';
 
+enum ConnectionDirection { receive, send, both }
+
 /// Interface for connections, e.g. Socket or WebSocket.
 abstract class ConnectionInterface {
   /// Invokes [messageHandler] upon reading input from the connection.
@@ -40,6 +42,8 @@ abstract class SocketInterface extends ConnectionInterface {
 
   /// Sends [raw] over the socket.
   void sendRaw(Uint8List raw);
+
+  void shutdown(ConnectionDirection direction) {}
 }
 
 /// Mixin for testing with shim [ConnectionInterface]s.
