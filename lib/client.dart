@@ -585,6 +585,13 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
         '',
         false));
   }
+
+  void exec(String command, {bool wantReply = true}) {
+    assert(socket != null && sessionChannel != null);
+    if (socket == null || sessionChannel == null) return;
+    writeCipher(MSG_CHANNEL_REQUEST.exec(
+        sessionChannel.remoteId, 'shell', '', wantReply));
+  }
 }
 
 /// Implement same [SocketInterface] as actual [Socket] but over [SSHClient] tunnel.
