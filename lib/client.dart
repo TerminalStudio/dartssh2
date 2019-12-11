@@ -590,7 +590,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     assert(socket != null && sessionChannel != null);
     if (socket == null || sessionChannel == null) return;
     writeCipher(MSG_CHANNEL_REQUEST.exec(
-        sessionChannel.remoteId, 'shell', '', wantReply));
+        sessionChannel.remoteId, 'exec', command, wantReply));
   }
 }
 
