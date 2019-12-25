@@ -50,7 +50,7 @@ class Channel {
   QueueBuffer buf = QueueBuffer(Uint8List(0));
   ChannelCallback cb;
   StringCallback error;
-  VoidCallback connected;
+  VoidCallback connected, closed;
   Channel(
       {this.localId = 0,
       this.remoteId = 0,
@@ -58,7 +58,8 @@ class Channel {
       this.windowS = 0,
       this.cb,
       this.error,
-      this.connected});
+      this.connected,
+      this.closed});
 }
 
 /// It is RECOMMENDED that the keys be changed after each gigabyte of transmitted
@@ -580,9 +581,9 @@ abstract class SSHTransport with SSHDiffieHellman {
       throw FormatException('$hostport: EOF invalid channel');
     }
 
-    bool alreadySentClose = chan.sentClose;
-    if (!alreadySentClose) {
+    if (!chan.sentClose) {
       chan.sentClose = true;
+      if (chan.closed != null) chan.closed();
       writeCipher(MSG_CHANNEL_CLOSE(chan.remoteId));
       handleChannelClose(chan, 'MSG_CHANNEL_CLOSE');
     }

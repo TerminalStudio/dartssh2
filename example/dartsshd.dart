@@ -91,7 +91,7 @@ Future<void> sshd(List<String> arguments) async {
           },
           disconnected: () {
             if (debug) {
-              print('disconnected');
+              print('dartsshd: $hostport: disconnected');
               listener.close();
             }
           },
@@ -147,6 +147,7 @@ Future<String> forwardTcpChannel(Channel channel, String sourceHost,
     int sourcePort, String targetHost, int targetPort) async {
   SocketImpl tunneledSocket = SocketImpl();
   Completer<String> connectCompleter = Completer<String>();
+  print('dartsshd: Forwarding connection to $targetHost:$targetPort');
   tunneledSocket.connect(
       Uri.parse('tcp://$targetHost:$targetPort'),
       () => connectCompleter.complete(null),
@@ -164,6 +165,10 @@ Future<String> forwardTcpChannel(Channel channel, String sourceHost,
 
   channel.cb = (_, Uint8List m) => tunneledSocket.sendRaw(m);
   channel.error = closeTunneledSocket;
+  channel.closed = () {
+    print("dartsshd: Closing forwarded connection to $targetHost:$targetPort");
+    closeTunneledSocket('remote closed');
+  };
   return null;
 }
 

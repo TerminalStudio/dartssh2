@@ -134,8 +134,18 @@ class WebSocketImpl extends SocketInterface {
 /// as [SSHTunneledWebSocketImpl]), is bridged via [SSHTunneledSocket] adaptor
 /// to initialize [io.WebSocket.fromUpgradedSocket()].
 class SSHTunneledWebSocketImpl extends WebSocketImpl {
-  SSHTunneledSocketImpl tunneledSocket;
-  SSHTunneledWebSocketImpl(this.tunneledSocket);
+  SocketInterface tunneledSocket;
+  final String sourceHost, tunnelToHost;
+  final int sourcePort, tunnelToPort;
+  final StringCallback debugPrint;
+
+  SSHTunneledWebSocketImpl(SSHTunneledSocketImpl inputSocket)
+      : tunneledSocket = inputSocket,
+        sourceHost = inputSocket.sourceHost,
+        tunnelToHost = inputSocket.tunnelToHost,
+        sourcePort = inputSocket.sourcePort,
+        tunnelToPort = inputSocket.tunnelToPort,
+        debugPrint = inputSocket.client.debugPrint;
 
   @override
   void connect(Uri uri, VoidCallback onConnected, StringCallback onError,
@@ -147,7 +157,21 @@ class SSHTunneledWebSocketImpl extends WebSocketImpl {
     if (!tunneledSocket.connected && !tunneledSocket.connecting) {
       tunneledSocket = await connectUri(uri, tunneledSocket,
           secureUpgrade: (SocketInterface x) async =>
-              SocketImpl(await io.SecureSocket.secure(SocketAdaptor(x))));
+              SocketImpl(await io.SecureSocket.secure(
+                SocketAdaptor(x),
+
+                /// https://github.com/dart-lang/sdk/issues/39690
+                /*io.Socket.fromRaw(RawSocketAdaptor(
+                  x,
+                  address: tryParseInternetAddress('127.0.0.1'),
+                  remoteAddress: (await io.InternetAddress.lookup(uri.host)).first,
+                  port: 1234,
+                  remotePort: uri.port,
+                  debugPrint: debugPrint,
+                )),*/
+                onBadCertificate: (io.X509Certificate certificate) =>
+                    ignoreBadCert,
+              )));
     }
 
     HttpResponse response = await httpRequest(
@@ -160,18 +184,28 @@ class SSHTunneledWebSocketImpl extends WebSocketImpl {
         'sec-websocket-version': '13',
         'sec-websocket-key': base64.encode(randBytes(Random.secure(), 8))
       },
-      debugPrint: tunneledSocket.client.debugPrint,
+      debugPrint: debugPrint,
     );
     if (response.status == 101) {
       socket = io.WebSocket.fromUpgradedSocket(
           SocketAdaptor(
             tunneledSocket,
-            address: tryParseInternetAddress(tunneledSocket.sourceHost),
-            remoteAddress: tryParseInternetAddress(tunneledSocket.tunnelToHost),
-            port: tunneledSocket.sourcePort,
-            remotePort: tunneledSocket.tunnelToPort,
-            debugPrint: tunneledSocket.client.debugPrint,
+            address: tryParseInternetAddress('127.0.0.1'),
+            remoteAddress: (await io.InternetAddress.lookup(uri.host)).first,
+            port: 1234,
+            remotePort: uri.port,
+            debugPrint: debugPrint,
           ),
+
+          /// https://github.com/dart-lang/sdk/issues/39690
+          /*io.Socket.socketFromRaw(RawSocketAdaptor(
+            tunneledSocket,
+            address: tryParseInternetAddress('127.0.0.1'),
+            remoteAddress: (await io.InternetAddress.lookup(uri.host)).first,
+            port: 1234,
+            remotePort: uri.port,
+            debugPrint: debugPrint,
+          )),*/
           serverSide: false);
       onConnected();
     } else {
