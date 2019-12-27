@@ -199,7 +199,7 @@ Future<HttpResponse> httpRequest(Uri uri, String method, SocketInterface socket,
   String headerText;
   List<String> statusLine;
   Map<String, String> headers;
-  int contentLength, contentRead = 0;
+  int contentLength = 0, contentRead = 0;
   QueueBuffer buffer = QueueBuffer(Uint8List(0));
   Completer<String> readHeadersCompleter = Completer<String>();
   StreamController<List<int>> contentController = StreamController<List<int>>();
@@ -251,7 +251,7 @@ Future<HttpResponse> httpRequest(Uri uri, String method, SocketInterface socket,
         readHeadersCompleter.complete(null);
 
         /// If there's no content then we're already done.
-        if ((contentLength ?? 0) == 0) {
+        if (contentLength == 0) {
           if (debugPrint != null) {
             debugPrint(
                 'SSHTunneledBaseClient.socket.listen: Content-Length: 0, remaining=${buffer.data.length}');

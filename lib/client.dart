@@ -563,9 +563,15 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   /// Sends [MSG_USERAUTH_REQUEST] optionally using [identity] or keyboard-interactive.
   void sendAuthenticationRequest() {
     if (identity == null) {
+      if (debugPrint != null) {
+        debugPrint('$hostport: Keyboard interactive');
+      }
       writeCipher(MSG_USERAUTH_REQUEST(login, 'ssh-connection',
           'keyboard-interactive', '', Uint8List(0), Uint8List(0)));
     } else if (identity.ed25519 != null) {
+      if (debugPrint != null) {
+        debugPrint('$hostport: Sending Ed25519 authorization request');
+      }
       Uint8List pubkey = identity.getEd25519PublicKey().toRaw();
       Uint8List challenge = deriveChallenge(sessionId, login, 'ssh-connection',
           'publickey', 'ssh-ed25519', pubkey);
@@ -573,6 +579,9 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       writeCipher(MSG_USERAUTH_REQUEST(login, 'ssh-connection', 'publickey',
           'ssh-ed25519', pubkey, sig.toRaw()));
     } else if (identity.ecdsaPrivate != null) {
+      if (debugPrint != null) {
+        debugPrint('$hostport: Sending ECDSA authorization request');
+      }
       String keyType = Key.name(identity.ecdsaKeyType);
       Uint8List pubkey = identity.getECDSAPublicKey().toRaw();
       Uint8List challenge = deriveChallenge(
@@ -582,6 +591,9 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       writeCipher(MSG_USERAUTH_REQUEST(
           login, 'ssh-connection', 'publickey', keyType, pubkey, sig.toRaw()));
     } else if (identity.rsaPrivate != null) {
+      if (debugPrint != null) {
+        debugPrint('$hostport: Sending RSA authorization request');
+      }
       Uint8List pubkey = identity.getRSAPublicKey().toRaw();
       Uint8List challenge = deriveChallenge(
           sessionId, login, 'ssh-connection', 'publickey', 'ssh-rsa', pubkey);

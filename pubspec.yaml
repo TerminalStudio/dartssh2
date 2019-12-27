@@ -1,5 +1,5 @@
 name: dartssh
-version: 1.0.3+3
+version: 1.0.4+4
 description: Dart SSH package providing First-class tunnelling primitives.
 author: Green Appers, Inc. <greenappers@gmail.com>
 homepage: https://github.com/GreenAppers/dartssh

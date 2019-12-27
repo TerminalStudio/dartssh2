@@ -151,6 +151,44 @@ void main() {
 
   test('tunneled http test', () async {
     expect(httpTest(HttpClientImpl()), completion(equals(true)));
+
+    KEX.supported =
+        Key.supported = Cipher.supported = MAC.supported = (_) => true;
+    Future<void> sshdMain = sshd.sshd(<String>[
+      '-p 42022',
+      '-h',
+      'test/ssh_host_',
+      '--debug',
+      '--trace',
+      '--forwardTcp',
+    ]);
+
+    String sshResponse = '';
+    StreamController<List<int>> sshInput = StreamController<List<int>>();
+    Future<void> sshMain = ssh.ssh(<String>[
+      '-l',
+      'root',
+      '127.0.0.1:42022',
+      '-i',
+      'test/id_ed25519',
+      '--debug',
+      '--trace',
+    ], sshInput.stream, (_, String v) => sshResponse += v,
+        () => sshInput.close());
+
+    while (ssh.client.sessionChannel == null) {
+      await Future.delayed(const Duration(seconds: 1));
+    }
+
+    bool tunneledHttpTest = await httpTest(
+        HttpClientImpl(clientFactory: () => SSHTunneledBaseClient(ssh.client)),
+        proto: 'http');
+    expect(tunneledHttpTest, true);
+
+    ssh.client.sendChannelData(utf8.encode('exit\n'));
+    await sshMain;
+    await sshdMain;
+    expect(sshResponse, '\$ exit\n');
   });
 
   test('tunneled websocket test', () async {

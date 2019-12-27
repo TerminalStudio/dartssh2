@@ -59,6 +59,10 @@ Future<int> ssh(List<String> arguments, Stream<List<int>> input,
 
   final ArgResults args = argParser.parse(arguments);
 
+  identity = null;
+  client = null;
+  forwardChannel = null;
+
   if (args.rest.length != 1) {
     print('usage: ssh -l login url [args]');
     print(argParser.usage);

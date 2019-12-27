@@ -41,9 +41,10 @@ Future<void> sshd(List<String> arguments) async {
 
   final ArgResults args = argParser.parse(arguments);
   final int port = int.parse(args['port'] ?? '22');
-  final String config = args['config'];
   final bool debug = args['debug'], forwardTcp = args['forwardTcp'];
   final Identity hostkey = loadHostKey(path: args['hostkey']);
+
+  server = null;
 
   applyCipherSuiteOverrides(
       args['kex'], args['key'], args['cipher'], args['mac']);
@@ -156,6 +157,8 @@ Future<String> forwardTcpChannel(Channel channel, String sourceHost,
   if (connectError != null) return connectError;
 
   StringCallback closeTunneledSocket = (String error) {
+    print(
+        "dartsshd: Closing forwarded connection to $targetHost:$targetPort: $error");
     tunneledSocket.close();
     server.closeChannel(channel);
   };
@@ -165,10 +168,7 @@ Future<String> forwardTcpChannel(Channel channel, String sourceHost,
 
   channel.cb = (_, Uint8List m) => tunneledSocket.sendRaw(m);
   channel.error = closeTunneledSocket;
-  channel.closed = () {
-    print("dartsshd: Closing forwarded connection to $targetHost:$targetPort");
-    closeTunneledSocket('remote closed');
-  };
+  channel.closed = () => closeTunneledSocket('remote closed');
   return null;
 }
 

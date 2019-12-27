@@ -711,9 +711,17 @@ abstract class SSHTransport with SSHDiffieHellman {
 
   /// Send EOF and close for [channel].
   void closeChannel(Channel channel) {
-    channel.sentEof = channel.sentClose = true;
-    writeCipher(MSG_CHANNEL_EOF(channel.remoteId));
-    writeCipher(MSG_CHANNEL_CLOSE(channel.remoteId));
+    if (!channel.sentEof) {
+      channel.sentEof = true;
+      writeCipher(MSG_CHANNEL_EOF(channel.remoteId));
+    }
+    if (!channel.sentClose) {
+      channel.sentClose = true;
+      writeCipher(MSG_CHANNEL_CLOSE(channel.remoteId));
+    }
+    channel.cb = null;
+    channel.error = null;
+    channel.closed = null;
   }
 
   /// Request remote opens a new TCP channel to [destHost]:[destPort].

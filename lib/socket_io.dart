@@ -4,10 +4,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:dartssh/serializable.dart';
 import 'package:dartssh/socket.dart';
 import 'package:dartssh/transport.dart';
 
@@ -113,7 +111,7 @@ class SocketAdaptor extends Stream<Uint8List> implements Socket {
   SocketAdaptorStreamConsumer consumer;
   IOSink sink;
   StringCallback debugPrint;
-  var _detachReady;
+  // var _detachReady;
 
   @override
   InternetAddress address;

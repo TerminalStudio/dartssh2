@@ -14,3 +14,7 @@
 
 - Fix tunneled WebSocket issue.
 
+## 1.0.4+4
+
+- Increase test coverage and documentation.
+
