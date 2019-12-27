@@ -591,7 +591,10 @@ abstract class SSHTransport with SSHDiffieHellman {
     }
     Channel chan = channels[msg.recipientChannel];
     if (chan == null) {
-      throw FormatException('$hostport: EOF invalid channel');
+      if (print != null) {
+        print('$hostport: Close invalid channel');
+        return;
+      }
     }
 
     if (!chan.sentClose) {

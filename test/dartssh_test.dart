@@ -16,6 +16,7 @@ import 'package:dartssh/identity.dart';
 import 'package:dartssh/pem.dart';
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/serializable.dart';
+import 'package:dartssh/socket.dart';
 import 'package:dartssh/ssh.dart';
 import 'package:dartssh/websocket_io.dart';
 
@@ -54,6 +55,27 @@ void main() {
     Identity rsa1 = parsePem(File('test/id_rsa').readAsStringSync());
     Identity rsa2 = parsePem(File('test/id_rsa.openssh').readAsStringSync());
     expect(rsa1.rsaPublic.exponent, rsa2.rsaPublic.exponent);
+  });
+
+  test('TestSocket', () {
+    TestSocket socket = TestSocket();
+    SSHClient ssh = SSHClient(
+        socketInput: socket,
+        print: print,
+        debugPrint: print,
+        tracePrint: print);
+    socket.connect(Uri.parse('tcp://foobar:22'), ssh.onConnected, (_) {});
+    expect(socket.sent.removeFirst(), 'SSH-2.0-dartssh_1.0\r\n');
+    ssh.disconnect('done');
+    expect(socket.closed, true);
+  });
+
+  test('TestHttpClient', () async {
+    TestHttpClient httpClient = TestHttpClient();
+    Future<bool> httpTestResult = httpTest(httpClient);
+    httpClient.requests.removeFirst().completer.complete(
+        HttpResponse(200, text: '<html>support@greenappers.com</html>'));
+    expect(httpTestResult, completion(equals(true)));
   });
 
   test('cipher suite', () async {
@@ -182,16 +204,18 @@ void main() {
     while (ssh.client.sessionChannel == null) {
       await Future.delayed(const Duration(seconds: 1));
     }
+    ssh.client.setTerminalWindowSize(80, 25);
+    ssh.client.exec('ls');
 
     bool tunneledHttpTest = await httpTest(
         HttpClientImpl(clientFactory: () => SSHTunneledBaseClient(ssh.client)),
         proto: 'http');
     expect(tunneledHttpTest, true);
 
-    ssh.client.sendChannelData(utf8.encode('exit\n'));
+    ssh.client.sendChannelData(utf8.encode('debugTest\nexit\n'));
     await sshMain;
     await sshdMain;
-    expect(sshResponse, 'Password:\r\n\$ exit\n');
+    expect(sshResponse, 'Password:\r\n\$ debugTest\nexit\n');
   });
 
   test('tunneled websocket test', () async {

@@ -115,6 +115,10 @@ Future<void> sshd(List<String> arguments) async {
                 () async => server.closeChannel(server.sessionChannel));
           } else if (line == 'testAgent') {
             pending = chainWork(pending, () => testAgentForwarding());
+          } else if (line == 'testDebug') {
+            server.writeCipher(MSG_DEBUG());
+            server.writeCipher(MSG_IGNORE());
+            server.sendChannelData(utf8.encode('success\n'));
           }
         });
       }

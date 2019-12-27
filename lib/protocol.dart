@@ -133,7 +133,7 @@ class MSG_DISCONNECT extends SSHMessage {
 class MSG_IGNORE extends SSHMessage {
   static const int ID = 2;
   String data;
-  MSG_IGNORE() : super(ID);
+  MSG_IGNORE([this.data = '']) : super(ID);
 
   @override
   int get serializedHeaderSize => 4;
@@ -145,7 +145,7 @@ class MSG_IGNORE extends SSHMessage {
   void deserialize(SerializableInput input) => data = deserializeString(input);
 
   @override
-  void serialize(SerializableOutput output) {}
+  void serialize(SerializableOutput output) => serializeString(output, data);
 }
 
 /// This message is used to transmit information that may help debugging.
@@ -153,7 +153,7 @@ class MSG_DEBUG extends SSHMessage {
   static const int ID = 4;
   int alwaysDisplay = 0;
   String message, language;
-  MSG_DEBUG() : super(ID);
+  MSG_DEBUG([this.message = '', this.language = '']) : super(ID);
 
   @override
   int get serializedHeaderSize => 1 + 2 * 4;
@@ -170,7 +170,11 @@ class MSG_DEBUG extends SSHMessage {
   }
 
   @override
-  void serialize(SerializableOutput output) {}
+  void serialize(SerializableOutput output) {
+    output.addUint8(alwaysDisplay);
+    serializeString(output, message);
+    serializeString(output, language);
+  }
 }
 
 /// After the key exchange, the client requests a service.

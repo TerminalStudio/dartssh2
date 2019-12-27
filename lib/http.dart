@@ -98,7 +98,7 @@ class HttpClientImpl extends HttpClient {
     return ret;
   }
 
-  void requestWithIncrementalHandler(String url,
+  /*void requestWithIncrementalHandler(String url,
       {String method, String data}) async {
     var request = http.Request(method ?? 'GET', Uri.parse(url));
     var response = await request.send();
@@ -109,7 +109,7 @@ class HttpClientImpl extends HttpClient {
     await for (String line in lineStream) {
       print(line);
     }
-  }
+  }*/
 }
 
 /// [http.BaseClient] with [userAgent] header.
