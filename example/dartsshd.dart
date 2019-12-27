@@ -31,6 +31,7 @@ Future<void> sshd(List<String> arguments) async {
     ..addOption('port', abbr: 'p')
     ..addOption('config', abbr: 'f')
     ..addOption('hostkey', abbr: 'h')
+    ..addOption('password')
     ..addOption('kex')
     ..addOption('key')
     ..addOption('cipher')
@@ -77,9 +78,16 @@ Future<void> sshd(List<String> arguments) async {
             input.add(v);
             server.sendChannelData(utf8.encode(v));
           },
-
-          /// Graciously accept all authorization requests.
-          userAuthRequest: (MSG_USERAUTH_REQUEST msg) => true,
+          userAuthRequest: (MSG_USERAUTH_REQUEST msg) {
+            String requirePassword = args['password'];
+            if ((requirePassword ?? '').isEmpty) {
+              /// Graciously accept all authorization requests.
+              return true;
+            } else {
+              return (msg.methodName ?? '') == 'password' &&
+                  utf8.decode(msg.secret ?? '') == requirePassword;
+            }
+          },
           sessionChannelRequest: (SSHServer server, String req) {
             if (req == 'shell') {
               server.sendChannelData(utf8.encode('\$ '));

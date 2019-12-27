@@ -589,16 +589,19 @@ class MSG_USERAUTH_FAILURE extends SSHMessage {
   static const int ID = 51;
   String authLeft;
   int partialSuccess = 0;
-  MSG_USERAUTH_FAILURE() : super(ID);
+  MSG_USERAUTH_FAILURE([this.authLeft = '']) : super(ID);
 
   @override
-  int get serializedHeaderSize => 4;
+  int get serializedHeaderSize => 5;
 
   @override
   int get serializedSize => serializedHeaderSize + authLeft.length;
 
   @override
-  void serialize(SerializableOutput output) {}
+  void serialize(SerializableOutput output) {
+    serializeString(output, authLeft);
+    output.addUint8(partialSuccess);
+  }
 
   @override
   void deserialize(SerializableInput input) {

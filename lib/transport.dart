@@ -207,10 +207,20 @@ abstract class SSHTransport with SSHDiffieHellman {
 
   /// If anything goes wrong, disconnect with [reason].
   void disconnect(String reason) {
-    socket.close();
+    if (socket != null) {
+      socket.close();
+      socket = null;
+    }
+
+    channels.forEach((int channelId, Channel channel) {
+      if (!channel.sentClose && channel.closed != null) channel.closed();
+    });
+    channels.clear();
+
     if (debugPrint != null) {
       debugPrint('SSHTransport.disconnected: $reason');
     }
+
     if (disconnected != null) disconnected();
   }
 
@@ -562,7 +572,10 @@ abstract class SSHTransport with SSHDiffieHellman {
     }
     Channel chan = channels[msg.recipientChannel];
     if (chan == null) {
-      throw FormatException('$hostport: close invalid channel');
+      if (print != null) {
+        print('$hostport: close invalid channel');
+        return;
+      }
     }
     if (!chan.sentEof) {
       chan.sentEof = true;
@@ -713,11 +726,15 @@ abstract class SSHTransport with SSHDiffieHellman {
   void closeChannel(Channel channel) {
     if (!channel.sentEof) {
       channel.sentEof = true;
-      writeCipher(MSG_CHANNEL_EOF(channel.remoteId));
+      if (socket != null) {
+        writeCipher(MSG_CHANNEL_EOF(channel.remoteId));
+      }
     }
     if (!channel.sentClose) {
       channel.sentClose = true;
-      writeCipher(MSG_CHANNEL_CLOSE(channel.remoteId));
+      if (socket != null) {
+        writeCipher(MSG_CHANNEL_CLOSE(channel.remoteId));
+      }
     }
     channel.cb = null;
     channel.error = null;

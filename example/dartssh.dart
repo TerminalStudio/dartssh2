@@ -48,14 +48,15 @@ Future<int> ssh(List<String> arguments, Stream<List<int>> input,
   final argParser = ArgParser()
     ..addOption('login', abbr: 'l')
     ..addOption('identity', abbr: 'i')
-    ..addFlag('agentForwarding', abbr: 'A')
+    ..addOption('password')
     ..addOption('tunnel')
     ..addOption('kex')
     ..addOption('key')
     ..addOption('cipher')
     ..addOption('mac')
-    ..addOption('debug')
-    ..addOption('trace');
+    ..addFlag('debug')
+    ..addFlag('trace')
+    ..addFlag('agentForwarding', abbr: 'A');
 
   final ArgResults args = argParser.parse(arguments);
 
@@ -96,8 +97,11 @@ Future<int> ssh(List<String> arguments, Stream<List<int>> input,
         termHeight: termHeight,
         termvar: Platform.environment['TERM'] ?? 'xterm',
         agentForwarding: args['agentForwarding'],
-        debugPrint: ((args['debug'] != null) ? print : null),
-        tracePrint: ((args['trace'] != null) ? print : null),
+        debugPrint: args['debug'] ? print : null,
+        tracePrint: args['trace'] ? print : null,
+        getPassword: ((args['password'] != null)
+            ? () => utf8.encode(args['password'])
+            : null),
         response: response,
         loadIdentity: () {
           if (identity == null && identityFile != null) {

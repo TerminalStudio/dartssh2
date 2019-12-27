@@ -151,6 +151,7 @@ void main() {
 
   test('tunneled http test', () async {
     expect(httpTest(HttpClientImpl()), completion(equals(true)));
+    String password = 'foobar123';
 
     KEX.supported =
         Key.supported = Cipher.supported = MAC.supported = (_) => true;
@@ -161,6 +162,8 @@ void main() {
       '--debug',
       '--trace',
       '--forwardTcp',
+      '--password',
+      password
     ]);
 
     String sshResponse = '';
@@ -169,8 +172,8 @@ void main() {
       '-l',
       'root',
       '127.0.0.1:42022',
-      '-i',
-      'test/id_ed25519',
+      '--password',
+      password,
       '--debug',
       '--trace',
     ], sshInput.stream, (_, String v) => sshResponse += v,
@@ -188,7 +191,7 @@ void main() {
     ssh.client.sendChannelData(utf8.encode('exit\n'));
     await sshMain;
     await sshdMain;
-    expect(sshResponse, '\$ exit\n');
+    expect(sshResponse, 'Password:\r\n\$ exit\n');
   });
 
   test('tunneled websocket test', () async {
@@ -215,8 +218,6 @@ void main() {
       '-l',
       'root',
       '127.0.0.1:42022',
-      '-i',
-      'test/id_ed25519',
       '--debug',
       '--trace',
     ], sshInput.stream, (_, String v) => sshResponse += v,
