@@ -29,7 +29,7 @@ typedef IdentityFunction = Identity Function();
 typedef FingerprintCallback = bool Function(int, Uint8List);
 typedef ChannelCallback = void Function(Channel, Uint8List);
 typedef ChannelInputCallback = void Function(Channel, SerializableInput);
-typedef ResponseCallback = void Function(SSHTransport, String);
+typedef ResponseCallback = void Function(SSHTransport, Uint8List);
 typedef RemoteForwardCallback = Future<String> Function(
     Channel, String, int, String, int);
 
