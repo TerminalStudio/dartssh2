@@ -92,6 +92,10 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     }
   }
 
+  void responseText(SSHTransport trans, String text) {
+    response(trans, Uint8List.fromList(text.codeUnits));
+  }
+
   /// https://tools.ietf.org/html/rfc4253#section-6
   @override
   void handlePacket(Uint8List packet) {
@@ -331,7 +335,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     if (tracePrint != null) tracePrint('$hostport: MSG_SERVICE_ACCEPT');
     if (login == null || login.isEmpty) {
       loginPrompts = 1;
-      response(this, 'login: ');
+      responseText(this, 'login: ');
     }
     if (identity == null && loadIdentity != null) {
       identity = loadIdentity();
@@ -348,7 +352,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     if (!loadedPw) clearPassword();
     userauthFail++;
     if (userauthFail == 1 && !wrotePw) {
-      response(this, 'Password:');
+      responseText(this, 'Password:');
       passwordPrompts = 1;
       getThenSendPassword();
     } else {
@@ -391,14 +395,14 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       if (tracePrint != null) {
         tracePrint('$hostport: instruction: ${msg.instruction}');
       }
-      response(this, msg.instruction);
+      responseText(this, msg.instruction);
     }
 
     for (MapEntry<String, int> prompt in msg.prompts) {
       if (tracePrint != null) {
         tracePrint('$hostport: prompt: ${prompt.key}');
       }
-      response(this, prompt.key);
+      responseText(this, prompt.key);
     }
 
     if (msg.prompts.isNotEmpty) {
@@ -499,7 +503,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   @override
   void handleChannelData(Channel chan, Uint8List data) {
     if (chan == sessionChannel) {
-      response(this, utf8.decode(data));
+      response(this, data);
     } else if (chan.cb != null) {
       chan.cb(chan, data);
     } else if (chan.agentChannel) {
@@ -545,7 +549,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
 
   /// Sends [MSG_USERAUTH_REQUEST] with password [pw].
   void sendPassword() {
-    response(this, '\r\n');
+    responseText(this, '\r\n');
     wrotePw = true;
     if (userauthFail != 0) {
       writeCipher(MSG_USERAUTH_REQUEST(
@@ -608,11 +612,11 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   @override
   void sendChannelData(Uint8List b) {
     if (loginPrompts != 0) {
-      response(this, utf8.decode(b));
+      response(this, b);
       bool cr = b.isNotEmpty && b.last == '\n'.codeUnits[0];
       login += String.fromCharCodes(b, 0, b.length - (cr ? 1 : 0));
       if (cr) {
-        response(this, '\n');
+        responseText(this, '\n');
         loginPrompts = 0;
         sendAuthenticationRequest();
       }
