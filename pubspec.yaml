@@ -11,7 +11,7 @@ dependencies:
   asn1lib: ^0.5.11
   convert: ^3.0.0
   meta: ^1.1.6
-  http: ^0.12.0+2
+  http: ^0.13.3
   pedantic: ^1.8.0
   pointycastle: ^1.0.1
   tweetnacl:
