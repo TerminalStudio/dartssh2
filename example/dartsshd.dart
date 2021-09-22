@@ -74,9 +74,9 @@ Future<void> sshd(List<String> arguments) async {
           print: print,
           debugPrint: debug ? print : null,
           tracePrint: args['trace'] ? print : null,
-          response: (SSHTransport server, String v) {
-            input.add(v);
-            server.sendChannelData(utf8.encode(v));
+          response: (SSHTransport server, Uint8List v) {
+            input.add(utf8.decode(v));
+            server.sendChannelData(v);
           },
           userAuthRequest: (MSG_USERAUTH_REQUEST msg) {
             String requirePassword = args['password'];

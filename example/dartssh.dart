@@ -30,7 +30,7 @@ void main(List<String> arguments) async {
     }
   });
   exitCode = await ssh(
-      arguments, stdin, (_, String v) => stdout.write(v), () => exit(0),
+      arguments, stdin, (_, Uint8List v) => stdout.write(utf8.decode(v)), () => exit(0),
       termWidth: stdout.terminalColumns, termHeight: stdout.terminalLines);
 }
 
@@ -120,7 +120,7 @@ Future<int> ssh(List<String> arguments, Stream<List<int>> input,
                     1234,
                     tunnelTarget[0],
                     int.parse(tunnelTarget[1]),
-                    (_, Uint8List m) => response(client, utf8.decode(m)));
+                    (_, Uint8List m) => response(client, m));
               });
 
     await for (String x in input.transform(utf8.decoder)) {

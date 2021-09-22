@@ -93,7 +93,8 @@ void main() {
           '=== suite begin ${KEX.name(kexIndex)}, ${Key.name(keyIndex)}, ${Cipher.name(cipherIndex)}, ${MAC.name(macIndex)} ===');
 
       StreamController<List<int>> sshInput = StreamController<List<int>>();
-      String sshResponse = '', identityFile;
+      List<int> sshResponse = [];
+      String identityFile;
 
       switch (keyIndex) {
         case Key.ED25519:
@@ -135,7 +136,7 @@ void main() {
         identityFile,
         '--debug',
         '--trace',
-      ], sshInput.stream, (_, String v) => sshResponse += v,
+      ], sshInput.stream, (_, Uint8List v) => sshResponse += v,
           () => sshInput.close());
 
       while (ssh.client.sessionChannel == null) {
@@ -144,7 +145,7 @@ void main() {
       ssh.client.sendChannelData(utf8.encode('testAgent\nexit\n'));
       await sshMain;
       await sshdMain;
-      expect(sshResponse, '\$ testAgent\nexit\nsuccess\n');
+      expect(utf8.decode(sshResponse), '\$ testAgent\nexit\nsuccess\n');
 
       print(
           '=== suite end ${KEX.name(kexIndex)}, ${Key.name(keyIndex)}, ${Cipher.name(cipherIndex)}, ${MAC.name(macIndex)} ===');
@@ -188,7 +189,7 @@ void main() {
       password
     ]);
 
-    String sshResponse = '';
+    List<int> sshResponse = [];
     StreamController<List<int>> sshInput = StreamController<List<int>>();
     Future<void> sshMain = ssh.ssh(<String>[
       '-l',
@@ -198,7 +199,7 @@ void main() {
       password,
       '--debug',
       '--trace',
-    ], sshInput.stream, (_, String v) => sshResponse += v,
+    ], sshInput.stream, (_, Uint8List v) => sshResponse += v,
         () => sshInput.close());
 
     while (ssh.client.sessionChannel == null) {
@@ -215,7 +216,7 @@ void main() {
     ssh.client.sendChannelData(utf8.encode('debugTest\nexit\n'));
     await sshMain;
     await sshdMain;
-    expect(sshResponse, 'Password:\r\n\$ debugTest\nexit\n');
+    expect(utf8.decode(sshResponse), 'Password:\r\n\$ debugTest\nexit\n');
   });
 
   test('tunneled websocket test', () async {
@@ -236,7 +237,7 @@ void main() {
       '--forwardTcp',
     ]);
 
-    String sshResponse = '';
+    List<int> sshResponse = [];
     StreamController<List<int>> sshInput = StreamController<List<int>>();
     Future<void> sshMain = ssh.ssh(<String>[
       '-l',
@@ -244,7 +245,7 @@ void main() {
       '127.0.0.1:42022',
       '--debug',
       '--trace',
-    ], sshInput.stream, (_, String v) => sshResponse += v,
+    ], sshInput.stream, (_, Uint8List v) => sshResponse += v,
         () => sshInput.close());
 
     while (ssh.client.sessionChannel == null) {
@@ -259,7 +260,7 @@ void main() {
     ssh.client.sendChannelData(utf8.encode('exit\n'));
     await sshMain;
     await sshdMain;
-    expect(sshResponse, '\$ exit\n');
+    expect(utf8.decode(sshResponse), '\$ exit\n');
   });
 }
 
