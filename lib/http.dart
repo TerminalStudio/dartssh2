@@ -81,11 +81,11 @@ class HttpClientImpl extends HttpClient {
     var uriResponse;
     switch (method) {
       case 'POST':
-        uriResponse = await client.post(url, body: data, headers: headers);
+        uriResponse = await client.post(Uri.parse(url), body: data, headers: headers);
         break;
 
       default:
-        uriResponse = await client.get(url, headers: headers);
+        uriResponse = await client.get(Uri.parse(url), headers: headers);
         break;
     }
 

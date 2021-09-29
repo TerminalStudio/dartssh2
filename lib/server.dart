@@ -284,7 +284,7 @@ class SSHServer extends SSHTransport {
   @override
   void handleChannelData(Channel channel, Uint8List data) {
     if (channel == sessionChannel) {
-      response(this, utf8.decode(data));
+      response(this, data);
     } else if (channel.cb != null) {
       channel.cb(channel, data);
     }
