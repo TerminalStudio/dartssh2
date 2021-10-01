@@ -64,24 +64,33 @@ class TestHttpClient extends HttpClient {
 /// package:http based implementation of [HttpClient].
 class HttpClientImpl extends HttpClient {
   HttpClientFactory clientFactory;
-  HttpClientImpl(
-      {this.clientFactory, StringCallback debugPrint, StringFilter userAgent})
-      : super(debugPrint: debugPrint) {
+  HttpClientImpl({
+    this.clientFactory,
+    StringCallback debugPrint,
+    StringFilter userAgent,
+  }) : super(debugPrint: debugPrint) {
     clientFactory ??= () => UserAgentBaseClient(
-        userAgent == null ? null : userAgent('HttpClientImpl'), http.Client());
+          userAgent == null ? null : userAgent('HttpClientImpl'),
+          http.Client(),
+        );
   }
 
   @override
-  Future<HttpResponse> request(String url,
-      {String method, String data, Map<String, String> headers}) async {
+  Future<HttpResponse> request(
+    String url, {
+    String method,
+    String data,
+    Map<String, String> headers,
+  }) async {
     numOutstanding++;
     if (debugPrint != null) debugPrint('HTTP Request: $url');
 
     http.Client client = clientFactory();
-    var uriResponse;
+    http.Response uriResponse;
     switch (method) {
       case 'POST':
-        uriResponse = await client.post(Uri.parse(url), body: data, headers: headers);
+        uriResponse =
+            await client.post(Uri.parse(url), body: data, headers: headers);
         break;
 
       default:
@@ -89,8 +98,7 @@ class HttpClientImpl extends HttpClient {
         break;
     }
 
-    HttpResponse ret =
-        HttpResponse(uriResponse.statusCode, text: uriResponse.body);
+    final ret = HttpResponse(uriResponse.statusCode, text: uriResponse.body);
     if (debugPrint != null) {
       debugPrint('HTTP Response=${ret.status}: ${ret.text}');
     }
@@ -207,6 +215,7 @@ Future<HttpResponse> httpRequest(Uri uri, String method, SocketInterface socket,
   if (!socket.connected && !socket.connecting) {
     socket = await connectUri(uri, socket);
   }
+
   socket.handleDone((String reason) {
     if (debugPrint != null) {
       debugPrint('SSHTunneledBaseClient.socket.handleDone');
@@ -229,20 +238,25 @@ Future<HttpResponse> httpRequest(Uri uri, String method, SocketInterface socket,
     if (debugPrint != null) {
       debugPrint('SSHTunneledBaseClient.socket.listen: read ${m.length} bytes');
     }
+
     if (headerText == null) {
       buffer.add(m);
-      int headersEnd = searchUint8List(
-          buffer.data, Uint8List.fromList('\r\n\r\n'.codeUnits));
+      final headersEnd = searchUint8List(
+        buffer.data,
+        Uint8List.fromList('\r\n\r\n'.codeUnits),
+      );
 
       /// Parse HTTP headers.
       if (headersEnd != -1) {
         headerText = utf8.decode(viewUint8List(buffer.data, 0, headersEnd));
         buffer.flush(headersEnd + 4);
-        var lines = LineSplitter.split(headerText);
+        final lines = LineSplitter.split(headerText);
         statusLine = lines.first.split(' ');
-        headers = Map<String, String>.fromIterable(lines.skip(1),
-            key: (h) => h.substring(0, h.indexOf(': ')),
-            value: (h) => h.substring(h.indexOf(': ') + 2).trim());
+        headers = Map<String, String>.fromIterable(
+          lines.skip(1),
+          key: (h) => h.substring(0, h.indexOf(': ')),
+          value: (h) => h.substring(h.indexOf(': ') + 2).trim(),
+        );
         headers.forEach((key, value) {
           if (key.toLowerCase() == 'content-length') {
             contentLength = int.parse(value);
@@ -254,7 +268,8 @@ Future<HttpResponse> httpRequest(Uri uri, String method, SocketInterface socket,
         if (contentLength == 0) {
           if (debugPrint != null) {
             debugPrint(
-                'SSHTunneledBaseClient.socket.listen: Content-Length: 0, remaining=${buffer.data.length}');
+              'SSHTunneledBaseClient.socket.listen: Content-Length: 0, remaining=${buffer.data.length}',
+            );
           }
           contentController.close();
           if (!persistentConnection) {
@@ -275,7 +290,8 @@ Future<HttpResponse> httpRequest(Uri uri, String method, SocketInterface socket,
     if (contentRead >= contentLength) {
       if (debugPrint != null) {
         debugPrint(
-            'SSHTunneledBaseClient.socket.listen: done $contentRead / $contentLength');
+          'SSHTunneledBaseClient.socket.listen: done $contentRead / $contentLength',
+        );
       }
       contentController.close();
       if (!persistentConnection || contentRead > contentLength) {
@@ -298,9 +314,11 @@ Future<HttpResponse> httpRequest(Uri uri, String method, SocketInterface socket,
   String readHeadersError = await readHeadersCompleter.future;
   if (readHeadersError != null) throw FormatException(readHeadersError);
 
-  return HttpResponse(int.parse(statusLine[1]),
-      reason: statusLine.sublist(2).join(' '),
-      headers: headers,
-      contentLength: contentLength,
-      contentStream: contentController.stream);
+  return HttpResponse(
+    int.parse(statusLine[1]),
+    reason: statusLine.sublist(2).join(' '),
+    headers: headers,
+    contentLength: contentLength,
+    contentStream: contentController.stream,
+  );
 }

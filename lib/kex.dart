@@ -9,7 +9,7 @@ import 'package:pointycastle/digests/sha1.dart';
 import "package:pointycastle/digests/sha256.dart";
 import 'package:pointycastle/ecc/api.dart';
 import 'package:pointycastle/src/utils.dart';
-import 'package:tweetnacl/tweetnacl.dart';
+import 'package:tweetnacl2/tweetnacl2.dart';
 
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/ssh.dart';

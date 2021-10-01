@@ -57,7 +57,7 @@ Future<void> sshd(List<String> arguments) async {
 
   try {
     await Chain.capture(() async {
-      final ServerSocket listener = await ServerSocket.bind('0.0.0.0', port);
+      final listener = await ServerSocket.bind('0.0.0.0', port, shared: true);
 
       await for (Socket socket in listener) {
         final String hostport =
@@ -156,8 +156,13 @@ Identity loadHostKey({StringFunction getPassword, String path}) {
   return hostkey;
 }
 
-Future<String> forwardTcpChannel(Channel channel, String sourceHost,
-    int sourcePort, String targetHost, int targetPort) async {
+Future<String> forwardTcpChannel(
+  Channel channel,
+  String sourceHost,
+  int sourcePort,
+  String targetHost,
+  int targetPort,
+) async {
   SocketImpl tunneledSocket = SocketImpl();
   Completer<String> connectCompleter = Completer<String>();
   print('dartsshd: Forwarding connection to $targetHost:$targetPort');
@@ -169,8 +174,9 @@ Future<String> forwardTcpChannel(Channel channel, String sourceHost,
   if (connectError != null) return connectError;
 
   StringCallback closeTunneledSocket = (String error) {
-    print(
-        "dartsshd: Closing forwarded connection to $targetHost:$targetPort: $error");
+    final reason = error == null ? '' : ': $error';
+    print("dartsshd: Closing forwarded connection to $targetHost:$targetPort" +
+        reason);
     tunneledSocket.close();
     server.closeChannel(channel);
   };

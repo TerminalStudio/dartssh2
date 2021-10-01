@@ -30,8 +30,13 @@ void main(List<String> arguments) async {
     }
   });
   exitCode = await ssh(
-      arguments, stdin, (_, Uint8List v) => stdout.write(utf8.decode(v)), () => exit(0),
-      termWidth: stdout.terminalColumns, termHeight: stdout.terminalLines);
+    arguments,
+    stdin,
+    (_, Uint8List v) => stdout.write(utf8.decode(v)),
+    () => exit(0),
+    termWidth: stdout.terminalColumns,
+    termHeight: stdout.terminalLines,
+  );
 }
 
 void send(Uint8List x) {
@@ -42,9 +47,14 @@ void send(Uint8List x) {
   }
 }
 
-Future<int> ssh(List<String> arguments, Stream<List<int>> input,
-    ResponseCallback response, VoidCallback done,
-    {int termWidth = 80, int termHeight = 25}) async {
+Future<int> ssh(
+  List<String> arguments,
+  Stream<List<int>> input,
+  ResponseCallback response,
+  VoidCallback done, {
+  int termWidth = 80,
+  int termHeight = 25,
+}) async {
   final argParser = ArgParser()
     ..addOption('login', abbr: 'l')
     ..addOption('identity', abbr: 'i')

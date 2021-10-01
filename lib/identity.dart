@@ -9,7 +9,7 @@ import 'package:pointycastle/digests/sha1.dart';
 import 'package:pointycastle/ecc/api.dart';
 import 'package:pointycastle/signers/ecdsa_signer.dart';
 import 'package:pointycastle/signers/rsa_signer.dart';
-import 'package:tweetnacl/tweetnacl.dart' as tweetnacl;
+import 'package:tweetnacl2/tweetnacl2.dart' as tweetnacl;
 
 import 'package:dartssh/protocol.dart';
 import 'package:dartssh/serializable.dart';

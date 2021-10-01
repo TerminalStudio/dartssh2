@@ -51,27 +51,28 @@ class Channel {
   ChannelCallback cb;
   StringCallback error;
   VoidCallback connected, closed;
-  Channel(
-      {this.localId = 0,
-      this.remoteId = 0,
-      this.windowC = 0,
-      this.windowS = 0,
-      this.cb,
-      this.error,
-      this.connected,
-      this.closed});
+  Channel({
+    this.localId = 0,
+    this.remoteId = 0,
+    this.windowC = 0,
+    this.windowS = 0,
+    this.cb,
+    this.error,
+    this.connected,
+    this.closed,
+  });
 }
 
 /// It is RECOMMENDED that the keys be changed after each gigabyte of transmitted
 /// data or after each hour of connection time, whichever comes sooner.
 class SSHTransportState {
-  static const int INIT = 0,
-      FIRST_KEXINIT = 1,
-      FIRST_KEXREPLY = 2,
-      FIRST_NEWKEYS = 3,
-      KEXINIT = 4,
-      KEXREPLY = 5,
-      NEWKEYS = 6;
+  static const int INIT = 0;
+  static const int FIRST_KEXINIT = 1;
+  static const int FIRST_KEXREPLY = 2;
+  static const int FIRST_NEWKEYS = 3;
+  static const int KEXINIT = 4;
+  static const int KEXREPLY = 5;
+  static const int NEWKEYS = 6;
 }
 
 /// SSH Transport Layer Protocol implementation providing KEX, ciphers, and MAC.
@@ -271,7 +272,8 @@ abstract class SSHTransport with SSHDiffieHellman {
     socket.sendRaw(kexInit);
     if (debugPrint != null) {
       debugPrint(
-          '$hostport wrote KEXINIT { kex=$kexPref key=$keyPref, cipher=$cipherPref, mac=$macPref, compress=$compressPref }');
+        '$hostport wrote KEXINIT { kex=$kexPref key=$keyPref, cipher=$cipherPref, mac=$macPref, compress=$compressPref }',
+      );
     }
   }
 
@@ -745,19 +747,27 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   /// Request remote opens a new TCP channel to [destHost]:[destPort].
-  Channel openTcpChannel(String sourceHost, int sourcePort, String destHost,
-      int destPort, ChannelCallback cb,
-      {VoidCallback connected, StringCallback error}) {
+  Channel openTcpChannel(
+    String sourceHost,
+    int sourcePort,
+    String destHost,
+    int destPort,
+    ChannelCallback cb, {
+    VoidCallback connected,
+    StringCallback error,
+  }) {
     if (socket == null || state <= SSHTransportState.FIRST_NEWKEYS) return null;
     if (debugPrint != null) debugPrint('openTcpChannel to $destHost:$destPort');
-    Channel chan = channels[nextChannelId] = Channel(
-        localId: nextChannelId++,
-        windowS: initialWindowSize,
-        cb: cb,
-        error: error,
-        connected: connected);
+    final chan = channels[nextChannelId] = Channel(
+      localId: nextChannelId++,
+      windowS: initialWindowSize,
+      cb: cb,
+      error: error,
+      connected: connected,
+    );
     nextChannelId++;
-    writeCipher(MSG_CHANNEL_OPEN_TCPIP(
+    writeCipher(
+      MSG_CHANNEL_OPEN_TCPIP(
         'direct-tcpip',
         chan.localId,
         chan.windowS,
@@ -765,7 +775,9 @@ abstract class SSHTransport with SSHDiffieHellman {
         destHost,
         destPort,
         sourceHost,
-        sourcePort));
+        sourcePort,
+      ),
+    );
     return chan;
   }
 }

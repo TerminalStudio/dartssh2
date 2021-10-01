@@ -40,8 +40,13 @@ class SocketImpl extends SocketInterface {
   }
 
   @override
-  void connect(Uri uri, VoidCallback onConnected, StringCallback onError,
-      {int timeoutSeconds = 15, bool ignoreBadCert = false}) {
+  void connect(
+    Uri uri,
+    VoidCallback onConnected,
+    StringCallback onError, {
+    int timeoutSeconds = 15,
+    bool ignoreBadCert = false,
+  }) {
     assert(!connecting);
     connecting = true;
     if (socket != null) {
