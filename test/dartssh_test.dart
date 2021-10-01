@@ -73,9 +73,11 @@ void main() {
   test('TestHttpClient', () async {
     TestHttpClient httpClient = TestHttpClient();
     Future<bool> httpTestResult = httpTest(httpClient);
-    httpClient.requests.removeFirst().completer.complete(
-        HttpResponse(200, text: '<html>support@greenappers.com</html>'));
-    expect(httpTestResult, completion(equals(true)));
+    httpClient.requests
+        .removeFirst()
+        .completer
+        .complete(HttpResponse(426, text: 'Expected Upgrade'));
+    expect(await httpTestResult, isTrue);
   });
 
   test('cipher suite', () async {
@@ -173,7 +175,7 @@ void main() {
   });
 
   test('tunneled http test', () async {
-    expect(httpTest(HttpClientImpl()), completion(equals(true)));
+    expect(await httpTest(HttpClientImpl()), isTrue);
     String password = 'foobar123';
 
     KEX.supported =
@@ -189,28 +191,34 @@ void main() {
       password
     ]);
 
-    List<int> sshResponse = [];
-    StreamController<List<int>> sshInput = StreamController<List<int>>();
-    Future<void> sshMain = ssh.ssh(<String>[
-      '-l',
-      'root',
-      '127.0.0.1:42022',
-      '--password',
-      password,
-      '--debug',
-      '--trace',
-    ], sshInput.stream, (_, Uint8List v) => sshResponse += v,
-        () => sshInput.close());
+    var sshResponse = <int>[];
+    final sshInput = StreamController<List<int>>();
+    Future<void> sshMain = ssh.ssh(
+      <String>[
+        '-l',
+        'root',
+        '127.0.0.1:42022',
+        '--password',
+        password,
+        '--debug',
+        '--trace',
+      ],
+      sshInput.stream,
+      (_, Uint8List v) => sshResponse += v,
+      () => sshInput.close(),
+    );
 
     while (ssh.client.sessionChannel == null) {
       await Future.delayed(const Duration(seconds: 1));
     }
+
     ssh.client.setTerminalWindowSize(80, 25);
     ssh.client.exec('ls');
 
     bool tunneledHttpTest = await httpTest(
-        HttpClientImpl(clientFactory: () => SSHTunneledBaseClient(ssh.client)),
-        proto: 'http');
+      HttpClientImpl(clientFactory: () => SSHTunneledBaseClient(ssh.client)),
+      proto: 'http', // SSHTunneledBaseClient does not support https
+    );
     expect(tunneledHttpTest, true);
 
     ssh.client.sendChannelData(utf8.encode('debugTest\nexit\n'));
@@ -220,11 +228,15 @@ void main() {
   });
 
   test('tunneled websocket test', () async {
-    expect(websocketEchoTest(WebSocketImpl(), proto: 'ws'),
-        completion(equals(true)));
+    expect(
+      await websocketEchoTest(WebSocketImpl(), proto: 'ws'),
+      isTrue,
+    );
 
-    expect(websocketEchoTest(WebSocketImpl(), ignoreBadCert: true),
-        completion(equals(true)));
+    expect(
+      await websocketEchoTest(WebSocketImpl(), ignoreBadCert: true),
+      isTrue,
+    );
 
     KEX.supported =
         Key.supported = Cipher.supported = MAC.supported = (_) => true;
@@ -265,29 +277,36 @@ void main() {
 }
 
 Future<bool> httpTest(HttpClient httpClient, {String proto = 'https'}) async {
-  var response = await httpClient.request('$proto://www.greenappers.com/');
-  return response != null && response.text.contains('support@greenappers.com');
+  var response = await httpClient.request('$proto://echo.terminal.studio/');
+  return response != null && response.text.contains('Expected Upgrade');
 }
 
-Future<bool> websocketEchoTest(WebSocketImpl websocket,
-    {bool ignoreBadCert = false, String proto = 'wss'}) async {
-  final Completer<String> connectCompleter = Completer<String>();
+Future<bool> websocketEchoTest(
+  WebSocketImpl websocket, {
+  bool ignoreBadCert = false,
+  String proto = 'wss',
+}) async {
+  final connectCompleter = Completer<String>();
+
   websocket.connect(
-      Uri.parse('$proto://echo.websocket.org'),
-      () => connectCompleter.complete(null),
-      (String error) => connectCompleter.complete(error),
-      ignoreBadCert: ignoreBadCert);
-  final String error = await connectCompleter.future;
+    Uri.parse('$proto://echo.terminal.studio'),
+    () => connectCompleter.complete(null),
+    (String error) => connectCompleter.complete(error),
+    ignoreBadCert: ignoreBadCert,
+  );
+
+  final error = await connectCompleter.future;
   if (error != null) return false;
 
-  final Completer<String> responseCompleter = Completer<String>();
-  final String challenge =
+  final responseCompleter = Completer<String>();
+  final challenge =
       'websocketEchoTest ${base64.encode(randBytes(Random.secure(), 16))}';
   websocket.listen((Uint8List m) => responseCompleter.complete(utf8.decode(m)));
   websocket.handleError((String m) => responseCompleter.complete(m));
   websocket.handleDone((String m) => responseCompleter.complete(m));
   websocket.send(challenge);
-  final String response = await responseCompleter.future;
+
+  final response = await responseCompleter.future;
   websocket.close();
   return response == challenge;
 }
