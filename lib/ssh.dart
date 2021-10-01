@@ -55,15 +55,15 @@ String buildPreferenceCsv(
 }
 
 /// Choose the first algorithm that satisfies the conditions.
-String preferenceIntersection(String intersectCsv, String supportedCsv,
+String preferenceIntersection(String? intersectCsv, String? supportedCsv,
     [bool server = false]) {
   if (server) {
-    String swapCsv = intersectCsv;
+    String? swapCsv = intersectCsv;
     intersectCsv = supportedCsv;
     supportedCsv = swapCsv;
   }
-  Set<String> supported = Set<String>.of(supportedCsv.split(','));
-  for (String intersect in intersectCsv.split(',')) {
+  Set<String> supported = Set<String>.of(supportedCsv!.split(','));
+  for (String intersect in intersectCsv!.split(',')) {
     if (supported.contains(intersect)) return intersect;
   }
   return '';
@@ -71,7 +71,11 @@ String preferenceIntersection(String intersectCsv, String supportedCsv,
 
 /// Limits cipher suite support to the specified parameter, if not null.
 void applyCipherSuiteOverrides(
-    String kex, String key, String cipher, String mac) {
+  String? kex,
+  String? key,
+  String? cipher,
+  String? mac,
+) {
   if (kex != null) {
     final int kexOverride = KEX.id(kex);
     if (kexOverride == 0) {
@@ -116,7 +120,7 @@ class Key {
       RSA = 5,
       End = 5;
 
-  static int id(String name) {
+  static int id(String? name) {
     if (name == null) return 0;
     switch (name) {
       case 'ssh-ed25519':
@@ -134,7 +138,7 @@ class Key {
     }
   }
 
-  static String name(int id) {
+  static String name(int? id) {
     switch (id) {
       case ED25519:
         return 'ssh-ed25519';
@@ -153,12 +157,12 @@ class Key {
 
   static SupportedFunction supported = (int id) => true;
 
-  static bool ellipticCurveDSA(int id) =>
+  static bool ellipticCurveDSA(int? id) =>
       id == ECDSA_SHA2_NISTP256 ||
       id == ECDSA_SHA2_NISTP384 ||
       id == ECDSA_SHA2_NISTP521;
 
-  static ECDomainParameters ellipticCurve(int id) {
+  static ECDomainParameters? ellipticCurve(int? id) {
     switch (id) {
       case ECDSA_SHA2_NISTP256:
         return ECCurve_secp256r1();
@@ -171,7 +175,7 @@ class Key {
     }
   }
 
-  static String ellipticCurveName(int id) {
+  static String? ellipticCurveName(int? id) {
     switch (id) {
       case ECDSA_SHA2_NISTP256:
         return 'nistp256';
@@ -184,7 +188,7 @@ class Key {
     }
   }
 
-  static int ellipticCurveSecretBits(int id) {
+  static int? ellipticCurveSecretBits(int id) {
     switch (id) {
       case ECDSA_SHA2_NISTP256:
         return 256;
@@ -197,7 +201,7 @@ class Key {
     }
   }
 
-  static Digest ellipticCurveHash(int id) {
+  static Digest? ellipticCurveHash(int? id) {
     switch (id) {
       case ECDSA_SHA2_NISTP256:
         return SHA256Digest();
@@ -213,7 +217,7 @@ class Key {
   static String preferenceCsv([int startAfter = 0]) =>
       buildPreferenceCsv(name, supported, End, startAfter);
 
-  static int preferenceIntersect(String intersectCsv,
+  static int preferenceIntersect(String? intersectCsv,
           [bool server = false, int startAfter = 0]) =>
       id(preferenceIntersection(
           preferenceCsv(startAfter), intersectCsv, server));
@@ -288,7 +292,7 @@ class KEX {
       id == ECDH_SHA2_NISTP384 ||
       id == ECDH_SHA2_NISTP521;
 
-  static ECDomainParameters ellipticCurve(int id) {
+  static ECDomainParameters? ellipticCurve(int id) {
     switch (id) {
       case ECDH_SHA2_NISTP256:
         return ECCurve_secp256r1();
@@ -301,7 +305,7 @@ class KEX {
     }
   }
 
-  static int ellipticCurveSecretBits(int id) {
+  static int? ellipticCurveSecretBits(int id) {
     switch (id) {
       case ECDH_SHA2_NISTP256:
         return 256;
@@ -314,7 +318,7 @@ class KEX {
     }
   }
 
-  static Digest ellipticCurveHash(int id) {
+  static Digest? ellipticCurveHash(int id) {
     switch (id) {
       case ECDH_SHA2_NISTP256:
         return SHA256Digest();
@@ -339,7 +343,7 @@ class KEX {
   static String preferenceCsv([int startAfter = 0]) =>
       buildPreferenceCsv(name, supported, End, startAfter);
 
-  static int preferenceIntersect(String intersectCsv,
+  static int preferenceIntersect(String? intersectCsv,
           [bool server = false, int startAfter = 0]) =>
       id(preferenceIntersection(
           preferenceCsv(startAfter), intersectCsv, server));
@@ -390,7 +394,7 @@ class Cipher {
   static String preferenceCsv([int startAfter = 0]) =>
       buildPreferenceCsv(name, supported, End, startAfter);
 
-  static int preferenceIntersect(String intersectCsv,
+  static int preferenceIntersect(String? intersectCsv,
           [bool server = false, int startAfter = 0]) =>
       id(preferenceIntersection(
           preferenceCsv(startAfter), intersectCsv, server));
@@ -531,7 +535,7 @@ class MAC {
   static String preferenceCsv([int startAfter = 0]) =>
       buildPreferenceCsv(name, supported, End, startAfter);
 
-  static int preferenceIntersect(String intersectCsv,
+  static int preferenceIntersect(String? intersectCsv,
           [bool server = false, int startAfter = 0]) =>
       id(preferenceIntersection(
           preferenceCsv(startAfter), intersectCsv, server));
@@ -616,7 +620,7 @@ class Compression {
   static String preferenceCsv([int startAfter = 0]) =>
       buildPreferenceCsv(name, supported, End, startAfter);
 
-  static int preferenceIntersect(String intersectCsv,
+  static int preferenceIntersect(String? intersectCsv,
           [bool server = false, int startAfter = 0]) =>
       id(preferenceIntersection(
           preferenceCsv(startAfter), intersectCsv, server));
@@ -673,7 +677,7 @@ Uint8List computeExchangeHash(
     int kexMethod,
     Digest algo,
     String verC,
-    String verS,
+    String? verS,
     Uint8List kexInitC,
     Uint8List kexInitS,
     Uint8List kS,
@@ -687,32 +691,32 @@ Uint8List computeExchangeHash(
       kexSPacketLen = 4 + kexSPacket.length;
 
   Digester H = Digester(algo);
-  if (server) H.updateString(verS);
+  if (server) H.updateString(verS!);
   H.updateString(verC);
-  if (!server) H.updateString(verS);
+  if (!server) H.updateString(verS!);
   H.updateOffset(kexInitC, 5, kexCPacketLen - 5 - kexCPacket.padding);
   H.updateOffset(kexInitS, 5, kexSPacketLen - 5 - kexSPacket.padding);
   H.update(kS);
 
   if (KEX.diffieHellmanGroupExchange(kexMethod)) {
-    H.updateInt(dh.gexMin);
-    H.updateInt(dh.gexPref);
-    H.updateInt(dh.gexMax);
-    H.updateBigInt(dh.p);
-    H.updateBigInt(dh.g);
+    H.updateInt(dh.gexMin!);
+    H.updateInt(dh.gexPref!);
+    H.updateInt(dh.gexMax!);
+    H.updateBigInt(dh.p!);
+    H.updateBigInt(dh.g!);
   }
   if (KEX.x25519DiffieHellman(kexMethod)) {
-    if (server) H.update(x25519dh.remotePubKey);
-    H.update(x25519dh.myPubKey);
-    if (!server) H.update(x25519dh.remotePubKey);
+    if (server) H.update(x25519dh.remotePubKey!);
+    H.update(x25519dh.myPubKey!);
+    if (!server) H.update(x25519dh.remotePubKey!);
   } else if (KEX.ellipticCurveDiffieHellman(kexMethod)) {
-    if (server) H.update(ecdh.sText);
-    H.update(ecdh.cText);
-    if (!server) H.update(ecdh.sText);
+    if (server) H.update(ecdh.sText!);
+    H.update(ecdh.cText!);
+    if (!server) H.update(ecdh.sText!);
   } else {
-    if (server) H.updateBigInt(dh.f);
-    H.updateBigInt(dh.e);
-    if (!server) H.updateBigInt(dh.f);
+    if (server) H.updateBigInt(dh.f!);
+    H.updateBigInt(dh.e!);
+    if (!server) H.updateBigInt(dh.f!);
   }
   H.updateBigInt(K);
   return H.finish();
@@ -720,37 +724,37 @@ Uint8List computeExchangeHash(
 
 /// Verifies that [key] signed [exH] producing [sig].
 bool verifyHostKey(
-    Uint8List exH, int hostkeyType, Uint8List key, Uint8List sig) {
+    Uint8List? exH, int hostkeyType, Uint8List key, Uint8List? sig) {
   if (hostkeyType == Key.RSA) {
     return verifyRSASignature(RSAKey()..deserialize(SerializableInput(key)),
-        RSASignature()..deserialize(SerializableInput(sig)), exH);
+        RSASignature()..deserialize(SerializableInput(sig!)), exH!);
   } else if (Key.ellipticCurveDSA(hostkeyType)) {
     return verifyECDSASignature(
         hostkeyType,
         ECDSAKey()..deserialize(SerializableInput(key)),
-        ECDSASignature()..deserialize(SerializableInput(sig)),
-        exH);
+        ECDSASignature()..deserialize(SerializableInput(sig!)),
+        exH!);
   } else if (hostkeyType == Key.ED25519) {
     return verifyEd25519Signature(
         Ed25519Key()..deserialize(SerializableInput(key)),
-        Ed25519Signature()..deserialize(SerializableInput(sig)),
-        exH);
+        Ed25519Signature()..deserialize(SerializableInput(sig!)),
+        exH!);
   } else {
     return false;
   }
 }
 
 /// https://tools.ietf.org/html/rfc4253#section-7.2
-Uint8List deriveKey(Digest algo, Uint8List sessionId, Uint8List exH, BigInt K,
-    int id, int bytes) {
+Uint8List deriveKey(Digest? algo, Uint8List? sessionId, Uint8List? exH,
+    BigInt? K, int id, int bytes) {
   Uint8List ret = Uint8List(0);
   while (ret.length < bytes) {
-    Digester digest = Digester(algo);
-    digest.updateBigInt(K);
-    digest.updateRaw(exH);
+    Digester digest = Digester(algo!);
+    digest.updateBigInt(K!);
+    digest.updateRaw(exH!);
     if (ret.isEmpty) {
       digest.updateByte(id);
-      digest.updateRaw(sessionId);
+      digest.updateRaw(sessionId!);
     } else {
       digest.updateRaw(ret);
     }

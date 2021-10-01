@@ -11,10 +11,10 @@ import 'package:dartssh/transport.dart';
 
 /// dart:io [Socket] based implementation of [SocketInterface].
 class SocketImpl extends SocketInterface {
-  Socket socket;
-  StreamSubscription messageSubscription;
-  Uint8ListCallback messageHandler;
-  StringCallback onError, onDone;
+  Socket? socket;
+  StreamSubscription? messageSubscription;
+  Uint8ListCallback? messageHandler;
+  StringCallback? onError, onDone;
 
   @override
   bool get connected => socket != null;
@@ -30,11 +30,11 @@ class SocketImpl extends SocketInterface {
     messageHandler = null;
     onError = onDone = null;
     if (messageSubscription != null) {
-      messageSubscription.cancel();
+      messageSubscription!.cancel();
       messageSubscription = null;
     }
     if (socket != null) {
-      socket.close();
+      socket!.close();
       socket = null;
     }
   }
@@ -86,36 +86,36 @@ class SocketImpl extends SocketInterface {
   void listen(Uint8ListCallback newMessageHandler) {
     messageHandler = newMessageHandler;
     if (messageSubscription == null) {
-      messageSubscription = socket.listen((Uint8List m) {
+      messageSubscription = socket!.listen((Uint8List m) {
         if (messageHandler != null) {
-          messageHandler(m);
+          messageHandler!(m);
         }
       }, onDone: () {
         if (onDone != null) {
-          onDone(null);
+          onDone!(null);
         }
       }, onError: (error, stacktrace) {
         if (onError != null) {
-          onError('$error: $stacktrace');
+          onError!('$error: $stacktrace');
         }
       });
     }
   }
 
   @override
-  void send(String text) => sendRaw(utf8.encode(text));
+  void send(String text) => sendRaw(utf8.encode(text) as Uint8List);
 
   @override
-  void sendRaw(Uint8List raw) => socket.add(raw);
+  void sendRaw(Uint8List raw) => socket!.add(raw);
 }
 
 /// https://github.com/dart-lang/sdk/blob/master/sdk/lib/_internal/vm/bin/socket_patch.dart#L1651
 class SocketAdaptor extends Stream<Uint8List> implements Socket {
   SocketInterface impl;
-  StreamController<Uint8List> controller;
-  SocketAdaptorStreamConsumer consumer;
-  IOSink sink;
-  StringCallback debugPrint;
+  late StreamController<Uint8List> controller;
+  late SocketAdaptorStreamConsumer consumer;
+  late IOSink sink;
+  StringCallback? debugPrint;
   // var _detachReady;
 
   @override
@@ -137,10 +137,10 @@ class SocketAdaptor extends Stream<Uint8List> implements Socket {
   set encoding(Encoding value) => sink.encoding = value;
 
   SocketAdaptor(this.impl,
-      {this.address,
-      this.remoteAddress,
-      this.port,
-      this.remotePort,
+      {required this.address,
+      required this.remoteAddress,
+      required this.port,
+      required this.remotePort,
       this.debugPrint}) {
     controller = StreamController<Uint8List>(sync: true);
     consumer = SocketAdaptorStreamConsumer(this);
@@ -148,8 +148,8 @@ class SocketAdaptor extends Stream<Uint8List> implements Socket {
 
     /// https://github.com/dart-lang/sdk/issues/39589
     impl.listen((Uint8List m) => controller.add(Uint8List.fromList(m)));
-    impl.handleError((error) => controller.addError(error));
-    impl.handleDone((String reason) => controller.addError(reason));
+    impl.handleError((error) => controller.addError(error!));
+    impl.handleDone((String? reason) => controller.addError(reason!));
   }
 
   @override
@@ -163,25 +163,26 @@ class SocketAdaptor extends Stream<Uint8List> implements Socket {
   void add(List<int> bytes) => sink.add(bytes);
 
   @override
-  void write(Object obj) => sink.write(obj);
+  void write(Object? obj) => sink.write(obj);
 
   @override
   void writeAll(Iterable objects, [String separator = ""]) =>
       sink.writeAll(objects, separator);
 
   @override
-  void writeln([Object obj = ""]) => sink.writeln(obj);
+  void writeln([Object? obj = ""]) => sink.writeln(obj);
 
   @override
   void writeCharCode(int charCode) => sink.writeCharCode(charCode);
 
   @override
-  void addError(error, [StackTrace stackTrace]) {
+  void addError(error, [StackTrace? stackTrace]) {
     throw UnsupportedError("Cannot send errors on sockets");
   }
 
   @override
-  Future<Socket> addStream(Stream<List<int>> stream) => sink.addStream(stream);
+  Future<Socket?> addStream(Stream<List<int>> stream) =>
+      sink.addStream(stream).then((value) => value as Socket?);
 
   @override
   Future flush() => sink.flush();
@@ -196,18 +197,18 @@ class SocketAdaptor extends Stream<Uint8List> implements Socket {
   bool setOption(SocketOption option, bool enabled) => false;
 
   @override
-  Uint8List getRawOption(RawSocketOption option) => null;
+  Uint8List getRawOption(RawSocketOption option) => Uint8List(0);
 
   @override
   void setRawOption(RawSocketOption option) {}
 
   @override
-  StreamSubscription<Uint8List> listen(void onData(Uint8List event),
-      {Function onError, void onDone(), bool cancelOnError}) {
-    //debugPrint('DEBUG SocketAdaptor.listen $remoteAddress:$remotePort');
+  StreamSubscription<Uint8List> listen(void onData(Uint8List event)?,
+      {Function? onError, void onDone()?, bool? cancelOnError}) {
+    //debugPrint?.call('DEBUG SocketAdaptor.listen $remoteAddress:$remotePort');
     return controller.stream.listen((m) {
-      //debugPrint('DEBUG SocketAdaptor.read $m');
-      onData(m);
+      //debugPrint?.call('DEBUG SocketAdaptor.read $m');
+      onData!(m);
     }, onError: onError, onDone: onDone, cancelOnError: cancelOnError);
   }
 
@@ -243,8 +244,8 @@ class SocketAdaptor extends Stream<Uint8List> implements Socket {
 /// Copied from https://github.com/dart-lang/sdk/blob/master/sdk/lib/_internal/vm/bin/socket_patch.dart
 class SocketAdaptorStreamConsumer extends StreamConsumer<List<int>> {
   final SocketAdaptor socket;
-  StreamSubscription subscription;
-  Completer streamCompleter;
+  StreamSubscription? subscription;
+  Completer? streamCompleter;
   SocketAdaptorStreamConsumer(this.socket);
 
   Future<Socket> close() {
@@ -254,16 +255,16 @@ class SocketAdaptorStreamConsumer extends StreamConsumer<List<int>> {
 
   void stop() {
     if (subscription == null) return;
-    subscription.cancel();
+    subscription!.cancel();
     subscription = null;
   }
 
   void done([error, stackTrace]) {
     if (streamCompleter != null) {
       if (error != null) {
-        streamCompleter.completeError(error, stackTrace);
+        streamCompleter!.completeError(error, stackTrace);
       } else {
-        streamCompleter.complete(socket);
+        streamCompleter!.complete(socket);
       }
       streamCompleter = null;
     }
@@ -276,7 +277,7 @@ class SocketAdaptorStreamConsumer extends StreamConsumer<List<int>> {
         try {
           if (subscription != null) {
             assert(data != null);
-            socket.impl.sendRaw(data);
+            socket.impl.sendRaw(data as Uint8List);
           }
         } catch (e) {
           socket.destroy();
@@ -290,7 +291,7 @@ class SocketAdaptorStreamConsumer extends StreamConsumer<List<int>> {
         done();
       }, cancelOnError: true);
     }
-    return streamCompleter.future;
+    return streamCompleter!.future.then((value) => value as Socket);
   }
 }
 
@@ -435,7 +436,7 @@ class RawSocketAdaptor extends Stream<RawSocketEvent> implements RawSocket {
 }
 */
 
-InternetAddress tryParseInternetAddress(String x) {
+InternetAddress? tryParseInternetAddress(String x) {
   try {
     return InternetAddress(x);
   } catch (error) {

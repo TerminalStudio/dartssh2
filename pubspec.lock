@@ -28,7 +28,7 @@ packages:
       name: asn1lib
       url: "https://pub.dartlang.org"
     source: hosted
-    version: "0.5.11"
+    version: "1.0.2"
   async:
     dependency: transitive
     description:
@@ -295,13 +295,20 @@ packages:
       url: "https://pub.dartlang.org"
     source: hosted
     version: "1.11.1"
+  pinenacl:
+    dependency: "direct main"
+    description:
+      name: pinenacl
+      url: "https://pub.dartlang.org"
+    source: hosted
+    version: "0.3.3"
   pointycastle:
     dependency: "direct main"
     description:
       name: pointycastle
       url: "https://pub.dartlang.org"
     source: hosted
-    version: "1.0.1"
+    version: "3.3.4"
   pool:
     dependency: transitive
     description:
@@ -435,13 +442,6 @@ packages:
       url: "https://pub.dartlang.org"
     source: hosted
     version: "1.0.0"
-  tweetnacl2:
-    dependency: "direct main"
-    description:
-      name: tweetnacl2
-      url: "https://pub.dartlang.org"
-    source: hosted
-    version: "0.3.3"
   typed_data:
     dependency: transitive
     description:
@@ -455,7 +455,7 @@ packages:
       name: validators
       url: "https://pub.dartlang.org"
     source: hosted
-    version: "2.0.0+1"
+    version: "3.0.0"
   vm_service:
     dependency: transitive
     description:
@@ -492,4 +492,4 @@ packages:
     source: hosted
     version: "3.1.0"
 sdks:
-  dart: ">=2.12.0 <3.0.0"
+  dart: ">=2.13.0 <3.0.0"

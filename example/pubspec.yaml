@@ -6,10 +6,10 @@ homepage: https://github.com/GreenAppers/cruzawl
 documentation: https://pub.dev/documentation/dartssh/latest/
 
 environment:
-  sdk: ">=2.1.0 <3.0.0"
+  sdk: ">=2.13.0 <3.0.0"
 
 dependencies:
-  args: ^1.5.2
+  args: ^2.3.0
   dartssh:
     path: ../
-  stack_trace: ^1.9.3
+  stack_trace: ^1.10.0

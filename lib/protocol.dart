@@ -18,10 +18,8 @@ int mpIntLength(BigInt x) => x.bitLength ~/ 8 + 1;
 /// mpint: https://www.ietf.org/rfc/rfc4251.txt
 void serializeMpInt(SerializableOutput output, BigInt x) {
   if (x.sign < 0) throw FormatException('Negative BigInt not supported');
-  Uint8List xBytes = encodeBigInt(x);
-  bool padX = x.bitLength > 0 && x.bitLength % 8 == 0;
-  output.addUint32(xBytes.length + (padX ? 1 : 0));
-  if (padX) output.addUint8(0);
+  final xBytes = x == BigInt.zero ? Uint8List(0) : encodeBigInt(x);
+  output.addUint32(xBytes.length);
   output.addBytes(xBytes);
 }
 
@@ -44,16 +42,16 @@ Uint8List deserializeStringBytes(SerializableInput input) =>
     input.getBytes(input.getUint32());
 
 /// Returns [n] random bytes.
-Uint8List randBytes(Random generator, int n) {
+Uint8List randBytes(Random? generator, int n) {
   final Uint8List random = Uint8List(n);
   for (int i = 0; i < random.length; i++) {
-    random[i] = generator.nextInt(255);
+    random[i] = generator!.nextInt(255);
   }
   return random;
 }
 
 /// Returns at least [n] random bits.
-Uint8List randBits(Random generator, int n) =>
+Uint8List randBits(Random? generator, int n) =>
     randBytes(generator, (n + 7) ~/ 8);
 
 /// SSH protocol frame.
@@ -71,7 +69,7 @@ abstract class SSHMessage extends Serializable {
   int id;
   SSHMessage(this.id);
 
-  Uint8List toBytes(dynamic zlib, Random random, int blockSize) {
+  Uint8List toBytes(dynamic zlib, Random? random, int blockSize) {
     Uint8List payload = Uint8List(serializedSize + 1);
     SerializableOutput output = SerializableOutput(payload);
     output.addUint8(id);
@@ -83,7 +81,7 @@ abstract class SSHMessage extends Serializable {
         zlib != null ? zlib.convert(payload) : payload, random, blockSize);
   }
 
-  Uint8List toPacket(Uint8List payload, Random random, int blockSize) {
+  Uint8List toPacket(Uint8List payload, Random? random, int blockSize) {
     Uint8List buffer = Uint8List(nextMultipleOfN(
         4 + BinaryPacket.headerSize + payload.length, max(8, blockSize)));
     SerializableOutput output = SerializableOutput(buffer);
@@ -181,14 +179,14 @@ class MSG_DEBUG extends SSHMessage {
 /// The service is identified by a name.
 class MSG_SERVICE_REQUEST extends SSHMessage {
   static const int ID = 5;
-  String serviceName;
+  String? serviceName;
   MSG_SERVICE_REQUEST([this.serviceName]) : super(ID);
 
   @override
   int get serializedHeaderSize => 4;
 
   @override
-  int get serializedSize => serializedHeaderSize + serviceName.length;
+  int get serializedSize => serializedHeaderSize + serviceName!.length;
 
   @override
   void deserialize(SerializableInput input) =>
@@ -203,14 +201,14 @@ class MSG_SERVICE_REQUEST extends SSHMessage {
 /// it MUST respond with the following.
 class MSG_SERVICE_ACCEPT extends SSHMessage {
   static const int ID = 6;
-  String serviceName;
+  String? serviceName;
   MSG_SERVICE_ACCEPT(this.serviceName) : super(ID);
 
   @override
   int get serializedHeaderSize => 4;
 
   @override
-  int get serializedSize => serializedHeaderSize + serviceName.length;
+  int get serializedSize => serializedHeaderSize + serviceName!.length;
 
   @override
   void deserialize(SerializableInput input) =>
@@ -225,8 +223,8 @@ class MSG_SERVICE_ACCEPT extends SSHMessage {
 /// https://tools.ietf.org/html/rfc4253#section-7.1
 class MSG_KEXINIT extends SSHMessage {
   static const int ID = 20;
-  Uint8List cookie;
-  String kexAlgorithms,
+  Uint8List? cookie;
+  String? kexAlgorithms,
       serverHostKeyAlgorithms,
       encryptionAlgorithmsClientToServer,
       encryptionAlgorithmsServerToClient,
@@ -236,7 +234,7 @@ class MSG_KEXINIT extends SSHMessage {
       compressionAlgorithmsServerToClient,
       languagesClientToServer,
       languagesServerToClient;
-  bool firstKexPacketFollows = false;
+  bool? firstKexPacketFollows = false;
 
   MSG_KEXINIT(
       [this.cookie,
@@ -259,20 +257,20 @@ class MSG_KEXINIT extends SSHMessage {
   @override
   int get serializedSize =>
       serializedHeaderSize +
-      kexAlgorithms.length +
-      serverHostKeyAlgorithms.length +
-      encryptionAlgorithmsClientToServer.length +
-      encryptionAlgorithmsServerToClient.length +
-      macAlgorithmsClientToServer.length +
-      macAlgorithmsServerToClient.length +
-      compressionAlgorithmsClientToServer.length +
-      compressionAlgorithmsServerToClient.length +
-      languagesClientToServer.length +
-      languagesServerToClient.length;
+      kexAlgorithms!.length +
+      serverHostKeyAlgorithms!.length +
+      encryptionAlgorithmsClientToServer!.length +
+      encryptionAlgorithmsServerToClient!.length +
+      macAlgorithmsClientToServer!.length +
+      macAlgorithmsServerToClient!.length +
+      compressionAlgorithmsClientToServer!.length +
+      compressionAlgorithmsServerToClient!.length +
+      languagesClientToServer!.length +
+      languagesServerToClient!.length;
 
   @override
   void serialize(SerializableOutput output) {
-    output.addBytes(cookie);
+    output.addBytes(cookie!);
     serializeString(output, kexAlgorithms);
     serializeString(output, serverHostKeyAlgorithms);
     serializeString(output, encryptionAlgorithmsClientToServer);
@@ -283,7 +281,7 @@ class MSG_KEXINIT extends SSHMessage {
     serializeString(output, compressionAlgorithmsServerToClient);
     serializeString(output, languagesClientToServer);
     serializeString(output, languagesServerToClient);
-    output.addUint8(firstKexPacketFollows ? 1 : 0);
+    output.addUint8(firstKexPacketFollows! ? 1 : 0);
     output.addUint32(0);
   }
 
@@ -342,17 +340,17 @@ class MSG_NEWKEYS extends SSHMessage {
 /// https://tools.ietf.org/html/rfc4253#section-8
 class MSG_KEXDH_INIT extends SSHMessage {
   static const int ID = 30;
-  BigInt e;
+  BigInt? e;
   MSG_KEXDH_INIT([this.e]) : super(ID);
 
   @override
   int get serializedHeaderSize => 4;
 
   @override
-  int get serializedSize => serializedHeaderSize + mpIntLength(e);
+  int get serializedSize => serializedHeaderSize + mpIntLength(e!);
 
   @override
-  void serialize(SerializableOutput output) => serializeMpInt(output, e);
+  void serialize(SerializableOutput output) => serializeMpInt(output, e!);
 
   @override
   void deserialize(SerializableInput input) => e = deserializeMpInt(input);
@@ -362,8 +360,8 @@ class MSG_KEXDH_INIT extends SSHMessage {
 /// S receives e.  It computes K = e^y mod p and H.
 class MSG_KEXDH_REPLY extends SSHMessage {
   static const int ID = 31;
-  Uint8List kS, hSig;
-  BigInt f;
+  Uint8List? kS, hSig;
+  BigInt? f;
   MSG_KEXDH_REPLY([this.f, this.kS, this.hSig]) : super(ID);
 
   @override
@@ -371,12 +369,12 @@ class MSG_KEXDH_REPLY extends SSHMessage {
 
   @override
   int get serializedSize =>
-      serializedHeaderSize + mpIntLength(f) + kS.length + hSig.length;
+      serializedHeaderSize + mpIntLength(f!) + kS!.length + hSig!.length;
 
   @override
   void serialize(SerializableOutput output) {
     serializeString(output, kS);
-    serializeMpInt(output, f);
+    serializeMpInt(output, f!);
     serializeString(output, hSig);
   }
 
@@ -393,7 +391,7 @@ class MSG_KEXDH_REPLY extends SSHMessage {
 /// https://tools.ietf.org/html/rfc4419
 class MSG_KEX_DH_GEX_REQUEST extends SSHMessage {
   static const int ID = 34;
-  int minN, maxN, n;
+  int? minN, maxN, n;
   MSG_KEX_DH_GEX_REQUEST([this.minN, this.maxN, this.n]) : super(ID);
 
   @override
@@ -404,9 +402,9 @@ class MSG_KEX_DH_GEX_REQUEST extends SSHMessage {
 
   @override
   void serialize(SerializableOutput output) {
-    output.addUint32(minN);
-    output.addUint32(n);
-    output.addUint32(maxN);
+    output.addUint32(minN!);
+    output.addUint32(n!);
+    output.addUint32(maxN!);
   }
 
   @override
@@ -420,7 +418,7 @@ class MSG_KEX_DH_GEX_REQUEST extends SSHMessage {
 /// S finds a group that best matches the client's request, and sends "p || g" to C.
 class MSG_KEX_DH_GEX_GROUP extends SSHMessage {
   static const int ID = 31;
-  BigInt p, g;
+  BigInt? p, g;
   MSG_KEX_DH_GEX_GROUP([this.p, this.g]) : super(ID);
 
   @override
@@ -428,12 +426,12 @@ class MSG_KEX_DH_GEX_GROUP extends SSHMessage {
 
   @override
   int get serializedSize =>
-      serializedHeaderSize + mpIntLength(p) + mpIntLength(g);
+      serializedHeaderSize + mpIntLength(p!) + mpIntLength(g!);
 
   @override
   void serialize(SerializableOutput output) {
-    serializeMpInt(output, p);
-    serializeMpInt(output, g);
+    serializeMpInt(output, p!);
+    serializeMpInt(output, g!);
   }
 
   @override
@@ -447,7 +445,7 @@ class MSG_KEX_DH_GEX_GROUP extends SSHMessage {
 /// It computes e = g^x mod p, and sends "e" to S.
 class MSG_KEX_DH_GEX_INIT extends MSG_KEXDH_INIT {
   static const int ID = 32;
-  MSG_KEX_DH_GEX_INIT([BigInt e]) : super(e) {
+  MSG_KEX_DH_GEX_INIT([BigInt? e]) : super(e) {
     id = ID;
   }
 }
@@ -456,7 +454,7 @@ class MSG_KEX_DH_GEX_INIT extends MSG_KEXDH_INIT {
 /// f = g^y mod p.  S receives "e".  It computes K = e^y mod p, and H.
 class MSG_KEX_DH_GEX_REPLY extends MSG_KEXDH_REPLY {
   static const int ID = 33;
-  MSG_KEX_DH_GEX_REPLY([BigInt f, Uint8List kS, Uint8List hSig])
+  MSG_KEX_DH_GEX_REPLY([BigInt? f, Uint8List? kS, Uint8List? hSig])
       : super(f, kS, hSig) {
     id = ID;
   }
@@ -466,14 +464,14 @@ class MSG_KEX_DH_GEX_REPLY extends MSG_KEXDH_REPLY {
 /// https://tools.ietf.org/html/rfc5656#section-4
 class MSG_KEX_ECDH_INIT extends SSHMessage {
   static const int ID = 30;
-  Uint8List qC;
+  Uint8List? qC;
   MSG_KEX_ECDH_INIT([this.qC]) : super(ID);
 
   @override
   int get serializedHeaderSize => 4;
 
   @override
-  int get serializedSize => serializedHeaderSize + qC.length;
+  int get serializedSize => serializedHeaderSize + qC!.length;
 
   @override
   void serialize(SerializableOutput output) => serializeString(output, qC);
@@ -487,7 +485,7 @@ class MSG_KEX_ECDH_INIT extends SSHMessage {
 /// generate and signs exchange hash.
 class MSG_KEX_ECDH_REPLY extends SSHMessage {
   static const int ID = 31;
-  Uint8List kS, qS, hSig;
+  Uint8List? kS, qS, hSig;
   MSG_KEX_ECDH_REPLY([this.qS, this.kS, this.hSig]) : super(ID);
 
   @override
@@ -495,7 +493,7 @@ class MSG_KEX_ECDH_REPLY extends SSHMessage {
 
   @override
   int get serializedSize =>
-      serializedHeaderSize + kS.length + qS.length + hSig.length;
+      serializedHeaderSize + kS!.length + qS!.length + hSig!.length;
 
   @override
   void serialize(SerializableOutput output) {
@@ -515,8 +513,8 @@ class MSG_KEX_ECDH_REPLY extends SSHMessage {
 /// https://tools.ietf.org/html/rfc4252#section-5
 class MSG_USERAUTH_REQUEST extends SSHMessage {
   static const int ID = 50;
-  String userName, serviceName, methodName, algoName;
-  Uint8List secret, sig;
+  String? userName, serviceName, methodName, algoName;
+  Uint8List? secret, sig;
   MSG_USERAUTH_REQUEST(
       [this.userName,
       this.serviceName,
@@ -532,13 +530,13 @@ class MSG_USERAUTH_REQUEST extends SSHMessage {
   @override
   int get serializedSize {
     int ret = serializedHeaderSize +
-        userName.length +
-        serviceName.length +
-        methodName.length;
+        userName!.length +
+        serviceName!.length +
+        methodName!.length;
     if (methodName == 'publickey') {
-      ret += 4 * 3 + 1 + algoName.length + secret.length + sig.length;
+      ret += 4 * 3 + 1 + algoName!.length + secret!.length + sig!.length;
     } else if (methodName == 'password') {
-      ret += 4 * 1 + 1 + secret.length;
+      ret += 4 * 1 + 1 + secret!.length;
     } else if (methodName == 'keyboard-interactive') {
       ret += 4 * 2;
     }
@@ -635,9 +633,12 @@ class MSG_USERAUTH_SUCCESS extends SSHMessage {
 /// https://tools.ietf.org/html/rfc4256#section-3.1
 class MSG_USERAUTH_INFO_REQUEST extends SSHMessage {
   static const int ID = 60;
-  String name, instruction, language;
-  List<MapEntry<String, int>> prompts;
+
   MSG_USERAUTH_INFO_REQUEST() : super(ID);
+
+  late List<MapEntry<String, int>> prompts;
+
+  late String name, instruction, language;
 
   @override
   int get serializedHeaderSize => 4 * 3;
@@ -657,7 +658,7 @@ class MSG_USERAUTH_INFO_REQUEST extends SSHMessage {
     instruction = deserializeString(input);
     language = deserializeString(input);
     numPrompts = input.getUint32();
-    prompts = List<MapEntry<String, int>>();
+    prompts = <MapEntry<String, int>>[];
     for (int i = 0; i < numPrompts; i++) {
       prompts.add(
           MapEntry<String, int>(deserializeString(input), input.getUint8()));
@@ -668,7 +669,7 @@ class MSG_USERAUTH_INFO_REQUEST extends SSHMessage {
 /// https://tools.ietf.org/html/rfc4256#section-3.4
 class MSG_USERAUTH_INFO_RESPONSE extends SSHMessage {
   static const int ID = 61;
-  List<Uint8List> response;
+  List<Uint8List?>? response;
   MSG_USERAUTH_INFO_RESPONSE([this.response]) : super(ID);
 
   @override
@@ -676,12 +677,12 @@ class MSG_USERAUTH_INFO_RESPONSE extends SSHMessage {
 
   @override
   int get serializedSize =>
-      response.fold(serializedHeaderSize, (v, e) => v + 4 + e.length);
+      response!.fold(serializedHeaderSize, (v, e) => v + 4 + e!.length);
 
   @override
   void serialize(SerializableOutput output) {
-    output.addUint32(response.length);
-    for (Uint8List r in response) {
+    output.addUint32(response!.length);
+    for (Uint8List? r in response!) {
       serializeString(output, r);
     }
   }
@@ -693,7 +694,7 @@ class MSG_USERAUTH_INFO_RESPONSE extends SSHMessage {
 /// https://tools.ietf.org/html/rfc4254#section-4
 class MSG_GLOBAL_REQUEST extends SSHMessage {
   static const int ID = 80;
-  String request;
+  late String request;
   int wantReply = 0;
   MSG_GLOBAL_REQUEST() : super(ID);
 
@@ -717,7 +718,7 @@ class MSG_GLOBAL_REQUEST extends SSHMessage {
 class MSG_GLOBAL_REQUEST_TCPIP extends SSHMessage {
   static const int ID = 80;
   String request = 'tcpip-forward', addr;
-  int port, wantReply = 0;
+  int? port, wantReply = 0;
   MSG_GLOBAL_REQUEST_TCPIP(this.addr, this.port) : super(ID);
 
   @override
@@ -729,9 +730,9 @@ class MSG_GLOBAL_REQUEST_TCPIP extends SSHMessage {
   @override
   void serialize(SerializableOutput output) {
     serializeString(output, request);
-    output.addUint8(wantReply);
+    output.addUint8(wantReply!);
     serializeString(output, addr);
-    output.addUint32(port);
+    output.addUint32(port!);
   }
 
   @override
@@ -746,8 +747,8 @@ class MSG_GLOBAL_REQUEST_TCPIP extends SSHMessage {
 /// https://tools.ietf.org/html/rfc4254#section-5.1
 class MSG_CHANNEL_OPEN extends SSHMessage {
   static const int ID = 90;
-  String channelType;
-  int senderChannel = 0, initialWinSize = 0, maximumPacketSize = 0;
+  String? channelType;
+  int? senderChannel = 0, initialWinSize = 0, maximumPacketSize = 0;
   MSG_CHANNEL_OPEN(
       [this.channelType,
       this.senderChannel,
@@ -759,14 +760,14 @@ class MSG_CHANNEL_OPEN extends SSHMessage {
   int get serializedHeaderSize => 4 * 4;
 
   @override
-  int get serializedSize => serializedHeaderSize + channelType.length;
+  int get serializedSize => serializedHeaderSize + channelType!.length;
 
   @override
   void serialize(SerializableOutput output) {
     serializeString(output, channelType);
-    output.addUint32(senderChannel);
-    output.addUint32(initialWinSize);
-    output.addUint32(maximumPacketSize);
+    output.addUint32(senderChannel!);
+    output.addUint32(initialWinSize!);
+    output.addUint32(maximumPacketSize!);
   }
 
   @override
@@ -781,8 +782,8 @@ class MSG_CHANNEL_OPEN extends SSHMessage {
 /// https://tools.ietf.org/html/rfc4254#section-7.2
 class MSG_CHANNEL_OPEN_TCPIP extends SSHMessage {
   static const int ID = 90;
-  String channelType, srcHost, dstHost;
-  int senderChannel = 0,
+  String? channelType, srcHost, dstHost;
+  int? senderChannel = 0,
       initialWinSize = 0,
       maximumPacketSize = 0,
       srcPort = 0,
@@ -804,20 +805,20 @@ class MSG_CHANNEL_OPEN_TCPIP extends SSHMessage {
   @override
   int get serializedSize =>
       serializedHeaderSize +
-      channelType.length +
-      srcHost.length +
-      dstHost.length;
+      channelType!.length +
+      srcHost!.length +
+      dstHost!.length;
 
   @override
   void serialize(SerializableOutput output) {
     serializeString(output, channelType);
-    output.addUint32(senderChannel);
-    output.addUint32(initialWinSize);
-    output.addUint32(maximumPacketSize);
+    output.addUint32(senderChannel!);
+    output.addUint32(initialWinSize!);
+    output.addUint32(maximumPacketSize!);
     serializeString(output, dstHost);
-    output.addUint32(dstPort);
+    output.addUint32(dstPort!);
     serializeString(output, srcHost);
-    output.addUint32(srcPort);
+    output.addUint32(srcPort!);
   }
 
   @override
@@ -834,13 +835,18 @@ class MSG_CHANNEL_OPEN_TCPIP extends SSHMessage {
 /// responds with either SSH_MSG_CHANNEL_OPEN_CONFIRMATION or SSH_MSG_CHANNEL_OPEN_FAILURE.
 class MSG_CHANNEL_OPEN_CONFIRMATION extends SSHMessage {
   static const int ID = 91;
-  int recipientChannel, senderChannel, initialWinSize, maximumPacketSize;
-  MSG_CHANNEL_OPEN_CONFIRMATION(
-      [this.recipientChannel,
-      this.senderChannel,
-      this.initialWinSize,
-      this.maximumPacketSize])
-      : super(ID);
+
+  MSG_CHANNEL_OPEN_CONFIRMATION([
+    this.recipientChannel,
+    this.senderChannel,
+    this.initialWinSize,
+    this.maximumPacketSize,
+  ]) : super(ID);
+
+  int? recipientChannel;
+  int? senderChannel;
+  int? initialWinSize;
+  int? maximumPacketSize;
 
   @override
   int get serializedHeaderSize => 4 * 4;
@@ -850,10 +856,10 @@ class MSG_CHANNEL_OPEN_CONFIRMATION extends SSHMessage {
 
   @override
   void serialize(SerializableOutput output) {
-    output.addUint32(recipientChannel);
-    output.addUint32(senderChannel);
-    output.addUint32(initialWinSize);
-    output.addUint32(maximumPacketSize);
+    output.addUint32(recipientChannel!);
+    output.addUint32(senderChannel!);
+    output.addUint32(initialWinSize!);
+    output.addUint32(maximumPacketSize!);
   }
 
   @override
@@ -868,23 +874,25 @@ class MSG_CHANNEL_OPEN_CONFIRMATION extends SSHMessage {
 /// The client MAY show the 'description' string to the user.
 class MSG_CHANNEL_OPEN_FAILURE extends SSHMessage {
   static const int ID = 92;
-  int recipientChannel = 0, reason = 0;
-  String description, language;
+
   MSG_CHANNEL_OPEN_FAILURE(
       [this.recipientChannel, this.reason, this.description, this.language])
       : super(ID);
+
+  int? recipientChannel = 0, reason = 0;
+  String? description, language;
 
   @override
   int get serializedHeaderSize => 4 * 4;
 
   @override
   int get serializedSize =>
-      serializedHeaderSize + description.length + language.length;
+      serializedHeaderSize + description!.length + language!.length;
 
   @override
   void serialize(SerializableOutput output) {
-    output.addUint32(recipientChannel);
-    output.addUint32(reason);
+    output.addUint32(recipientChannel!);
+    output.addUint32(reason!);
     serializeString(output, description);
     serializeString(output, language);
   }
@@ -902,7 +910,7 @@ class MSG_CHANNEL_OPEN_FAILURE extends SSHMessage {
 /// before it must wait for the window to be adjusted.
 class MSG_CHANNEL_WINDOW_ADJUST extends SSHMessage {
   static const int ID = 93;
-  int recipientChannel, bytesToAdd;
+  int? recipientChannel, bytesToAdd;
   MSG_CHANNEL_WINDOW_ADJUST([this.recipientChannel = 0, this.bytesToAdd = 0])
       : super(ID);
 
@@ -914,8 +922,8 @@ class MSG_CHANNEL_WINDOW_ADJUST extends SSHMessage {
 
   @override
   void serialize(SerializableOutput output) {
-    output.addUint32(recipientChannel);
-    output.addUint32(bytesToAdd);
+    output.addUint32(recipientChannel!);
+    output.addUint32(bytesToAdd!);
   }
 
   @override
@@ -928,19 +936,19 @@ class MSG_CHANNEL_WINDOW_ADJUST extends SSHMessage {
 /// https://tools.ietf.org/html/rfc4254#section-5.2
 class MSG_CHANNEL_DATA extends SSHMessage {
   static const int ID = 94;
-  int recipientChannel;
-  Uint8List data;
+  int? recipientChannel;
+  Uint8List? data;
   MSG_CHANNEL_DATA([this.recipientChannel, this.data]) : super(ID);
 
   @override
   int get serializedHeaderSize => 4 * 2;
 
   @override
-  int get serializedSize => serializedHeaderSize + data.length;
+  int get serializedSize => serializedHeaderSize + data!.length;
 
   @override
   void serialize(SerializableOutput output) {
-    output.addUint32(recipientChannel);
+    output.addUint32(recipientChannel!);
     serializeString(output, data);
   }
 
@@ -954,7 +962,7 @@ class MSG_CHANNEL_DATA extends SSHMessage {
 /// When a party will no longer send more data to a channel, it SHOULD send SSH_MSG_CHANNEL_EOF.
 class MSG_CHANNEL_EOF extends SSHMessage {
   static const int ID = 96;
-  int recipientChannel;
+  int? recipientChannel;
   MSG_CHANNEL_EOF([this.recipientChannel = 0]) : super(ID);
 
   @override
@@ -965,7 +973,7 @@ class MSG_CHANNEL_EOF extends SSHMessage {
 
   @override
   void serialize(SerializableOutput output) =>
-      output.addUint32(recipientChannel);
+      output.addUint32(recipientChannel!);
 
   @override
   void deserialize(SerializableInput input) =>
@@ -976,7 +984,7 @@ class MSG_CHANNEL_EOF extends SSHMessage {
 /// https://tools.ietf.org/html/rfc4254#section-5.3
 class MSG_CHANNEL_CLOSE extends SSHMessage {
   static const int ID = 97;
-  int recipientChannel;
+  int? recipientChannel;
   MSG_CHANNEL_CLOSE([this.recipientChannel = 0]) : super(ID);
 
   @override
@@ -987,7 +995,7 @@ class MSG_CHANNEL_CLOSE extends SSHMessage {
 
   @override
   void serialize(SerializableOutput output) =>
-      output.addUint32(recipientChannel);
+      output.addUint32(recipientChannel!);
 
   @override
   void deserialize(SerializableInput input) =>
@@ -997,13 +1005,13 @@ class MSG_CHANNEL_CLOSE extends SSHMessage {
 /// Channel-Specific Requests https://tools.ietf.org/html/rfc4254#section-5.4
 class MSG_CHANNEL_REQUEST extends SSHMessage {
   static const int ID = 98;
-  int recipientChannel = 0,
+  int? recipientChannel = 0,
       width = 0,
       height = 0,
       pixelWidth = 0,
       pixelHeight = 0;
   bool wantReply = false;
-  String requestType, term, termMode;
+  String? requestType, term, termMode;
   MSG_CHANNEL_REQUEST() : super(ID);
   MSG_CHANNEL_REQUEST.exec(
       this.recipientChannel, this.requestType, this.term, this.wantReply)
@@ -1013,10 +1021,10 @@ class MSG_CHANNEL_REQUEST extends SSHMessage {
       : super(ID);
   MSG_CHANNEL_REQUEST.ptyReq(this.recipientChannel, this.requestType, Point d,
       Point pd, this.term, this.termMode, this.wantReply)
-      : width = d.x,
-        height = d.y,
-        pixelWidth = pd.x,
-        pixelHeight = pd.y,
+      : width = d.x as int?,
+        height = d.y as int?,
+        pixelWidth = pd.x as int?,
+        pixelHeight = pd.y as int?,
         super(ID);
 
   @override
@@ -1024,11 +1032,11 @@ class MSG_CHANNEL_REQUEST extends SSHMessage {
 
   @override
   int get serializedSize {
-    int ret = serializedHeaderSize + requestType.length;
+    int ret = serializedHeaderSize + requestType!.length;
     if (requestType == 'pty-req') {
-      ret += 4 * 6 + term.length + termMode.length;
+      ret += 4 * 6 + term!.length + termMode!.length;
     } else if (requestType == 'exec') {
-      ret += 4 * 1 + term.length;
+      ret += 4 * 1 + term!.length;
     } else if (requestType == 'window-change') {
       ret += 4 * 4;
     }
@@ -1044,25 +1052,25 @@ class MSG_CHANNEL_REQUEST extends SSHMessage {
 
   @override
   void serialize(SerializableOutput output) {
-    output.addUint32(recipientChannel);
+    output.addUint32(recipientChannel!);
     serializeString(output, requestType);
     output.addUint8(wantReply ? 1 : 0);
     if (requestType == 'pty-req') {
       serializeString(output, term);
-      output.addUint32(width);
-      output.addUint32(height);
-      output.addUint32(pixelWidth);
-      output.addUint32(pixelHeight);
+      output.addUint32(width!);
+      output.addUint32(height!);
+      output.addUint32(pixelWidth!);
+      output.addUint32(pixelHeight!);
       serializeString(output, termMode);
     } else if (requestType == 'exec') {
       serializeString(output, term);
     } else if (requestType == 'window-change') {
-      output.addUint32(width);
-      output.addUint32(height);
-      output.addUint32(pixelWidth);
-      output.addUint32(pixelHeight);
+      output.addUint32(width!);
+      output.addUint32(height!);
+      output.addUint32(pixelWidth!);
+      output.addUint32(pixelHeight!);
     } else if (requestType == 'exit-status') {
-      output.addUint32(width);
+      output.addUint32(width!);
     }
   }
 }
@@ -1071,7 +1079,7 @@ class MSG_CHANNEL_REQUEST extends SSHMessage {
 /// the recipient responds with either SSH_MSG_CHANNEL_SUCCESS, or SSH_MSG_CHANNEL_FAILURE.
 class MSG_CHANNEL_SUCCESS extends SSHMessage {
   static const int ID = 99;
-  int recipientChannel;
+  int? recipientChannel;
   MSG_CHANNEL_SUCCESS([this.recipientChannel]) : super(ID);
 
   @override
@@ -1082,7 +1090,7 @@ class MSG_CHANNEL_SUCCESS extends SSHMessage {
 
   @override
   void serialize(SerializableOutput output) =>
-      output.addUint32(recipientChannel);
+      output.addUint32(recipientChannel!);
 
   @override
   void deserialize(SerializableInput input) =>
@@ -1092,7 +1100,7 @@ class MSG_CHANNEL_SUCCESS extends SSHMessage {
 /// These messages do not consume window space and can be sent even if no window space is available.
 class MSG_CHANNEL_FAILURE extends SSHMessage {
   static const int ID = 100;
-  int recipientChannel;
+  int? recipientChannel;
   MSG_CHANNEL_FAILURE([this.recipientChannel]) : super(ID);
 
   @override
@@ -1103,7 +1111,7 @@ class MSG_CHANNEL_FAILURE extends SSHMessage {
 
   @override
   void serialize(SerializableOutput output) =>
-      output.addUint32(recipientChannel);
+      output.addUint32(recipientChannel!);
 
   @override
   void deserialize(SerializableInput input) =>

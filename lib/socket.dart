@@ -49,8 +49,8 @@ abstract class SocketInterface extends ConnectionInterface {
 /// Mixin for testing with shim [ConnectionInterface]s.
 mixin TestConnection {
   bool connected = false, connecting = false, closed = false;
-  Uint8ListCallback messageHandler;
-  StringCallback errorHandler, doneHandler;
+  Uint8ListCallback? messageHandler;
+  StringCallback? errorHandler, doneHandler;
   Queue<String> sent = Queue<String>();
 
   void close() => closed = true;

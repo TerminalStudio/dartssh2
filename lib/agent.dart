@@ -43,8 +43,8 @@ mixin SSHAgentForwarding on SSHTransport {
         break;
 
       default:
-        if (print != null) {
-          print('$hostport: unknown agent packet number: $agentPacketId');
+        if (this.print != null) {
+          this.print!('$hostport: unknown agent packet number: $agentPacketId');
         }
         break;
     }
@@ -53,11 +53,11 @@ mixin SSHAgentForwarding on SSHTransport {
   /// Responds with any identities we're forwarding.
   void handleAGENTC_REQUEST_IDENTITIES(Channel channel) {
     if (tracePrint != null) {
-      tracePrint('$hostport: agent channel: AGENTC_REQUEST_IDENTITIES');
+      tracePrint!('$hostport: agent channel: AGENTC_REQUEST_IDENTITIES');
     }
     AGENT_IDENTITIES_ANSWER reply = AGENT_IDENTITIES_ANSWER();
     if (identity != null) {
-      reply.keys = identity.getRawPublicKeyList();
+      reply.keys = identity!.getRawPublicKeyList();
     }
     sendToChannel(channel, reply.toRaw());
   }
@@ -65,12 +65,12 @@ mixin SSHAgentForwarding on SSHTransport {
   /// Signs challenge authenticating a descendent channel.
   void handleAGENTC_SIGN_REQUEST(Channel channel, AGENTC_SIGN_REQUEST msg) {
     if (tracePrint != null) {
-      tracePrint('$hostport: agent channel: AGENTC_SIGN_REQUEST');
+      tracePrint!('$hostport: agent channel: AGENTC_SIGN_REQUEST');
     }
-    SerializableInput keyStream = SerializableInput(msg.key);
+    SerializableInput keyStream = SerializableInput(msg.key!);
     String keyType = deserializeString(keyStream);
     Uint8List sig =
-        identity.signMessage(Key.id(keyType), msg.data, getSecureRandom());
+        identity!.signMessage(Key.id(keyType), msg.data, getSecureRandom());
     if (sig != null) {
       sendToChannel(channel, AGENT_SIGN_RESPONSE(sig).toRaw());
     } else {
@@ -136,8 +136,10 @@ class AGENTC_REQUEST_IDENTITIES extends AgentMessage {
 /// https://tools.ietf.org/html/draft-miller-ssh-agent-03#section-4.4
 class AGENT_IDENTITIES_ANSWER extends AgentMessage {
   static const int ID = 12;
-  List<MapEntry<Uint8List, String>> keys = List<MapEntry<Uint8List, String>>();
+
   AGENT_IDENTITIES_ANSWER() : super(ID);
+
+  var keys = <MapEntry<Uint8List, String>>[];
 
   @override
   int get serializedHeaderSize => 4;
@@ -169,7 +171,7 @@ class AGENT_IDENTITIES_ANSWER extends AgentMessage {
 /// https://tools.ietf.org/html/draft-miller-ssh-agent-03#section-4.5
 class AGENTC_SIGN_REQUEST extends AgentMessage {
   static const int ID = 13;
-  Uint8List key, data;
+  Uint8List? key, data;
   int flags;
   AGENTC_SIGN_REQUEST([this.key, this.data, this.flags = 0]) : super(ID);
 
@@ -177,7 +179,7 @@ class AGENTC_SIGN_REQUEST extends AgentMessage {
   int get serializedHeaderSize => 4 * 3;
 
   @override
-  int get serializedSize => serializedHeaderSize + key.length + data.length;
+  int get serializedSize => serializedHeaderSize + key!.length + data!.length;
 
   @override
   void deserialize(SerializableInput input) {
@@ -197,14 +199,14 @@ class AGENTC_SIGN_REQUEST extends AgentMessage {
 /// On success, the agent shall reply with:
 class AGENT_SIGN_RESPONSE extends AgentMessage {
   static const int ID = 14;
-  Uint8List sig;
+  Uint8List? sig;
   AGENT_SIGN_RESPONSE([this.sig]) : super(ID);
 
   @override
   int get serializedHeaderSize => 4;
 
   @override
-  int get serializedSize => serializedHeaderSize + sig.length;
+  int get serializedSize => serializedHeaderSize + sig!.length;
 
   @override
   void deserialize(SerializableInput input) =>

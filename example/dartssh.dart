@@ -13,9 +13,9 @@ import 'package:dartssh/pem.dart';
 import 'package:dartssh/ssh.dart';
 import 'package:dartssh/transport.dart';
 
-Identity identity;
-SSHClient client;
-Channel forwardChannel;
+Identity? identity;
+SSHClient? client;
+Channel? forwardChannel;
 
 void main(List<String> arguments) async {
   stdin.lineMode = false;
@@ -25,8 +25,8 @@ void main(List<String> arguments) async {
   });
   ProcessSignal.sigwinch.watch().listen((_) {
     if (client != null) {
-      client.setTerminalWindowSize(
-          stdout.terminalColumns, stdout.terminalLines);
+      client!
+          .setTerminalWindowSize(stdout.terminalColumns, stdout.terminalLines);
     }
   });
   exitCode = await ssh(
@@ -41,9 +41,9 @@ void main(List<String> arguments) async {
 
 void send(Uint8List x) {
   if (forwardChannel != null) {
-    client.sendToChannel(forwardChannel, x);
+    client!.sendToChannel(forwardChannel!, x);
   } else {
-    client.sendChannelData(x);
+    client!.sendChannelData(x);
   }
 }
 
@@ -80,10 +80,10 @@ Future<int> ssh(
     return 1;
   }
 
-  final String host = args.rest.first,
-      login = args['login'],
-      identityFile = args['identity'],
-      tunnel = args['tunnel'];
+  final String host = args.rest.first;
+  final String? login = args['login'];
+  final String? identityFile = args['identity'];
+  final String? tunnel = args['tunnel'];
 
   if (login == null || login.isEmpty) {
     print('no login specified');
@@ -100,41 +100,43 @@ Future<int> ssh(
 
   try {
     client = SSHClient(
-        hostport: parseUri(host),
-        login: login,
-        print: print,
-        termWidth: termWidth,
-        termHeight: termHeight,
-        termvar: Platform.environment['TERM'] ?? 'xterm',
-        agentForwarding: args['agentForwarding'],
-        debugPrint: args['debug'] ? print : null,
-        tracePrint: args['trace'] ? print : null,
-        getPassword: ((args['password'] != null)
-            ? () => utf8.encode(args['password'])
-            : null),
-        response: response,
-        loadIdentity: () {
-          if (identity == null && identityFile != null) {
-            identity = parsePem(File(identityFile).readAsStringSync());
-          }
-          return identity;
-        },
-        disconnected: done,
-        startShell: tunnel == null,
-        success: tunnel == null
-            ? null
-            : () {
-                List<String> tunnelTarget = tunnel.split(':');
-                forwardChannel = client.openTcpChannel(
-                    '127.0.0.1',
-                    1234,
-                    tunnelTarget[0],
-                    int.parse(tunnelTarget[1]),
-                    (_, Uint8List m) => response(client, m));
-              });
+      hostport: parseUri(host),
+      login: login,
+      print: print,
+      termWidth: termWidth,
+      termHeight: termHeight,
+      termvar: Platform.environment['TERM'] ?? 'xterm',
+      agentForwarding: args['agentForwarding'] == true,
+      debugPrint: args['debug'] == true ? print : null,
+      tracePrint: args['trace'] == true ? print : null,
+      getPassword: (args['password'] != null)
+          ? () => utf8.encode(args['password']) as Uint8List
+          : null,
+      response: response,
+      loadIdentity: () {
+        if (identity == null && identityFile != null) {
+          identity = parsePem(File(identityFile).readAsStringSync());
+        }
+        return identity;
+      },
+      disconnected: done,
+      startShell: tunnel == null,
+      success: tunnel == null
+          ? null
+          : () {
+              List<String> tunnelTarget = tunnel.split(':');
+              forwardChannel = client!.openTcpChannel(
+                '127.0.0.1',
+                1234,
+                tunnelTarget[0],
+                int.parse(tunnelTarget[1]),
+                (_, Uint8List? m) => response(client!, m!),
+              );
+            },
+    );
 
     await for (String x in input.transform(utf8.decoder)) {
-      send(utf8.encode(x));
+      send(utf8.encode(x) as Uint8List);
     }
   } catch (error, stacktrace) {
     print('ssh: exception: $error: $stacktrace');

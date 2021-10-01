@@ -10,12 +10,12 @@ import 'package:dartssh/transport.dart';
 /// dart:html based alternative [HttpClient] implementation.
 class HttpClientImpl extends HttpClient {
   static const String type = 'html';
-  HttpClientImpl({StringCallback debugPrint, StringFilter userAgent})
+  HttpClientImpl({StringCallback? debugPrint, StringFilter? userAgent})
       : super(debugPrint: debugPrint);
 
   @override
   Future<HttpResponse> request(String url,
-      {String method, String data, Map<String, String> headers}) {
+      {String? method, String? data, Map<String, String>? headers}) {
     numOutstanding++;
     Completer<HttpResponse> completer = Completer<HttpResponse>();
     html.HttpRequest.request(url, method: method, requestHeaders: headers)

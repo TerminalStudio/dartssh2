@@ -20,24 +20,24 @@ import 'package:dartssh/ssh.dart';
 
 typedef VoidCallback = void Function();
 typedef FutureFunction = Future Function();
-typedef StringCallback = void Function(String);
+typedef StringCallback = void Function(String?);
 typedef StringFunction = String Function();
-typedef StringFilter = String Function(String);
+typedef StringFilter = String Function(String?);
 typedef Uint8ListCallback = void Function(Uint8List);
 typedef Uint8ListFunction = Uint8List Function();
-typedef IdentityFunction = Identity Function();
-typedef FingerprintCallback = bool Function(int, Uint8List);
-typedef ChannelCallback = void Function(Channel, Uint8List);
+typedef IdentityFunction = Identity? Function();
+typedef FingerprintCallback = bool Function(int, Uint8List?);
+typedef ChannelCallback = void Function(Channel, Uint8List?);
 typedef ChannelInputCallback = void Function(Channel, SerializableInput);
 typedef ResponseCallback = void Function(SSHTransport, Uint8List);
-typedef RemoteForwardCallback = Future<String> Function(
-    Channel, String, int, String, int);
+typedef RemoteForwardCallback = Future<String?> Function(
+    Channel, String?, int?, String?, int?);
 
 /// When a connection comes to a port for which forwarding has been
 /// requested, a channel is opened to forward the port to the other side.
 class Forward {
-  int port, targetPort;
-  String targetHost;
+  int? port, targetPort;
+  String? targetHost;
 }
 
 /// All terminal sessions, forwarded connections, etc., are [Channel]s.
@@ -48,9 +48,9 @@ class Channel {
   int localId, remoteId, windowC, windowS;
   bool opened = true, agentChannel = false, sentEof = false, sentClose = false;
   QueueBuffer buf = QueueBuffer(Uint8List(0));
-  ChannelCallback cb;
-  StringCallback error;
-  VoidCallback connected, closed;
+  ChannelCallback? cb;
+  StringCallback? error;
+  VoidCallback? connected, closed;
   Channel({
     this.localId = 0,
     this.remoteId = 0,
@@ -65,67 +65,74 @@ class Channel {
 
 /// It is RECOMMENDED that the keys be changed after each gigabyte of transmitted
 /// data or after each hour of connection time, whichever comes sooner.
-class SSHTransportState {
-  static const int INIT = 0;
-  static const int FIRST_KEXINIT = 1;
-  static const int FIRST_KEXREPLY = 2;
-  static const int FIRST_NEWKEYS = 3;
-  static const int KEXINIT = 4;
-  static const int KEXREPLY = 5;
-  static const int NEWKEYS = 6;
+enum SSHTransportState {
+  INIT,
+  FIRST_KEXINIT,
+  FIRST_KEXREPLY,
+  FIRST_NEWKEYS,
+  KEXINIT,
+  KEXREPLY,
+  NEWKEYS,
 }
+
+// extension SSHTransportStateX on SSHTransportState {
+//   operator <(SSHTransportState other) => this.index < other.index;
+//   operator >(SSHTransportState other) => this.index > other.index;
+//   operator <=(SSHTransportState other) => this.index <= other.index;
+//   operator >=(SSHTransportState other) => this.index >= other.index;
+// }
 
 /// SSH Transport Layer Protocol implementation providing KEX, ciphers, and MAC.
 /// https://tools.ietf.org/html/rfc4253
 abstract class SSHTransport with SSHDiffieHellman {
   /// Parameter for public key authentication
-  Identity identity;
+  Identity? identity;
 
   /// Remote endpoint of SSH connection.  Parameter on client-side.
-  Uri hostport;
+  Uri? hostport;
 
   /// Whether compression is supported.
-  bool compress;
+  bool? compress;
 
   /// Source of randomness, e.g [Random.secure()].
-  Random random;
+  Random? random;
 
   /// Pointycastle's random interface.
-  SecureRandom secureRandom;
+  SecureRandom? secureRandom;
 
   /// Parameter invoked on connection close.
-  VoidCallback disconnected;
+  VoidCallback? disconnected;
 
   /// Parameter invoked with session channel data (and optionally UI prompts).
-  ResponseCallback response;
+  ResponseCallback? response;
 
   /// Parameter invoked with ERROR and INFO loggging.
-  StringCallback print;
+  StringCallback? print;
 
   /// Parameter invoked with debug logging.
-  StringCallback debugPrint;
+  StringCallback? debugPrint;
 
   /// Parameter invoked with trace logging.
-  StringCallback tracePrint;
+  StringCallback? tracePrint;
 
   /// Parameter describing local ports to forward over SSH tunnel.
-  List<Forward> forwardLocal;
+  List<Forward>? forwardLocal;
 
   /// Parameter describing remote ports to forward over SSH tunnel.
-  List<Forward> forwardRemote;
+  List<Forward>? forwardRemote;
 
   /// Paramter invoked upon connection to forwarded remote port.
-  RemoteForwardCallback remoteForward;
+  RemoteForwardCallback? remoteForward;
 
   // State
-  bool server,
+  bool? server,
       guessedC = false,
       guessedS = false,
       guessedRightC = false,
       guessedRightS = false;
 
-  int state = 0,
-      padding = 0,
+  SSHTransportState state = SSHTransportState.INIT;
+  int padding = 0,
       packetId = 0,
       packetLen = 0,
       packetMacLen = 0,
@@ -151,9 +158,10 @@ abstract class SSHTransport with SSHDiffieHellman {
 
   num serverVersion = 0;
 
-  String verC = 'SSH-2.0-dartssh_1.0', verS;
+  String verC = 'SSH-2.0-dartssh_1.0';
+  String? verS;
 
-  Uint8List kexInitC,
+  Uint8List? kexInitC,
       kexInitS,
       decryptBuf,
       exH,
@@ -161,15 +169,15 @@ abstract class SSHTransport with SSHDiffieHellman {
       integrityC2s,
       integrityS2c;
 
-  SocketInterface socket;
+  SocketInterface? socket;
   QueueBuffer readBuffer = QueueBuffer(Uint8List(0));
-  SerializableInput packetS;
-  BlockCipher encrypt, decrypt;
-  HMac macAlgoC2s, macAlgoS2c;
+  SerializableInput? packetS;
+  BlockCipher? encrypt, decrypt;
+  HMac? macAlgoC2s, macAlgoS2c;
   dynamic zreader, zwriter;
-  Channel sessionChannel;
+  Channel? sessionChannel;
   HashMap<int, Channel> channels = HashMap<int, Channel>();
-  HashMap<int, Forward> forwardingRemote;
+  HashMap<int?, Forward>? forwardingRemote;
 
   SSHTransport(this.server,
       {this.identity,
@@ -194,13 +202,13 @@ abstract class SSHTransport with SSHDiffieHellman {
   void handlePacket(Uint8List packet);
   void handleChannelOpenConfirmation(Channel chan);
   void handleChannelData(Channel chan, Uint8List data);
-  void handleChannelClose(Channel chan, [String description]);
+  void handleChannelClose(Channel chan, [String? description]);
 
   /// Whether we've initiated the connection.
-  bool get client => !server;
+  bool get client => !server!;
 
   /// PointyCastle random number generator interface.
-  SecureRandom getSecureRandom() {
+  SecureRandom? getSecureRandom() {
     if (secureRandom != null) return secureRandom;
     return (secureRandom = FortunaRandom())
       ..seed(KeyParameter(randBytes(random, 32)));
@@ -209,36 +217,36 @@ abstract class SSHTransport with SSHDiffieHellman {
   /// If anything goes wrong, disconnect with [reason].
   void disconnect(String reason) {
     if (socket != null) {
-      socket.close();
+      socket!.close();
       socket = null;
     }
 
     channels.forEach((int channelId, Channel channel) {
-      if (!channel.sentClose && channel.closed != null) channel.closed();
+      if (!channel.sentClose && channel.closed != null) channel.closed!();
     });
     channels.clear();
 
-    if (debugPrint != null) {
-      debugPrint('SSHTransport.disconnected: $reason');
+    {
+      debugPrint?.call('SSHTransport.disconnected: $reason');
     }
 
-    if (disconnected != null) disconnected();
+    if (disconnected != null) disconnected!();
   }
 
   /// Callback supplied to [socket.connect].
   void onConnected() {
-    socket.handleError((error) => disconnect('SSHTransport.error: $error'));
-    socket.handleDone((v) => disconnect('SSHTransport.done: $v'));
-    socket.listen(handleRead);
+    socket!.handleError((error) => disconnect('SSHTransport.error: $error'));
+    socket!.handleDone((v) => disconnect('SSHTransport.done: $v'));
+    socket!.listen(handleRead);
     handleConnected();
   }
 
   /// When the connection has been established, both sides MUST send an identification string.
   /// https://tools.ietf.org/html/rfc4253#section-4.2
   void handleConnected() {
-    if (debugPrint != null) debugPrint('SSHTransport.handleConnected');
+    debugPrint?.call('SSHTransport.handleConnected');
     if (state != SSHTransportState.INIT) throw FormatException('$state');
-    socket.send(verC + '\r\n');
+    socket!.send(verC + '\r\n');
     if (client) sendKeyExchangeInit(false);
   }
 
@@ -248,7 +256,7 @@ abstract class SSHTransport with SSHDiffieHellman {
         kexPref = KEX.preferenceCsv(),
         cipherPref = Cipher.preferenceCsv(),
         macPref = MAC.preferenceCsv(),
-        compressPref = Compression.preferenceCsv(compress ? 0 : 1);
+        compressPref = Compression.preferenceCsv(compress! ? 0 : 1);
     sequenceNumberC2s++;
     Uint8List kexInit = MSG_KEXINIT(
             randBytes(random, 16),
@@ -269,9 +277,9 @@ abstract class SSHTransport with SSHDiffieHellman {
     } else {
       kexInitS = kexInit;
     }
-    socket.sendRaw(kexInit);
-    if (debugPrint != null) {
-      debugPrint(
+    socket!.sendRaw(kexInit);
+    {
+      debugPrint?.call(
         '$hostport wrote KEXINIT { kex=$kexPref key=$keyPref, cipher=$cipherPref, mac=$macPref, compress=$compressPref }',
       );
     }
@@ -289,7 +297,7 @@ abstract class SSHTransport with SSHDiffieHellman {
 
     /// Thereafter we speak RFC4253 Binary Packet Protocol.
     while (true) {
-      bool encrypted = state > SSHTransportState.FIRST_NEWKEYS;
+      bool encrypted = state.index > SSHTransportState.FIRST_NEWKEYS.index;
 
       /// We only need to decrypt one cipher block to determine the next packet length.
       if (packetLen == 0) {
@@ -305,7 +313,7 @@ abstract class SSHTransport with SSHDiffieHellman {
               readCipher(viewUint8List(readBuffer.data, 0, decryptBlockSize));
         }
         BinaryPacket binaryPacket =
-            BinaryPacket(encrypted ? decryptBuf : readBuffer.data);
+            BinaryPacket(encrypted ? decryptBuf! : readBuffer.data);
         packetLen = 4 + binaryPacket.length + packetMacLen;
         padding = binaryPacket.padding;
       }
@@ -316,7 +324,7 @@ abstract class SSHTransport with SSHDiffieHellman {
       /// Decrypts the remaining cipher blocks in the packet.
       if (encrypted) {
         decryptBuf = appendUint8List(
-            decryptBuf,
+            decryptBuf!,
             readCipher(viewUint8List(readBuffer.data, decryptBlockSize,
                 packetLen - decryptBlockSize - packetMacLen)));
       }
@@ -327,9 +335,9 @@ abstract class SSHTransport with SSHDiffieHellman {
         Uint8List mac = computeMAC(
             MAC.mac(macIdS2c),
             macHashLenS,
-            viewUint8List(decryptBuf, 0, packetLen - packetMacLen),
+            viewUint8List(decryptBuf!, 0, packetLen - packetMacLen),
             sequenceNumberS2c - 1,
-            integrityS2c,
+            integrityS2c!,
             macPrefixS2c);
         if (!equalUint8List(
             mac,
@@ -340,14 +348,14 @@ abstract class SSHTransport with SSHDiffieHellman {
       }
 
       /// Handles the packet.
-      Uint8List packet = encrypted ? decryptBuf : readBuffer.data;
+      Uint8List packet = encrypted ? decryptBuf! : readBuffer.data;
       packetS = SerializableInput(viewUint8List(packet, BinaryPacket.headerSize,
           packetLen - BinaryPacket.headerSize - packetMacLen - padding));
       if (zreader != null) {
         /// If compression has been negotiated, the 'payload' field (and only it)
         /// will be compressed using the negotiated algorithm.
         /// https://tools.ietf.org/html/rfc4253#section-6.2
-        packetS = SerializableInput(zreader.convert(packetS.buffer));
+        packetS = SerializableInput(zreader.convert(packetS!.buffer));
       }
       handlePacket(packet);
       readBuffer.flush(packetLen);
@@ -365,13 +373,13 @@ abstract class SSHTransport with SSHDiffieHellman {
       String line = String.fromCharCodes(viewUint8List(
               readBuffer.data, processed, newlineIndex - processed))
           .trim();
-      if (tracePrint != null) tracePrint('$hostport: SSH_INIT: $line');
+      if (tracePrint != null) tracePrint!('$hostport: SSH_INIT: $line');
       processed = newlineIndex + 1;
       if (line.startsWith('SSH-')) {
         verS = line;
         serverVersion = toFloat(line.substring(4));
-        state++;
-        if (server) sendKeyExchangeInit(false);
+        state = SSHTransportState.FIRST_KEXINIT;
+        if (server!) sendKeyExchangeInit(false);
         break;
       }
     }
@@ -380,7 +388,7 @@ abstract class SSHTransport with SSHDiffieHellman {
 
   /// https://tools.ietf.org/html/rfc4253#section-7.1
   void handleMSG_KEXINIT(MSG_KEXINIT msg, Uint8List packet) {
-    if (tracePrint != null) tracePrint('$hostport: MSG_KEXINIT $msg');
+    if (tracePrint != null) tracePrint!('$hostport: MSG_KEXINIT $msg');
 
     if (client) {
       guessedS = msg.firstKexPacketFollows;
@@ -391,45 +399,46 @@ abstract class SSHTransport with SSHDiffieHellman {
     }
 
     /// Make sure we can agree on an algorithm suite.
-    if (0 == (kexMethod = KEX.preferenceIntersect(msg.kexAlgorithms, server))) {
+    if (0 ==
+        (kexMethod = KEX.preferenceIntersect(msg.kexAlgorithms, server!))) {
       throw FormatException('$hostport: negotiate kex');
     } else if (0 ==
         (hostkeyType =
-            Key.preferenceIntersect(msg.serverHostKeyAlgorithms, server))) {
+            Key.preferenceIntersect(msg.serverHostKeyAlgorithms, server!))) {
       throw FormatException('$hostport: negotiate hostkey');
     } else if (0 ==
         (cipherIdC2s = Cipher.preferenceIntersect(
-            msg.encryptionAlgorithmsClientToServer, server))) {
+            msg.encryptionAlgorithmsClientToServer, server!))) {
       throw FormatException('$hostport: negotiate c2s cipher');
     } else if (0 ==
         (cipherIdS2c = Cipher.preferenceIntersect(
-            msg.encryptionAlgorithmsServerToClient, server))) {
+            msg.encryptionAlgorithmsServerToClient, server!))) {
       throw FormatException('$hostport: negotiate s2c cipher');
     } else if (0 ==
-        (macIdC2s =
-            MAC.preferenceIntersect(msg.macAlgorithmsClientToServer, server))) {
+        (macIdC2s = MAC.preferenceIntersect(
+            msg.macAlgorithmsClientToServer, server!))) {
       throw FormatException('$hostport: negotiate c2s mac');
     } else if (0 ==
-        (macIdS2c =
-            MAC.preferenceIntersect(msg.macAlgorithmsServerToClient, server))) {
+        (macIdS2c = MAC.preferenceIntersect(
+            msg.macAlgorithmsServerToClient, server!))) {
       throw FormatException('$hostport: negotiate s2c mac');
     } else if (0 ==
         (compressIdC2s = Compression.preferenceIntersect(
             msg.compressionAlgorithmsClientToServer,
-            server,
-            compress ? 0 : 1))) {
+            server!,
+            compress! ? 0 : 1))) {
       throw FormatException('$hostport: negotiate c2s compression');
     } else if (0 ==
         (compressIdS2c = Compression.preferenceIntersect(
             msg.compressionAlgorithmsServerToClient,
-            server,
-            compress ? 0 : 1))) {
+            server!,
+            compress! ? 0 : 1))) {
       throw FormatException('$hostport: negotiate s2c compression');
     }
 
     /// Setup connection and start Diffie Hellman key exchange.
-    guessedRightS = kexMethod == KEX.id(msg.kexAlgorithms.split(',')[0]) &&
-        hostkeyType == Key.id(msg.serverHostKeyAlgorithms.split(',')[0]);
+    guessedRightS = kexMethod == KEX.id(msg.kexAlgorithms!.split(',')[0]) &&
+        hostkeyType == Key.id(msg.serverHostKeyAlgorithms!.split(',')[0]);
     guessedRightC = kexMethod == 1 && hostkeyType == 1;
     encryptBlockSize = Cipher.blockSize(cipherIdC2s);
     decryptBlockSize = Cipher.blockSize(cipherIdS2c);
@@ -440,7 +449,7 @@ abstract class SSHTransport with SSHDiffieHellman {
     sendDiffileHellmanInit();
 
     if (print != null) {
-      print('$hostport: ssh negotiated { kex=${KEX.name(kexMethod)}, hostkey=${Key.name(hostkeyType)}' +
+      print!('$hostport: ssh negotiated { kex=${KEX.name(kexMethod)}, hostkey=${Key.name(hostkeyType)}' +
           (cipherIdC2s == cipherIdS2c
               ? ', cipher=${Cipher.name(cipherIdC2s)}'
               : ', cipherC2s=${Cipher.name(cipherIdC2s)}, cipherS2c=${Cipher.name(cipherIdS2c)}') +
@@ -453,7 +462,7 @@ abstract class SSHTransport with SSHDiffieHellman {
           " }");
     }
     if (tracePrint != null) {
-      tracePrint(
+      tracePrint!(
           '$hostport: blockSize=$encryptBlockSize,$decryptBlockSize, macHashLen=$macHashLenC,$macHashLenS');
     }
   }
@@ -465,7 +474,7 @@ abstract class SSHTransport with SSHDiffieHellman {
       throw FormatException('$hostport: unexpected state $state');
     }
     if (tracePrint != null) {
-      tracePrint('$hostport: MSG_NEWKEYS');
+      tracePrint!('$hostport: MSG_NEWKEYS');
     }
     int keyLenC = Cipher.keySize(cipherIdC2s),
         keyLenS = Cipher.keySize(cipherIdS2c);
@@ -488,12 +497,12 @@ abstract class SSHTransport with SSHDiffieHellman {
         deriveKey(kexHash, sessionId, exH, K, 'E'.codeUnits[0], macHashLenC);
     integrityS2c =
         deriveKey(kexHash, sessionId, exH, K, 'F'.codeUnits[0], macHashLenS);
-    if (server) {
-      BlockCipher tmpBC = encrypt;
+    if (server!) {
+      BlockCipher? tmpBC = encrypt;
       encrypt = decrypt;
       decrypt = tmpBC;
 
-      Uint8List swapUL = integrityC2s;
+      Uint8List? swapUL = integrityC2s;
       integrityC2s = integrityS2c;
       integrityS2c = swapUL;
     }
@@ -503,16 +512,16 @@ abstract class SSHTransport with SSHDiffieHellman {
   /// If the remote side can open the channel, it responds with SSH_MSG_CHANNEL_OPEN_CONFIRMATION.
   void handleMSG_CHANNEL_OPEN_CONFIRMATION(MSG_CHANNEL_OPEN_CONFIRMATION msg) {
     if (tracePrint != null) {
-      tracePrint(
+      tracePrint!(
           '$hostport: MSG_CHANNEL_OPEN_CONFIRMATION local_id=${msg.recipientChannel} remote_id=${msg.senderChannel}');
     }
 
-    Channel chan = channels[msg.recipientChannel];
+    Channel? chan = channels[msg.recipientChannel!];
     if (chan == null || chan.remoteId == null) {
       throw FormatException('$hostport: open invalid channel');
     }
-    chan.remoteId = msg.senderChannel;
-    chan.windowC = msg.initialWinSize;
+    chan.remoteId = msg.senderChannel!;
+    chan.windowC = msg.initialWinSize!;
     chan.opened = true;
     handleChannelOpenConfirmation(chan);
   }
@@ -520,11 +529,11 @@ abstract class SSHTransport with SSHDiffieHellman {
   /// If the remote side can't open the channel, it responds with SSH_MSG_CHANNEL_OPEN_FAILURE.
   void handleMSG_CHANNEL_OPEN_FAILURE(MSG_CHANNEL_OPEN_FAILURE msg) {
     if (tracePrint != null) {
-      tracePrint(
+      tracePrint!(
           '$hostport: MSG_CHANNEL_OPEN_FAILURE local_id=${msg.recipientChannel}');
     }
 
-    Channel chan = channels[msg.recipientChannel];
+    Channel? chan = channels[msg.recipientChannel!];
     if (chan == null || chan.remoteId == null) {
       throw FormatException('$hostport: fail invalid channel');
     }
@@ -537,23 +546,23 @@ abstract class SSHTransport with SSHDiffieHellman {
   /// more than it was previously allowed to send; the window size is incremented.
   void handleMSG_CHANNEL_WINDOW_ADJUST(MSG_CHANNEL_WINDOW_ADJUST msg) {
     if (tracePrint != null) {
-      tracePrint(
+      tracePrint!(
           '$hostport: MSG_CHANNEL_WINDOW_ADJUST add ${msg.bytesToAdd} to channel ${msg.recipientChannel}');
     }
-    Channel chan = channels[msg.recipientChannel];
+    Channel? chan = channels[msg.recipientChannel!];
     if (chan == null) {
       throw FormatException('$hostport: window adjust invalid channel');
     }
-    chan.windowC += msg.bytesToAdd;
+    chan.windowC += msg.bytesToAdd!;
   }
 
   /// Data transfer is done with messages of the type SSH_MSG_CHANNEL_DATA.
   void handleMSG_CHANNEL_DATA(MSG_CHANNEL_DATA msg) {
     if (tracePrint != null) {
-      tracePrint(
-          '$hostport: MSG_CHANNEL_DATA: channel ${msg.recipientChannel} : ${msg.data.length} bytes');
+      tracePrint!(
+          '$hostport: MSG_CHANNEL_DATA: channel ${msg.recipientChannel} : ${msg.data!.length} bytes');
     }
-    Channel chan = channels[msg.recipientChannel];
+    Channel? chan = channels[msg.recipientChannel!];
     if (chan == null) {
       throw FormatException('$hostport: data for invalid channel');
     }
@@ -563,23 +572,23 @@ abstract class SSHTransport with SSHDiffieHellman {
           MSG_CHANNEL_WINDOW_ADJUST(chan.remoteId, initialWindowSize));
       chan.windowS += initialWindowSize;
     }
-    handleChannelData(chan, msg.data);
+    handleChannelData(chan, msg.data!);
   }
 
   /// No explicit response is sent to this message.  However, the application
   /// may send EOF to whatever is at the other end of the channel.
   void handleMSG_CHANNEL_EOF(MSG_CHANNEL_EOF msg) {
     if (tracePrint != null) {
-      tracePrint('$hostport: MSG_CHANNEL_EOF ${msg.recipientChannel}');
+      tracePrint!('$hostport: MSG_CHANNEL_EOF ${msg.recipientChannel}');
     }
-    Channel chan = channels[msg.recipientChannel];
+    Channel? chan = channels[msg.recipientChannel!];
     if (chan == null) {
       if (print != null) {
-        print('$hostport: close invalid channel');
+        print!('$hostport: close invalid channel');
         return;
       }
     }
-    if (!chan.sentEof) {
+    if (!chan!.sentEof) {
       chan.sentEof = true;
       writeCipher(MSG_CHANNEL_EOF(chan.remoteId));
     }
@@ -589,19 +598,19 @@ abstract class SSHTransport with SSHDiffieHellman {
   /// unless it has already sent this message for the channel.
   void handleMSG_CHANNEL_CLOSE(MSG_CHANNEL_CLOSE msg) {
     if (tracePrint != null) {
-      tracePrint('$hostport: MSG_CHANNEL_CLOSE ${msg.recipientChannel}');
+      tracePrint!('$hostport: MSG_CHANNEL_CLOSE ${msg.recipientChannel}');
     }
-    Channel chan = channels[msg.recipientChannel];
+    Channel? chan = channels[msg.recipientChannel!];
     if (chan == null) {
       if (print != null) {
-        print('$hostport: Close invalid channel');
-        return;
+        print!('$hostport: Close invalid channel');
       }
+      return;
     }
 
     if (!chan.sentClose) {
       chan.sentClose = true;
-      if (chan.closed != null) chan.closed();
+      if (chan.closed != null) chan.closed!();
       writeCipher(MSG_CHANNEL_CLOSE(chan.remoteId));
       handleChannelClose(chan, 'MSG_CHANNEL_CLOSE');
     }
@@ -612,17 +621,17 @@ abstract class SSHTransport with SSHDiffieHellman {
   /// https://tools.ietf.org/html/rfc4254#section-4
   void handleMSG_GLOBAL_REQUEST(MSG_GLOBAL_REQUEST msg) {
     if (tracePrint != null) {
-      tracePrint('$hostport: MSG_GLOBAL_REQUEST request=${msg.request}');
+      tracePrint!('$hostport: MSG_GLOBAL_REQUEST request=${msg.request}');
     }
   }
 
   /// The recipient MUST NOT accept any data after receiving MSG_DISCONNECT.
   void handleMSG_DISCONNECT(MSG_DISCONNECT msg) {
     if (tracePrint != null) {
-      tracePrint(
+      tracePrint!(
           '$hostport: MSG_DISCONNECT ${msg.reasonCode} ${msg.description}');
     }
-    if (server) {
+    if (server!) {
       disconnect('MSG_DISCONNECT ${msg.reasonCode} ${msg.description}');
     }
   }
@@ -630,27 +639,27 @@ abstract class SSHTransport with SSHDiffieHellman {
   /// MSG_IGNORE can be used as an additional protection measure against advanced traffic analysis techniques.
   void handleMSG_IGNORE(MSG_IGNORE msg) {
     if (tracePrint != null) {
-      tracePrint('$hostport: MSG_IGNORE');
+      tracePrint!('$hostport: MSG_IGNORE');
     }
   }
 
   /// All implementations MUST understand MSG_DEBUG, but they are allowed to ignore it.
   void handleMSG_DEBUG(MSG_DEBUG msg) {
     if (tracePrint != null) {
-      tracePrint('$hostport: MSG_DEBUG ${msg.message}');
+      tracePrint!('$hostport: MSG_DEBUG ${msg.message}');
     }
   }
 
   /// Computes a new exchange hash [exH] given the server key [kS].
   void updateExchangeHash(Uint8List kS) {
-    exH = computeExchangeHash(server, kexMethod, kexHash, verC, verS, kexInitC,
-        kexInitS, kS, K, dh, ecdh, x25519dh);
+    exH = computeExchangeHash(server!, kexMethod, kexHash!, verC, verS,
+        kexInitC!, kexInitS!, kS, K!, dh, ecdh, x25519dh);
 
     /// The exchange hash H from the first key exchange is used as the session identifier.
     if (state == SSHTransportState.FIRST_KEXREPLY) sessionId = exH;
 
     if (tracePrint != null) {
-      tracePrint('$hostport: H = "${hex.encode(exH)}"');
+      tracePrint!('$hostport: H = "${hex.encode(exH!)}"');
     }
   }
 
@@ -658,10 +667,10 @@ abstract class SSHTransport with SSHDiffieHellman {
   BlockCipher initCipher(int cipherId, Uint8List IV, Uint8List key, bool dir) {
     BlockCipher cipher = Cipher.cipher(cipherId);
     if (tracePrint != null) {
-      tracePrint('$hostport: ' +
+      tracePrint!('$hostport: ' +
           (dir ? 'C->S' : 'S->C') +
           ' IV  = "${hex.encode(IV)}"');
-      tracePrint('$hostport: ' +
+      tracePrint!('$hostport: ' +
           (dir ? 'C->S' : 'S->C') +
           ' key = "${hex.encode(key)}"');
     }
@@ -673,29 +682,31 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   /// Decrypt data using the negotiated block cipher.
-  Uint8List readCipher(Uint8List m) => applyBlockCipher(decrypt, m);
+  Uint8List readCipher(Uint8List m) => applyBlockCipher(decrypt!, m);
 
   /// Encrypt Binary Packet data using the negotiated block cipher and MAC.
   void writeCipher(SSHMessage msg) {
     sequenceNumberC2s++;
     Uint8List m = msg.toBytes(zwriter, random, encryptBlockSize);
-    Uint8List encM = applyBlockCipher(encrypt, m);
+    Uint8List encM = applyBlockCipher(encrypt!, m);
     Uint8List mac = computeMAC(MAC.mac(macIdC2s), macHashLenC, m,
-        sequenceNumberC2s - 1, integrityC2s, macPrefixC2s);
-    socket.sendRaw(Uint8List.fromList(encM + mac));
+        sequenceNumberC2s - 1, integrityC2s!, macPrefixC2s);
+    socket!.sendRaw(Uint8List.fromList(encM + mac));
     if (tracePrint != null) {
-      tracePrint('$hostport: sent MSG id=${msg.id}');
+      tracePrint!('$hostport: sent MSG id=${msg.id}');
     }
   }
 
   /// Send a Binary Packet (e.g. KEX_INIT) that is initially sent in the clear,
   /// but encryped when keys are being renegotiated.
   void writeClearOrEncrypted(SSHMessage msg) {
-    if (state > SSHTransportState.FIRST_NEWKEYS) return writeCipher(msg);
+    if (state.index > SSHTransportState.FIRST_NEWKEYS.index) {
+      return writeCipher(msg);
+    }
     sequenceNumberC2s++;
-    socket.sendRaw(msg.toBytes(null, random, encryptBlockSize));
+    socket!.sendRaw(msg.toBytes(null, random, encryptBlockSize));
     if (tracePrint != null) {
-      tracePrint('$hostport: sent MSG id=${msg.id} in clear');
+      tracePrint!('$hostport: sent MSG id=${msg.id} in clear');
     }
   }
 
@@ -719,8 +730,8 @@ abstract class SSHTransport with SSHDiffieHellman {
   Channel acceptChannel(MSG_CHANNEL_OPEN msg) {
     Channel channel = channels[nextChannelId] = Channel();
     channel.localId = nextChannelId;
-    channel.remoteId = msg.senderChannel;
-    channel.windowC = msg.initialWinSize;
+    channel.remoteId = msg.senderChannel!;
+    channel.windowC = msg.initialWinSize!;
     channel.windowS = initialWindowSize;
     channel.opened = true;
     nextChannelId++;
@@ -747,17 +758,21 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   /// Request remote opens a new TCP channel to [destHost]:[destPort].
-  Channel openTcpChannel(
+  Channel? openTcpChannel(
     String sourceHost,
     int sourcePort,
-    String destHost,
-    int destPort,
+    String? destHost,
+    int? destPort,
     ChannelCallback cb, {
-    VoidCallback connected,
-    StringCallback error,
+    VoidCallback? connected,
+    StringCallback? error,
   }) {
-    if (socket == null || state <= SSHTransportState.FIRST_NEWKEYS) return null;
-    if (debugPrint != null) debugPrint('openTcpChannel to $destHost:$destPort');
+    if (socket == null ||
+        state.index <= SSHTransportState.FIRST_NEWKEYS.index) {
+      return null;
+    }
+    if (debugPrint != null)
+      debugPrint?.call('openTcpChannel to $destHost:$destPort');
     final chan = channels[nextChannelId] = Channel(
       localId: nextChannelId++,
       windowS: initialWindowSize,

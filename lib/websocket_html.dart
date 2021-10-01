@@ -12,11 +12,11 @@ import 'package:dartssh/transport.dart';
 class WebSocketImpl extends SocketInterface {
   static const String type = 'html';
 
-  html.WebSocket socket;
-  Uint8ListCallback messageHandler;
-  StringCallback errorHandler, doneHandler;
-  VoidCallback connectCallback;
-  StreamSubscription connectErrorSubscription,
+  html.WebSocket? socket;
+  Uint8ListCallback? messageHandler;
+  StringCallback? errorHandler, doneHandler;
+  late VoidCallback connectCallback;
+  StreamSubscription? connectErrorSubscription,
       messageSubscription,
       errorSubscription,
       doneSubscription;
@@ -33,19 +33,19 @@ class WebSocketImpl extends SocketInterface {
     errorHandler = null;
     doneHandler = null;
     if (errorSubscription != null) {
-      errorSubscription.cancel();
+      errorSubscription!.cancel();
       errorSubscription = null;
     }
     if (doneSubscription != null) {
-      doneSubscription.cancel();
+      doneSubscription!.cancel();
       doneSubscription = null;
     }
     if (messageSubscription != null) {
-      messageSubscription.cancel();
+      messageSubscription!.cancel();
       messageSubscription = null;
     }
     if (socket != null) {
-      socket.close();
+      socket!.close();
       socket == null;
     }
   }
@@ -60,16 +60,16 @@ class WebSocketImpl extends SocketInterface {
     try {
       connectCallback = onConnected;
       socket = html.WebSocket('$uri');
-      socket.onOpen.listen(connectSucceeded);
+      socket!.onOpen.listen(connectSucceeded);
       connectErrorSubscription =
-          socket.onError.listen((error) => onError('$error'));
+          socket!.onError.listen((error) => onError('$error'));
     } catch (error) {
       onError('$error');
     }
   }
 
   void connectSucceeded(dynamic x) {
-    connectErrorSubscription.cancel();
+    connectErrorSubscription!.cancel();
     connectErrorSubscription = null;
     connectCallback();
   }
@@ -87,33 +87,33 @@ class WebSocketImpl extends SocketInterface {
     messageHandler = newMessageHandler;
 
     if (errorSubscription == null) {
-      errorSubscription = socket.onError.listen((error) {
+      errorSubscription = socket!.onError.listen((error) {
         if (errorHandler != null) {
-          errorHandler('$error');
+          errorHandler!('$error');
         }
       });
     }
 
     if (doneSubscription == null) {
-      doneSubscription = socket.onClose.listen((closeEvent) {
+      doneSubscription = socket!.onClose.listen((closeEvent) {
         if (doneHandler != null) {
-          doneHandler('$closeEvent');
+          doneHandler!('$closeEvent');
         }
       });
     }
 
     if (messageSubscription == null) {
-      messageSubscription = socket.onMessage.listen((e) {
+      messageSubscription = socket!.onMessage.listen((e) {
         if (messageHandler != null) {
-          messageHandler(e.data);
+          messageHandler!(e.data);
         }
       });
     }
   }
 
   @override
-  void send(String text) => socket.sendString(text);
+  void send(String text) => socket!.sendString(text);
 
   @override
-  void sendRaw(Uint8List raw) => socket.send(raw);
+  void sendRaw(Uint8List raw) => socket!.send(raw);
 }

@@ -31,6 +31,7 @@ void main() {
     SerializableOutput output = SerializableOutput(buffer, endian: Endian.big);
 
     BigInt x = BigInt.from(0);
+    print(x.bitLength);
     serializeMpInt(output, x);
     expect(hex.encode(output.view()), '00000000');
     expect(deserializeMpInt(input), x);
@@ -54,7 +55,7 @@ void main() {
   test('pem', () {
     Identity rsa1 = parsePem(File('test/id_rsa').readAsStringSync());
     Identity rsa2 = parsePem(File('test/id_rsa.openssh').readAsStringSync());
-    expect(rsa1.rsaPublic.exponent, rsa2.rsaPublic.exponent);
+    expect(rsa1.rsaPublic!.exponent, rsa2.rsaPublic!.exponent);
   });
 
   test('TestSocket', () {
@@ -129,22 +130,27 @@ void main() {
         '--trace',
       ]);
 
-      Future<void> sshMain = ssh.ssh(<String>[
-        '-A',
-        '-l',
-        'root',
-        '127.0.0.1:42022',
-        '-i',
-        identityFile,
-        '--debug',
-        '--trace',
-      ], sshInput.stream, (_, Uint8List v) => sshResponse += v,
-          () => sshInput.close());
+      Future<void> sshMain = ssh.ssh(
+        <String>[
+          '-A',
+          '-l',
+          'root',
+          '127.0.0.1:42022',
+          '-i',
+          identityFile,
+          '--debug',
+          '--trace',
+        ],
+        sshInput.stream,
+        (_, Uint8List v) => sshResponse += v,
+        () => sshInput.close(),
+      );
 
-      while (ssh.client.sessionChannel == null) {
+      while (ssh.client!.sessionChannel == null) {
         await Future.delayed(const Duration(seconds: 1));
       }
-      ssh.client.sendChannelData(utf8.encode('testAgent\nexit\n'));
+      ssh.client!
+          .sendChannelData(utf8.encode('testAgent\nexit\n') as Uint8List);
       await sshMain;
       await sshdMain;
       expect(utf8.decode(sshResponse), '\$ testAgent\nexit\nsuccess\n');
@@ -208,20 +214,20 @@ void main() {
       () => sshInput.close(),
     );
 
-    while (ssh.client.sessionChannel == null) {
+    while (ssh.client!.sessionChannel == null) {
       await Future.delayed(const Duration(seconds: 1));
     }
 
-    ssh.client.setTerminalWindowSize(80, 25);
-    ssh.client.exec('ls');
+    ssh.client!.setTerminalWindowSize(80, 25);
+    ssh.client!.exec('ls');
 
     bool tunneledHttpTest = await httpTest(
-      HttpClientImpl(clientFactory: () => SSHTunneledBaseClient(ssh.client)),
+      HttpClientImpl(clientFactory: () => SSHTunneledBaseClient(ssh.client!)),
       proto: 'http', // SSHTunneledBaseClient does not support https
     );
     expect(tunneledHttpTest, true);
 
-    ssh.client.sendChannelData(utf8.encode('debugTest\nexit\n'));
+    ssh.client!.sendChannelData(utf8.encode('debugTest\nexit\n') as Uint8List);
     await sshMain;
     await sshdMain;
     expect(utf8.decode(sshResponse), 'Password:\r\n\$ debugTest\nexit\n');
@@ -260,16 +266,16 @@ void main() {
     ], sshInput.stream, (_, Uint8List v) => sshResponse += v,
         () => sshInput.close());
 
-    while (ssh.client.sessionChannel == null) {
+    while (ssh.client!.sessionChannel == null) {
       await Future.delayed(const Duration(seconds: 1));
     }
 
     bool tunneledWebsocketTest = await websocketEchoTest(
-        SSHTunneledWebSocketImpl(SSHTunneledSocketImpl.fromClient(ssh.client)),
+        SSHTunneledWebSocketImpl(SSHTunneledSocketImpl.fromClient(ssh.client!)),
         proto: 'ws');
     expect(tunneledWebsocketTest, true);
 
-    ssh.client.sendChannelData(utf8.encode('exit\n'));
+    ssh.client!.sendChannelData(utf8.encode('exit\n') as Uint8List);
     await sshMain;
     await sshdMain;
     expect(utf8.decode(sshResponse), '\$ exit\n');
@@ -278,7 +284,7 @@ void main() {
 
 Future<bool> httpTest(HttpClient httpClient, {String proto = 'https'}) async {
   var response = await httpClient.request('$proto://echo.terminal.studio/');
-  return response != null && response.text.contains('Expected Upgrade');
+  return response.text!.contains('Expected Upgrade');
 }
 
 Future<bool> websocketEchoTest(
@@ -286,12 +292,12 @@ Future<bool> websocketEchoTest(
   bool ignoreBadCert = false,
   String proto = 'wss',
 }) async {
-  final connectCompleter = Completer<String>();
+  final connectCompleter = Completer<String?>();
 
   websocket.connect(
     Uri.parse('$proto://echo.terminal.studio'),
     () => connectCompleter.complete(null),
-    (String error) => connectCompleter.complete(error),
+    (String? error) => connectCompleter.complete(error),
     ignoreBadCert: ignoreBadCert,
   );
 
@@ -302,8 +308,8 @@ Future<bool> websocketEchoTest(
   final challenge =
       'websocketEchoTest ${base64.encode(randBytes(Random.secure(), 16))}';
   websocket.listen((Uint8List m) => responseCompleter.complete(utf8.decode(m)));
-  websocket.handleError((String m) => responseCompleter.complete(m));
-  websocket.handleDone((String m) => responseCompleter.complete(m));
+  websocket.handleError((String? m) => responseCompleter.complete(m));
+  websocket.handleDone((String? m) => responseCompleter.complete(m));
   websocket.send(challenge);
 
   final response = await responseCompleter.future;
