@@ -1,6 +1,8 @@
 // Copyright 2019 dartssh developers
 // Use of this source code is governed by a MIT-style license that can be found in the LICENSE file.
 
+// ignore_for_file: constant_identifier_names, non_constant_identifier_names
+
 import 'dart:math';
 import 'dart:collection';
 import 'dart:typed_data';
@@ -11,12 +13,12 @@ import 'package:pointycastle/macs/hmac.dart';
 import 'package:pointycastle/random/fortuna_random.dart';
 import 'package:validators/sanitizers.dart';
 
-import 'package:dartssh/identity.dart';
-import 'package:dartssh/kex.dart';
-import 'package:dartssh/protocol.dart';
-import 'package:dartssh/serializable.dart';
-import 'package:dartssh/socket.dart';
-import 'package:dartssh/ssh.dart';
+import 'package:dartssh2/identity.dart';
+import 'package:dartssh2/kex.dart';
+import 'package:dartssh2/protocol.dart';
+import 'package:dartssh2/serializable.dart';
+import 'package:dartssh2/socket.dart';
+import 'package:dartssh2/ssh.dart';
 
 typedef VoidCallback = void Function();
 typedef FutureFunction = Future Function();
@@ -201,9 +203,9 @@ abstract class SSHTransport with SSHDiffieHellman {
   void sendDiffileHellmanInit();
   void sendChannelData(Uint8List b);
   void handlePacket(Uint8List packet);
-  void handleChannelOpenConfirmation(Channel chan);
-  void handleChannelData(Channel chan, Uint8List data);
-  void handleChannelClose(Channel chan, [String? description]);
+  void handleChannelOpenConfirmation(Channel channel);
+  void handleChannelData(Channel channel, Uint8List data);
+  void handleChannelClose(Channel channel, [String? description]);
 
   /// Whether we've initiated the connection.
   bool get client => !server!;
@@ -691,7 +693,7 @@ abstract class SSHTransport with SSHDiffieHellman {
     final mac = computeMAC(MAC.mac(macIdC2s), macHashLenC, m,
         sequenceNumberC2s - 1, integrityC2s!, macPrefixC2s);
     socket!.sendRaw(Uint8List.fromList(encM + mac));
-    tracePrint?.call('-> $hostport: ${msg}');
+    tracePrint?.call('-> $hostport: $msg');
   }
 
   /// Send a Binary Packet (e.g. KEX_INIT) that is initially sent in the clear,
@@ -702,7 +704,7 @@ abstract class SSHTransport with SSHDiffieHellman {
     }
     sequenceNumberC2s++;
     socket!.sendRaw(msg.toBytes(null, random, encryptBlockSize));
-    tracePrint?.call('-> $hostport: ${msg} in clear');
+    tracePrint?.call('-> $hostport: $msg in clear');
   }
 
   // Enable the most recently negotiated encryption algorithms.

@@ -6,8 +6,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:dartssh/socket.dart';
-import 'package:dartssh/transport.dart';
+import 'package:dartssh2/socket.dart';
+import 'package:dartssh2/transport.dart';
 
 /// dart:io [Socket] based implementation of [SocketInterface].
 class SocketImpl extends SocketInterface {
@@ -86,23 +86,25 @@ class SocketImpl extends SocketInterface {
   void handleDone(StringCallback doneHandler) => onDone = doneHandler;
 
   @override
+  // ignore: avoid_renaming_method_parameters
   void listen(Uint8ListCallback newMessageHandler) {
     messageHandler = newMessageHandler;
-    if (messageSubscription == null) {
-      messageSubscription = socket!.listen((Uint8List m) {
-        if (messageHandler != null) {
-          messageHandler!(m);
-        }
-      }, onDone: () {
-        if (onDone != null) {
-          onDone!(null);
-        }
-      }, onError: (error, stacktrace) {
-        if (onError != null) {
-          onError!('$error: $stacktrace');
-        }
-      });
+
+    if (messageSubscription != null) {
+      return;
     }
+
+    messageSubscription = socket!.listen(
+      (Uint8List m) {
+        messageHandler?.call(m);
+      },
+      onDone: () {
+        onDone?.call(null);
+      },
+      onError: (error, stacktrace) {
+        onError?.call('$error: $stacktrace');
+      },
+    );
   }
 
   @override
@@ -206,13 +208,22 @@ class SocketAdaptor extends Stream<Uint8List> implements Socket {
   void setRawOption(RawSocketOption option) {}
 
   @override
-  StreamSubscription<Uint8List> listen(void onData(Uint8List event)?,
-      {Function? onError, void onDone()?, bool? cancelOnError}) {
+  StreamSubscription<Uint8List> listen(
+    void Function(Uint8List event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
     //debugPrint?.call('DEBUG SocketAdaptor.listen $remoteAddress:$remotePort');
-    return controller.stream.listen((m) {
-      //debugPrint?.call('DEBUG SocketAdaptor.read $m');
-      onData!(m);
-    }, onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+    return controller.stream.listen(
+      (m) {
+        //debugPrint?.call('DEBUG SocketAdaptor.read $m');
+        onData!(m);
+      },
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    );
   }
 
   /*void _consumerDone() {
@@ -251,6 +262,7 @@ class SocketAdaptorStreamConsumer extends StreamConsumer<List<int>> {
   Completer? streamCompleter;
   SocketAdaptorStreamConsumer(this.socket);
 
+  @override
   Future<Socket> close() {
     //socket._consumerDone();
     return Future.value(socket);
@@ -273,6 +285,7 @@ class SocketAdaptorStreamConsumer extends StreamConsumer<List<int>> {
     }
   }
 
+  @override
   Future<Socket> addStream(Stream<List<int>> stream) {
     streamCompleter = Completer<Socket>();
     subscription = stream.listen(

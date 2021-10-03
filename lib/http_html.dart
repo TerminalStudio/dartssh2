@@ -4,8 +4,8 @@
 import 'dart:async';
 import 'dart:html' as html;
 
-import 'package:dartssh/http.dart';
-import 'package:dartssh/transport.dart';
+import 'package:dartssh2/http.dart';
+import 'package:dartssh2/transport.dart';
 
 /// dart:html based alternative [HttpClient] implementation.
 class HttpClientImpl extends HttpClient {

@@ -1,18 +1,20 @@
 // Copyright 2019 dartssh developers
 // Use of this source code is governed by a MIT-style license that can be found in the LICENSE file.
 
+// ignore_for_file: non_constant_identifier_names
+
 import 'dart:math';
 import 'dart:typed_data';
 
 import "package:pointycastle/api.dart";
 
-import 'package:dartssh/identity.dart';
-import 'package:dartssh/kex.dart';
-import 'package:dartssh/socket.dart';
-import 'package:dartssh/ssh.dart';
-import 'package:dartssh/protocol.dart';
-import 'package:dartssh/serializable.dart';
-import 'package:dartssh/transport.dart';
+import 'package:dartssh2/identity.dart';
+import 'package:dartssh2/kex.dart';
+import 'package:dartssh2/socket.dart';
+import 'package:dartssh2/ssh.dart';
+import 'package:dartssh2/protocol.dart';
+import 'package:dartssh2/serializable.dart';
+import 'package:dartssh2/transport.dart';
 
 typedef ChannelRequest = bool Function(SSHServer server, String? request);
 typedef UserAuthRequest = bool Function(MSG_USERAUTH_REQUEST msg);

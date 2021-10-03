@@ -10,14 +10,14 @@ import 'dart:typed_data';
 import 'package:args/args.dart';
 import 'package:stack_trace/stack_trace.dart';
 
-import 'package:dartssh/agent.dart';
-import 'package:dartssh/identity.dart';
-import 'package:dartssh/pem.dart';
-import 'package:dartssh/protocol.dart';
-import 'package:dartssh/socket_io.dart';
-import 'package:dartssh/server.dart';
-import 'package:dartssh/ssh.dart';
-import 'package:dartssh/transport.dart';
+import 'package:dartssh2/agent.dart';
+import 'package:dartssh2/identity.dart';
+import 'package:dartssh2/pem.dart';
+import 'package:dartssh2/protocol.dart';
+import 'package:dartssh2/socket_io.dart';
+import 'package:dartssh2/server.dart';
+import 'package:dartssh2/ssh.dart';
+import 'package:dartssh2/transport.dart';
 
 SSHServer? server;
 

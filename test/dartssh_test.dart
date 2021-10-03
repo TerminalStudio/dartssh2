@@ -10,15 +10,15 @@ import 'dart:typed_data';
 import 'package:convert/convert.dart';
 import 'package:test/test.dart';
 
-import 'package:dartssh/client.dart';
-import 'package:dartssh/http.dart';
-import 'package:dartssh/identity.dart';
-import 'package:dartssh/pem.dart';
-import 'package:dartssh/protocol.dart';
-import 'package:dartssh/serializable.dart';
-import 'package:dartssh/socket.dart';
-import 'package:dartssh/ssh.dart';
-import 'package:dartssh/websocket_io.dart';
+import 'package:dartssh2/client.dart';
+import 'package:dartssh2/http.dart';
+import 'package:dartssh2/identity.dart';
+import 'package:dartssh2/pem.dart';
+import 'package:dartssh2/protocol.dart';
+import 'package:dartssh2/serializable.dart';
+import 'package:dartssh2/socket.dart';
+import 'package:dartssh2/ssh.dart';
+import 'package:dartssh2/websocket_io.dart';
 
 import '../example/dartssh.dart' as ssh;
 import '../example/dartsshd.dart' as sshd;

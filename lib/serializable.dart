@@ -52,13 +52,14 @@ class QueueBuffer {
 
 /// Base class for advancing [offset] view of Uint8List [data].
 abstract class SerializableBuffer {
+  SerializableBuffer(this.buffer, {this.endian = Endian.big})
+      : data =
+            ByteData.view(buffer.buffer, buffer.offsetInBytes, buffer.length);
+
   int offset = 0;
   final Uint8List buffer;
   final ByteData data;
   final Endian endian;
-  SerializableBuffer(this.buffer, {this.endian = Endian.big})
-      : this.data =
-            ByteData.view(buffer.buffer, buffer.offsetInBytes, buffer.length);
 
   bool get done => offset == buffer.length;
   int get remaining => buffer.length - offset;

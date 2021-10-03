@@ -1,12 +1,13 @@
 // Copyright 2019 dartssh developers
 // Use of this source code is governed by a MIT-style license that can be found in the LICENSE file.
 
+// ignore_for_file: camel_case_types, constant_identifier_names
+
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:pointycastle/src/utils.dart';
-
-import 'package:dartssh/serializable.dart';
+import 'package:dartssh2/bigint.dart';
+import 'package:dartssh2/serializable.dart';
 
 /// Rounds [input] up to the next [n]th, if necessary.
 int nextMultipleOfN(int input, int n) =>
@@ -316,17 +317,18 @@ class MSG_KEXINIT extends SSHMessage {
     firstKexPacketFollows = input.getBool();
   }
 
+  @override
   String toString() =>
-      'kexAlgorithms:                       $kexAlgorithms,                       \n' +
-      'serverHostKeyAlgorithms:             $serverHostKeyAlgorithms,             \n' +
-      'encryptionAlgorithmsClientToServer:  $encryptionAlgorithmsClientToServer,  \n' +
-      'encryptionAlgorithmsServerToClient:  $encryptionAlgorithmsServerToClient,  \n' +
-      'macAlgorithmsClientToServer:         $macAlgorithmsClientToServer,         \n' +
-      'macAlgorithmsServerToClient:         $macAlgorithmsServerToClient,         \n' +
-      'compressionAlgorithmsClientToServer: $compressionAlgorithmsClientToServer, \n' +
-      'compressionAlgorithmsServerToClient: $compressionAlgorithmsServerToClient, \n' +
-      'languagesClientToServer:             $languagesClientToServer,             \n' +
-      'languagesServerToClient:             $languagesServerToClient,             \n' +
+      'kexAlgorithms:                       $kexAlgorithms,                       \n'
+      'serverHostKeyAlgorithms:             $serverHostKeyAlgorithms,             \n'
+      'encryptionAlgorithmsClientToServer:  $encryptionAlgorithmsClientToServer,  \n'
+      'encryptionAlgorithmsServerToClient:  $encryptionAlgorithmsServerToClient,  \n'
+      'macAlgorithmsClientToServer:         $macAlgorithmsClientToServer,         \n'
+      'macAlgorithmsServerToClient:         $macAlgorithmsServerToClient,         \n'
+      'compressionAlgorithmsClientToServer: $compressionAlgorithmsClientToServer, \n'
+      'compressionAlgorithmsServerToClient: $compressionAlgorithmsServerToClient, \n'
+      'languagesClientToServer:             $languagesClientToServer,             \n'
+      'languagesServerToClient:             $languagesServerToClient,             \n'
       'firstKexPacketFollows:               $firstKexPacketFollows,               \n';
 }
 

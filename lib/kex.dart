@@ -4,15 +4,15 @@
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:dartssh2/bigint.dart';
 import 'package:pinenacl/tweetnacl.dart';
 import "package:pointycastle/api.dart";
 import 'package:pointycastle/digests/sha1.dart';
 import "package:pointycastle/digests/sha256.dart";
 import 'package:pointycastle/ecc/api.dart';
-import 'package:pointycastle/src/utils.dart';
 
-import 'package:dartssh/protocol.dart';
-import 'package:dartssh/ssh.dart';
+import 'package:dartssh2/protocol.dart';
+import 'package:dartssh2/ssh.dart';
 
 /// Mixin providing a suite of key exchange methods.
 mixin SSHDiffieHellman {
@@ -544,6 +544,7 @@ class ScalarMult {
 
   /// Multiplies an integer n by a standard group element and
   /// returns the resulting group element.
+  // ignore: non_constant_identifier_names
   static Uint8List? scalseMult_base(Uint8List n) {
     if (!(n.length == _scalarLength)) return null;
 

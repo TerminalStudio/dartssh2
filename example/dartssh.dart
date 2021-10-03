@@ -7,11 +7,11 @@ import 'dart:typed_data';
 
 import 'package:args/args.dart';
 
-import 'package:dartssh/client.dart';
-import 'package:dartssh/identity.dart';
-import 'package:dartssh/pem.dart';
-import 'package:dartssh/ssh.dart';
-import 'package:dartssh/transport.dart';
+import 'package:dartssh2/client.dart';
+import 'package:dartssh2/identity.dart';
+import 'package:dartssh2/pem.dart';
+import 'package:dartssh2/ssh.dart';
+import 'package:dartssh2/transport.dart';
 
 Identity? identity;
 SSHClient? client;

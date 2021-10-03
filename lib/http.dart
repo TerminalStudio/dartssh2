@@ -8,10 +8,10 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
-import 'package:dartssh/client.dart';
-import 'package:dartssh/serializable.dart';
-import 'package:dartssh/socket.dart';
-import 'package:dartssh/transport.dart';
+import 'package:dartssh2/client.dart';
+import 'package:dartssh2/serializable.dart';
+import 'package:dartssh2/socket.dart';
+import 'package:dartssh2/transport.dart';
 
 typedef HttpClientFactory = http.Client Function();
 typedef SocketFilter = Future<SocketInterface> Function(SocketInterface);
@@ -127,6 +127,7 @@ class UserAgentBaseClient extends http.BaseClient {
   final http.Client inner;
   UserAgentBaseClient(this.userAgent, this.inner);
 
+  @override
   Future<http.StreamedResponse> send(http.BaseRequest request) {
     if (userAgent != null) {
       request.headers['user-agent'] = userAgent!;
@@ -253,11 +254,11 @@ Future<HttpResponse> httpRequest(Uri uri, String method, SocketInterface socket,
         buffer.flush(headersEnd + 4);
         final lines = LineSplitter.split(headerText!);
         statusLine = lines.first.split(' ');
-        headers = Map<String, String>.fromIterable(
-          lines.skip(1),
-          key: (h) => h.substring(0, h.indexOf(': ')),
-          value: (h) => h.substring(h.indexOf(': ') + 2).trim(),
-        );
+        headers = {
+          for (var h in lines.skip(1))
+            h.substring(0, h.indexOf(': ')):
+                h.substring(h.indexOf(': ') + 2).trim()
+        };
         headers!.forEach((key, value) {
           if (key.toLowerCase() == 'content-length') {
             contentLength = int.parse(value);
@@ -301,11 +302,11 @@ Future<HttpResponse> httpRequest(Uri uri, String method, SocketInterface socket,
     }
   });
 
-  requestHeaders['Host'] = '${uri.host}';
+  requestHeaders['Host'] = uri.host;
   if (method == 'POST') {
     requestHeaders['Content-Length'] = '${body!.length}';
   }
-  socket.send('${method} /${uri.path} HTTP/1.1\r\n' +
+  socket.send('$method /${uri.path} HTTP/1.1\r\n' +
       requestHeaders.entries
           .map((header) => '${header.key}: ${header.value}')
           .join('\r\n') +

@@ -7,12 +7,12 @@ import 'dart:io' as io;
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:dartssh/client.dart';
-import 'package:dartssh/http.dart';
-import 'package:dartssh/protocol.dart';
-import 'package:dartssh/socket.dart';
-import 'package:dartssh/socket_io.dart';
-import 'package:dartssh/transport.dart';
+import 'package:dartssh2/client.dart';
+import 'package:dartssh2/http.dart';
+import 'package:dartssh2/protocol.dart';
+import 'package:dartssh2/socket.dart';
+import 'package:dartssh2/socket_io.dart';
+import 'package:dartssh2/transport.dart';
 
 /// dart:io [WebSocket] based implementation of [SocketInterface].
 class WebSocketImpl extends SocketInterface {
@@ -93,14 +93,17 @@ class WebSocketImpl extends SocketInterface {
   }
 
   @override
+  // ignore: avoid_renaming_method_parameters
   void handleError(StringCallback newErrorHandler) =>
       errorHandler = newErrorHandler;
 
   @override
+  // ignore: avoid_renaming_method_parameters
   void handleDone(StringCallback newDoneHandler) =>
       doneHandler = newDoneHandler;
 
   @override
+  // ignore: avoid_renaming_method_parameters
   void listen(Uint8ListCallback newMessageHandler) {
     messageHandler = newMessageHandler;
 

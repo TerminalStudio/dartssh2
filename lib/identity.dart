@@ -12,9 +12,9 @@ import 'package:pointycastle/random/fortuna_random.dart';
 import 'package:pointycastle/signers/ecdsa_signer.dart';
 import 'package:pointycastle/signers/rsa_signer.dart';
 
-import 'package:dartssh/protocol.dart';
-import 'package:dartssh/serializable.dart';
-import 'package:dartssh/ssh.dart';
+import 'package:dartssh2/protocol.dart';
+import 'package:dartssh2/serializable.dart';
+import 'package:dartssh2/ssh.dart';
 
 class Identity {
   SigningKey? ed25519;

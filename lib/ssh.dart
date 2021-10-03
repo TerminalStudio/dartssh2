@@ -1,8 +1,11 @@
 // Copyright 2019 dartssh developers
 // Use of this source code is governed by a MIT-style license that can be found in the LICENSE file.
 
+// ignore_for_file: constant_identifier_names
+
 import 'dart:typed_data';
 
+import 'package:dartssh2/bigint.dart';
 import 'package:pointycastle/api.dart' hide Signature;
 import 'package:pointycastle/block/aes_fast.dart';
 import 'package:pointycastle/block/modes/cbc.dart';
@@ -17,13 +20,12 @@ import 'package:pointycastle/ecc/curves/secp256r1.dart';
 import 'package:pointycastle/ecc/curves/secp384r1.dart';
 import 'package:pointycastle/ecc/curves/secp521r1.dart';
 import 'package:pointycastle/macs/hmac.dart';
-import 'package:pointycastle/src/utils.dart';
 import 'package:pointycastle/stream/ctr.dart';
 
-import 'package:dartssh/identity.dart';
-import 'package:dartssh/kex.dart';
-import 'package:dartssh/protocol.dart';
-import 'package:dartssh/serializable.dart';
+import 'package:dartssh2/identity.dart';
+import 'package:dartssh2/kex.dart';
+import 'package:dartssh2/protocol.dart';
+import 'package:dartssh2/serializable.dart';
 
 typedef NameFunction = String Function(int);
 typedef SupportedFunction = bool Function(int);

@@ -5,8 +5,8 @@ import 'dart:async';
 import 'dart:html' as html;
 import 'dart:typed_data';
 
-import 'package:dartssh/socket.dart';
-import 'package:dartssh/transport.dart';
+import 'package:dartssh2/socket.dart';
+import 'package:dartssh2/transport.dart';
 
 /// dart:html [WebSocket] based implementation of [SocketInterface].
 class WebSocketImpl extends SocketInterface {
@@ -75,17 +75,21 @@ class WebSocketImpl extends SocketInterface {
   }
 
   @override
+  // ignore: avoid_renaming_method_parameters
   void handleError(StringCallback newErrorHandler) =>
       errorHandler = newErrorHandler;
 
   @override
+  // ignore: avoid_renaming_method_parameters
   void handleDone(StringCallback newDoneHandler) =>
       doneHandler = newDoneHandler;
 
   @override
+  // ignore: avoid_renaming_method_parameters
   void listen(Uint8ListCallback newMessageHandler) {
     messageHandler = newMessageHandler;
 
+    // ignore: prefer_conditional_assignment
     if (errorSubscription == null) {
       errorSubscription = socket!.onError.listen((error) {
         if (errorHandler != null) {
@@ -94,6 +98,7 @@ class WebSocketImpl extends SocketInterface {
       });
     }
 
+    // ignore: prefer_conditional_assignment
     if (doneSubscription == null) {
       doneSubscription = socket!.onClose.listen((closeEvent) {
         if (doneHandler != null) {
@@ -102,6 +107,7 @@ class WebSocketImpl extends SocketInterface {
       });
     }
 
+    // ignore: prefer_conditional_assignment
     if (messageSubscription == null) {
       messageSubscription = socket!.onMessage.listen((e) {
         if (messageHandler != null) {

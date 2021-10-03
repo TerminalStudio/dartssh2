@@ -10,11 +10,11 @@ import 'package:pointycastle/api.dart' hide Signature;
 import 'package:pointycastle/asymmetric/api.dart' as asymmetric;
 import 'package:pointycastle/ecc/api.dart';
 
-import 'package:dartssh/identity.dart';
-import 'package:dartssh/protocol.dart';
-import 'package:dartssh/serializable.dart';
-import 'package:dartssh/ssh.dart';
-import 'package:dartssh/transport.dart';
+import 'package:dartssh2/identity.dart';
+import 'package:dartssh2/protocol.dart';
+import 'package:dartssh2/serializable.dart';
+import 'package:dartssh2/ssh.dart';
+import 'package:dartssh2/transport.dart';
 
 /// Privacy-Enhanced Mail (PEM) is a de facto file format for storing and sending
 /// cryptographic keys, certificates, and other data.
@@ -197,6 +197,7 @@ class RSAPrivateKey extends Deserializable {
     coefficient = (pkSeq.elements[8] as ASN1Integer).valueAsBigInteger;
   }
 
+  @override
   String toString() => 'version: $version, n: $n, d: $d, e: $e, p: $p, q: $q';
 }
 
@@ -315,6 +316,7 @@ class OpenSSHRSAPrivateKey extends Serializable {
   @override
   void serialize(SerializableOutput output) {}
 
+  @override
   String toString() => 'n: $n, d: $d, e: $e, p: $p, q: $q';
 }
 

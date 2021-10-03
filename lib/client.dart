@@ -1,24 +1,26 @@
 // Copyright 2019 dartssh developers
 // Use of this source code is governed by a MIT-style license that can be found in the LICENSE file.
 
+// ignore_for_file: non_constant_identifier_names
+
 import 'dart:math';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import "package:pointycastle/api.dart";
 
-import 'package:dartssh/agent.dart';
-import 'package:dartssh/identity.dart';
-import 'package:dartssh/pem.dart';
-import 'package:dartssh/protocol.dart';
-import 'package:dartssh/serializable.dart';
-import 'package:dartssh/socket.dart';
-import 'package:dartssh/socket_html.dart'
-    if (dart.library.io) 'package:dartssh/socket_io.dart';
-import 'package:dartssh/ssh.dart';
-import 'package:dartssh/transport.dart';
-import 'package:dartssh/websocket_html.dart'
-    if (dart.library.io) 'package:dartssh/websocket_io.dart';
+import 'package:dartssh2/agent.dart';
+import 'package:dartssh2/identity.dart';
+import 'package:dartssh2/pem.dart';
+import 'package:dartssh2/protocol.dart';
+import 'package:dartssh2/serializable.dart';
+import 'package:dartssh2/socket.dart';
+import 'package:dartssh2/socket_html.dart'
+    if (dart.library.io) 'package:dartssh2/socket_io.dart';
+import 'package:dartssh2/ssh.dart';
+import 'package:dartssh2/transport.dart';
+import 'package:dartssh2/websocket_html.dart'
+    if (dart.library.io) 'package:dartssh2/websocket_io.dart';
 
 /// The Secure Shell (SSH) is a protocol for secure remote login and
 /// other secure network services over an insecure network.
@@ -439,6 +441,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   }
 
   /// Handles successfully opened client-initiated [Channel].
+  @override
   void handleChannelOpenConfirmation(Channel channel) {
     if (channel == sessionChannel) {
       handleSessionStarted();

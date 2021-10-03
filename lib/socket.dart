@@ -4,9 +4,9 @@
 import 'dart:collection';
 import 'dart:typed_data';
 
-// import 'package:dartssh/socket_html.dart'
-//     if (dart.library.io) 'package:dartssh/socket_io.dart';
-import 'package:dartssh/transport.dart';
+// import 'package:dartssh2/socket_html.dart'
+//     if (dart.library.io) 'package:dartssh2/socket_io.dart';
+import 'package:dartssh2/transport.dart';
 
 enum ConnectionDirection { receive, send, both }
 
@@ -68,13 +68,22 @@ mixin TestConnection {
 
 /// Shim [Socket] for testing
 class TestSocket extends SocketInterface with TestConnection {
-  void connect(Uri address, VoidCallback onConnected, StringCallback onError,
-      {int timeoutSeconds = 15, bool ignoreBadCert = false}) {
+  @override
+  void connect(
+    // ignore: avoid_renaming_method_parameters
+    Uri address,
+    VoidCallback onConnected,
+    StringCallback onError, {
+    int timeoutSeconds = 15,
+    bool ignoreBadCert = false,
+  }) {
     connected = true;
     closed = false;
     onConnected();
   }
 
+  @override
   void send(String text) => sent.add(text);
+  @override
   void sendRaw(Uint8List raw) => sent.add(String.fromCharCodes(raw));
 }
