@@ -1,1 +1,5 @@
-include: package:pedantic/analysis_options.1.8.0.yaml
+include: package:lints/recommended.yaml
+
+linter:
+  rules:
+    prefer_function_declarations_over_variables: false

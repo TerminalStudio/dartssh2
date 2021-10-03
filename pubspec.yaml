@@ -1,8 +1,8 @@
-name: dartssh
-version: 1.0.4+4
-description: Dart SSH package providing First-class tunnelling primitives.
+name: dartssh2
+version: 1.1.0
+description: A fork of dartssh, the pure Dart SSH implementation, with bug fixes, up-to-date dependencies and sound null safety.
 # author: Green Appers, Inc. <greenappers@gmail.com>
-homepage: https://github.com/GreenAppers/dartssh
+homepage: https://github.com/TerminalStudio/dartssh
 
 environment:
   sdk: ">=2.13.0 <3.0.0"
@@ -12,12 +12,11 @@ dependencies:
   convert: ^3.0.0
   meta: ^1.1.6
   http: ^0.13.3
-  # pedantic: ^1.8.0
   pointycastle: ^3.0.0
-  # tweetnacl2: ^0.3.3
   validators: ^3.0.0
   pinenacl: ^0.3.3
 
 dev_dependencies:
   build_runner: ^2.1.1
+  lints: ^1.0.1
   test: ^1.6.5

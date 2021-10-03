@@ -11,6 +11,9 @@ environment:
 
 dependencies:
   args: ^2.3.0
-  dartssh:
+  dartssh2:
     path: ../
   stack_trace: ^1.10.0
+
+dev_dependencies:
+  lints: ^1.0.1
