@@ -4,8 +4,8 @@
 import 'dart:collection';
 import 'dart:typed_data';
 
-import 'package:dartssh/socket_html.dart'
-    if (dart.library.io) 'package:dartssh/socket_io.dart';
+// import 'package:dartssh/socket_html.dart'
+//     if (dart.library.io) 'package:dartssh/socket_io.dart';
 import 'package:dartssh/transport.dart';
 
 enum ConnectionDirection { receive, send, both }
@@ -34,8 +34,13 @@ abstract class SocketInterface extends ConnectionInterface {
   bool get connecting;
 
   /// Connects the socket to [uri] then invokes [onConnected] or [onError].
-  void connect(Uri uri, VoidCallback onConnected, StringCallback onError,
-      {int timeoutSeconds = 15, bool ignoreBadCert = false});
+  void connect(
+    Uri uri,
+    VoidCallback onConnected,
+    StringCallback onError, {
+    int timeoutSeconds = 15,
+    bool ignoreBadCert = false,
+  });
 
   /// Sends [text] over the socket.
   void send(String text);

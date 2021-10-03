@@ -15,7 +15,10 @@ mixin SSHAgentForwarding on SSHTransport {
       dispatchAgentRead(channel, msg, handleAgentPacket);
 
   static void dispatchAgentRead(
-      Channel channel, Uint8List msg, ChannelInputCallback handleAgentPacket) {
+    Channel channel,
+    Uint8List msg,
+    ChannelInputCallback handleAgentPacket,
+  ) {
     channel.buf.add(msg);
     while (channel.buf.data.length > 4) {
       SerializableInput input = SerializableInput(channel.buf.data);
@@ -52,9 +55,7 @@ mixin SSHAgentForwarding on SSHTransport {
 
   /// Responds with any identities we're forwarding.
   void handleAGENTC_REQUEST_IDENTITIES(Channel channel) {
-    if (tracePrint != null) {
-      tracePrint!('$hostport: agent channel: AGENTC_REQUEST_IDENTITIES');
-    }
+    tracePrint?.call('$hostport: agent channel: AGENTC_REQUEST_IDENTITIES');
     AGENT_IDENTITIES_ANSWER reply = AGENT_IDENTITIES_ANSWER();
     if (identity != null) {
       reply.keys = identity!.getRawPublicKeyList();
@@ -64,16 +65,15 @@ mixin SSHAgentForwarding on SSHTransport {
 
   /// Signs challenge authenticating a descendent channel.
   void handleAGENTC_SIGN_REQUEST(Channel channel, AGENTC_SIGN_REQUEST msg) {
-    if (tracePrint != null) {
-      tracePrint!('$hostport: agent channel: AGENTC_SIGN_REQUEST');
-    }
+    tracePrint?.call('$hostport: agent channel: AGENTC_SIGN_REQUEST');
     SerializableInput keyStream = SerializableInput(msg.key!);
     String keyType = deserializeString(keyStream);
-    Uint8List sig =
-        identity!.signMessage(Key.id(keyType), msg.data, getSecureRandom());
-    if (sig != null) {
+    try {
+      final sig =
+          identity!.signMessage(Key.id(keyType), msg.data, getSecureRandom());
       sendToChannel(channel, AGENT_SIGN_RESPONSE(sig).toRaw());
-    } else {
+    } catch (e) {
+      tracePrint?.call('$hostport: agent channel: AGENTC_SIGN_REQUEST: $e');
       sendToChannel(channel, AGENT_FAILURE().toRaw());
     }
   }
@@ -82,6 +82,7 @@ mixin SSHAgentForwarding on SSHTransport {
 /// https://tools.ietf.org/html/draft-miller-ssh-agent-03#section-3
 abstract class AgentMessage extends Serializable {
   int id;
+
   AgentMessage(this.id);
 
   Uint8List toRaw({Endian endian = Endian.big}) {

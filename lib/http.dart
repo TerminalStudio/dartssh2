@@ -259,8 +259,8 @@ Future<HttpResponse> httpRequest(Uri uri, String method, SocketInterface socket,
           value: (h) => h.substring(h.indexOf(': ') + 2).trim(),
         );
         headers!.forEach((key, value) {
-          if (key!.toLowerCase() == 'content-length') {
-            contentLength = int.parse(value!);
+          if (key.toLowerCase() == 'content-length') {
+            contentLength = int.parse(value);
           }
         });
         readHeadersCompleter.complete(null);

@@ -22,7 +22,7 @@ mixin SSHDiffieHellman {
   Digest? kexHash;
   BigInt? K;
 
-  void initializeDiffieHellman(int kexMethod, Random? random) {
+  void initializeDiffieHellman(int kexMethod, Random random) {
     if (KEX.x25519DiffieHellman(kexMethod)) {
       kexHash = SHA256Digest();
       x25519dh.generatePair(random);
@@ -50,7 +50,7 @@ mixin SSHDiffieHellman {
     }
   }
 
-  void initializeDiffieHellmanGroup(BigInt? p, BigInt? g, Random? random) {
+  void initializeDiffieHellmanGroup(BigInt p, BigInt g, Random random) {
     dh = DiffieHellman(p, g, 256);
     dh.generatePair(random);
   }
@@ -60,14 +60,15 @@ mixin SSHDiffieHellman {
 class X25519DiffieHellman {
   Uint8List? myPrivKey, myPubKey, remotePubKey;
 
-  void generatePair(Random? random) {
+  void generatePair(Random random) {
     myPrivKey = randBytes(random, 32);
     myPubKey = ScalarMult.scalseMult_base(myPrivKey!);
   }
 
   BigInt computeSecret(Uint8List remotePubKey) {
     this.remotePubKey = remotePubKey;
-    return decodeBigInt(ScalarMult.scalseMult(myPrivKey!, remotePubKey)!);
+    final secret = ScalarMult.scalseMult(myPrivKey!, remotePubKey)!;
+    return decodeBigIntWithSign(1, secret);
   }
 }
 
@@ -82,9 +83,9 @@ class EllipticCurveDiffieHellman {
   EllipticCurveDiffieHellman([this.curve, this.secretBits]);
 
   /// Generate ephemeral key pair.
-  void generatePair(Random? random) {
+  void generatePair(Random random) {
     do {
-      x = decodeBigInt(randBits(random, secretBits!)) % curve!.n;
+      x = decodeBigIntWithSign(1, randBits(random, secretBits!)) % curve!.n;
     } while (x == BigInt.zero);
     ECPoint c = (curve!.G * x)!;
     cText = c.getEncoded(false);
@@ -510,7 +511,7 @@ class DiffieHellman {
           ]),
         );
 
-  void generatePair(Random? random) {
+  void generatePair(Random random) {
     if (secretBits! % 8 != 0) throw FormatException();
     x = decodeBigIntWithSign(1, randBytes(random, secretBits! ~/ 8));
     e = g!.modPow(x!, p!);

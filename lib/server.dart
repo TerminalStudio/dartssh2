@@ -1,7 +1,6 @@
 // Copyright 2019 dartssh developers
 // Use of this source code is governed by a MIT-style license that can be found in the LICENSE file.
 
-import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -194,7 +193,7 @@ class SSHServer extends SSHTransport {
       group = MapEntry<BigInt?, BigInt?>(group14.p, group14.g);
     }
     initializeDiffieHellman(kexMethod, random);
-    initializeDiffieHellmanGroup(group.key, group.value, random);
+    initializeDiffieHellmanGroup(group.key!, group.value!, random);
     writeClearOrEncrypted(MSG_KEX_DH_GEX_GROUP(group.key, group.value));
   }
 
@@ -211,7 +210,7 @@ class SSHServer extends SSHTransport {
 
   void handleMSG_USERAUTH_REQUEST(MSG_USERAUTH_REQUEST msg) {
     if (tracePrint != null) {
-      tracePrint!('$hostport: MSG_USERAUTH_REQUEST: $msg');
+      tracePrint?.call('$hostport: MSG_USERAUTH_REQUEST: $msg');
     }
 
     if (userAuthRequest != null && userAuthRequest!(msg)) {
@@ -224,7 +223,7 @@ class SSHServer extends SSHTransport {
   void handleMSG_CHANNEL_OPEN(
       MSG_CHANNEL_OPEN msg, SerializableInput? packetS) {
     if (tracePrint != null) {
-      tracePrint!('$hostport: MSG_CHANNEL_OPEN type=${msg.channelType}');
+      tracePrint?.call('$hostport: MSG_CHANNEL_OPEN type=${msg.channelType}');
     }
     if (msg.channelType == 'session') {
       if (sessionChannel != null) {
@@ -250,16 +249,14 @@ class SSHServer extends SSHTransport {
         },
       );
     } else {
-      if (print != null) {
-        print('unknown channel open ${msg.channelType}');
-      }
+      this.print?.call('unknown channel open ${msg.channelType}');
       writeCipher(MSG_CHANNEL_OPEN_FAILURE(msg.senderChannel, 0, '', ''));
     }
   }
 
   void handleMSG_CHANNEL_REQUEST(MSG_CHANNEL_REQUEST msg) {
     if (tracePrint != null) {
-      tracePrint!(
+      tracePrint?.call(
           '$hostport: MSG_CHANNEL_REQUEST ${msg.requestType} wantReply=${msg.wantReply}');
     }
     Channel? chan = channels[msg.recipientChannel!];

@@ -51,7 +51,9 @@ Identity parsePem(
   if (start < text.length && text[start] == '\r') start++;
   if (start < text.length && text[start] == '\n') start++;
 
-  String headersEndText = '\n\n', procType;
+  String headersEndText = '\n\n';
+  // procType is unused, commented for now.
+  // String procType;
   int headersStart = -1, headersEnd = text.indexOf(headersEndText, start);
   if (headersEnd == -1 || headersEnd >= end) {
     headersEndText = '\r\n\r\n';
@@ -60,10 +62,10 @@ Identity parsePem(
   if (headersEnd != -1 && headersEnd < end) {
     headersStart = start;
     start = headersEnd + headersEndText.length;
-    for (String header
+    for (var header
         in LineSplitter().convert(text.substring(headersStart, headersEnd))) {
       if (header.startsWith('Proc-Type: ')) {
-        procType = header.substring(11);
+        // procType = header.substring(11);
       } else if (header.startsWith('DEK-Info: ')) {
         throw FormatException('not supported');
       }
@@ -157,7 +159,6 @@ Identity parsePem(
             throw FormatException('type $type');
           }
       }
-      break;
 
     case 'RSA PRIVATE KEY':
       RSAPrivateKey rsaPrivateKey = RSAPrivateKey()

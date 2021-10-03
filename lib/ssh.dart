@@ -237,7 +237,6 @@ class KEX {
       End = 8;
 
   static int id(String name) {
-    if (name == null) return 0;
     switch (name) {
       case 'curve25519-sha256@libssh.org':
         return ECDH_SHA2_X25519;
@@ -359,7 +358,6 @@ class Cipher {
       End = 4;
 
   static int id(String name) {
-    if (name == null) return 0;
     switch (name) {
       case 'aes128-ctr':
         return AES128_CTR;
@@ -461,7 +459,6 @@ class MAC {
       End = 8;
 
   static int id(String name) {
-    if (name == null) return 0;
     switch (name) {
       case 'hmac-md5':
         return MD5;
@@ -593,7 +590,6 @@ class Compression {
   static const int OpenSSHZLib = 1, None = 2, End = 2;
 
   static int id(String name) {
-    if (name == null) return 0;
     switch (name) {
       case 'zlib@openssh.com':
         return OpenSSHZLib;
@@ -655,11 +651,10 @@ class Digester {
     digest.update(buf, 0, buf.length);
   }
 
-  void updateBigInt(BigInt x) {
-    Uint8List xBytes = encodeBigInt(x);
-    bool padX = x.bitLength > 0 && x.bitLength % 8 == 0;
-    updateInt(xBytes.length + (padX ? 1 : 0));
-    if (padX) digest.updateByte(0);
+  void updateMpint(BigInt x) {
+    assert(x >= BigInt.zero);
+    final xBytes = x == BigInt.zero ? Uint8List(0) : encodeBigInt(x);
+    updateInt(xBytes.length);
     digest.update(xBytes, 0, xBytes.length);
   }
 
@@ -672,28 +667,36 @@ class Digester {
 }
 
 /// The exchange hash is used to authenticate the key exchange and SHOULD be kept secret.
+/// H = hash(V_C || V_S || I_C || I_S || K_S || e || f || K)
 Uint8List computeExchangeHash(
-    bool server,
-    int kexMethod,
-    Digest algo,
-    String verC,
-    String? verS,
-    Uint8List kexInitC,
-    Uint8List kexInitS,
-    Uint8List kS,
-    BigInt K,
-    DiffieHellman dh,
-    EllipticCurveDiffieHellman ecdh,
-    X25519DiffieHellman x25519dh) {
-  BinaryPacket kexCPacket = BinaryPacket(kexInitC),
-      kexSPacket = BinaryPacket(kexInitS);
-  int kexCPacketLen = 4 + kexCPacket.length,
-      kexSPacketLen = 4 + kexSPacket.length;
+  bool server,
+  int kexMethod,
+  Digest algo,
+  String verC,
+  String verS,
+  Uint8List kexInitC,
+  Uint8List kexInitS,
+  Uint8List kS,
+  BigInt K,
+  DiffieHellman dh,
+  EllipticCurveDiffieHellman ecdh,
+  X25519DiffieHellman x25519dh,
+) {
+  final kexCPacket = BinaryPacket(kexInitC);
+  final kexSPacket = BinaryPacket(kexInitS);
+  final kexCPacketLen = 4 + kexCPacket.length;
+  final kexSPacketLen = 4 + kexSPacket.length;
 
-  Digester H = Digester(algo);
-  if (server) H.updateString(verS!);
-  H.updateString(verC);
-  if (!server) H.updateString(verS!);
+  final H = Digester(algo);
+
+  if (server) {
+    H.updateString(verS);
+    H.updateString(verC);
+  } else {
+    H.updateString(verC);
+    H.updateString(verS);
+  }
+
   H.updateOffset(kexInitC, 5, kexCPacketLen - 5 - kexCPacket.padding);
   H.updateOffset(kexInitS, 5, kexSPacketLen - 5 - kexSPacket.padding);
   H.update(kS);
@@ -702,29 +705,47 @@ Uint8List computeExchangeHash(
     H.updateInt(dh.gexMin!);
     H.updateInt(dh.gexPref!);
     H.updateInt(dh.gexMax!);
-    H.updateBigInt(dh.p!);
-    H.updateBigInt(dh.g!);
+    H.updateMpint(dh.p!);
+    H.updateMpint(dh.g!);
   }
+
   if (KEX.x25519DiffieHellman(kexMethod)) {
-    if (server) H.update(x25519dh.remotePubKey!);
-    H.update(x25519dh.myPubKey!);
-    if (!server) H.update(x25519dh.remotePubKey!);
+    if (server) {
+      H.update(x25519dh.remotePubKey!);
+      H.update(x25519dh.myPubKey!);
+    } else {
+      H.update(x25519dh.myPubKey!);
+      H.update(x25519dh.remotePubKey!);
+    }
   } else if (KEX.ellipticCurveDiffieHellman(kexMethod)) {
-    if (server) H.update(ecdh.sText!);
-    H.update(ecdh.cText!);
-    if (!server) H.update(ecdh.sText!);
+    if (server) {
+      H.update(ecdh.sText!);
+      H.update(ecdh.cText!);
+    } else {
+      H.update(ecdh.cText!);
+      H.update(ecdh.sText!);
+    }
   } else {
-    if (server) H.updateBigInt(dh.f!);
-    H.updateBigInt(dh.e!);
-    if (!server) H.updateBigInt(dh.f!);
+    if (server) {
+      H.updateMpint(dh.f!);
+      H.updateMpint(dh.e!);
+    } else {
+      H.updateMpint(dh.e!);
+      H.updateMpint(dh.f!);
+    }
   }
-  H.updateBigInt(K);
+
+  H.updateMpint(K);
   return H.finish();
 }
 
 /// Verifies that [key] signed [exH] producing [sig].
 bool verifyHostKey(
-    Uint8List? exH, int hostkeyType, Uint8List key, Uint8List? sig) {
+  Uint8List? exH,
+  int hostkeyType,
+  Uint8List key,
+  Uint8List? sig,
+) {
   if (hostkeyType == Key.RSA) {
     return verifyRSASignature(RSAKey()..deserialize(SerializableInput(key)),
         RSASignature()..deserialize(SerializableInput(sig!)), exH!);
@@ -750,7 +771,7 @@ Uint8List deriveKey(Digest? algo, Uint8List? sessionId, Uint8List? exH,
   Uint8List ret = Uint8List(0);
   while (ret.length < bytes) {
     Digester digest = Digester(algo!);
-    digest.updateBigInt(K!);
+    digest.updateMpint(K!);
     digest.updateRaw(exH!);
     if (ret.isEmpty) {
       digest.updateByte(id);
@@ -764,16 +785,26 @@ Uint8List deriveKey(Digest? algo, Uint8List? sessionId, Uint8List? exH,
 }
 
 /// https://tools.ietf.org/html/rfc4252#section-7
-Uint8List deriveChallenge(Uint8List sessionId, String userName,
-    String serviceName, String methodName, String algoName, Uint8List secret) {
-  SerializableOutput output = SerializableOutput(Uint8List(2 +
-      4 * 6 +
-      sessionId.length +
-      userName.length +
-      serviceName.length +
-      methodName.length +
-      algoName.length +
-      secret.length));
+Uint8List deriveChallenge(
+  Uint8List sessionId,
+  String userName,
+  String serviceName,
+  String methodName,
+  String algoName,
+  Uint8List secret,
+) {
+  SerializableOutput output = SerializableOutput(
+    Uint8List(
+      2 +
+          4 * 6 +
+          sessionId.length +
+          userName.length +
+          serviceName.length +
+          methodName.length +
+          algoName.length +
+          secret.length,
+    ),
+  );
   serializeString(output, sessionId);
   output.addUint8(MSG_USERAUTH_REQUEST.ID);
   serializeString(output, userName);

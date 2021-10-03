@@ -25,7 +25,7 @@ void serializeMpInt(SerializableOutput output, BigInt x) {
 
 /// mpint: https://www.ietf.org/rfc/rfc4251.txt
 BigInt deserializeMpInt(SerializableInput input) =>
-    decodeBigInt(deserializeStringBytes(input));
+    decodeBigIntWithSign(1, deserializeStringBytes(input));
 
 /// string: https://www.ietf.org/rfc/rfc4251.txt
 void serializeString(SerializableOutput output, dynamic x) {
@@ -42,16 +42,16 @@ Uint8List deserializeStringBytes(SerializableInput input) =>
     input.getBytes(input.getUint32());
 
 /// Returns [n] random bytes.
-Uint8List randBytes(Random? generator, int n) {
+Uint8List randBytes(Random generator, int n) {
   final Uint8List random = Uint8List(n);
   for (int i = 0; i < random.length; i++) {
-    random[i] = generator!.nextInt(255);
+    random[i] = generator.nextInt(255);
   }
   return random;
 }
 
 /// Returns at least [n] random bits.
-Uint8List randBits(Random? generator, int n) =>
+Uint8List randBits(Random generator, int n) =>
     randBytes(generator, (n + 7) ~/ 8);
 
 /// SSH protocol frame.
@@ -69,7 +69,7 @@ abstract class SSHMessage extends Serializable {
   int id;
   SSHMessage(this.id);
 
-  Uint8List toBytes(dynamic zlib, Random? random, int blockSize) {
+  Uint8List toBytes(dynamic zlib, Random random, int blockSize) {
     Uint8List payload = Uint8List(serializedSize + 1);
     SerializableOutput output = SerializableOutput(payload);
     output.addUint8(id);
@@ -81,9 +81,11 @@ abstract class SSHMessage extends Serializable {
         zlib != null ? zlib.convert(payload) : payload, random, blockSize);
   }
 
-  Uint8List toPacket(Uint8List payload, Random? random, int blockSize) {
+  Uint8List toPacket(Uint8List payload, Random random, int blockSize) {
     Uint8List buffer = Uint8List(nextMultipleOfN(
-        4 + BinaryPacket.headerSize + payload.length, max(8, blockSize)));
+      4 + BinaryPacket.headerSize + payload.length,
+      max(8, blockSize),
+    ));
     SerializableOutput output = SerializableOutput(buffer);
     int padding = buffer.length - BinaryPacket.headerSize - payload.length;
     output.addUint32(buffer.length - 4);
@@ -94,6 +96,11 @@ abstract class SSHMessage extends Serializable {
       throw FormatException('${output.offset}/${output.buffer.length}');
     }
     return buffer;
+  }
+
+  @override
+  String toString() {
+    return runtimeType.toString();
   }
 }
 
@@ -195,14 +202,19 @@ class MSG_SERVICE_REQUEST extends SSHMessage {
   @override
   void serialize(SerializableOutput output) =>
       serializeString(output, serviceName);
+
+  @override
+  String toString() => '$runtimeType[$serviceName]';
 }
 
 /// If the server supports the service (and permits the client to use it),
 /// it MUST respond with the following.
 class MSG_SERVICE_ACCEPT extends SSHMessage {
   static const int ID = 6;
-  String? serviceName;
+
   MSG_SERVICE_ACCEPT(this.serviceName) : super(ID);
+
+  String? serviceName;
 
   @override
   int get serializedHeaderSize => 4;
@@ -217,6 +229,9 @@ class MSG_SERVICE_ACCEPT extends SSHMessage {
   @override
   void serialize(SerializableOutput output) =>
       serializeString(output, serviceName);
+
+  @override
+  String toString() => '$runtimeType[$serviceName]';
 }
 
 /// Key exchange begins by each side sending the following packet.
@@ -445,6 +460,7 @@ class MSG_KEX_DH_GEX_GROUP extends SSHMessage {
 /// It computes e = g^x mod p, and sends "e" to S.
 class MSG_KEX_DH_GEX_INIT extends MSG_KEXDH_INIT {
   static const int ID = 32;
+
   MSG_KEX_DH_GEX_INIT([BigInt? e]) : super(e) {
     id = ID;
   }
@@ -454,6 +470,7 @@ class MSG_KEX_DH_GEX_INIT extends MSG_KEXDH_INIT {
 /// f = g^y mod p.  S receives "e".  It computes K = e^y mod p, and H.
 class MSG_KEX_DH_GEX_REPLY extends MSG_KEXDH_REPLY {
   static const int ID = 33;
+
   MSG_KEX_DH_GEX_REPLY([BigInt? f, Uint8List? kS, Uint8List? hSig])
       : super(f, kS, hSig) {
     id = ID;
@@ -483,10 +500,21 @@ class MSG_KEX_ECDH_INIT extends SSHMessage {
 
 /// Server generates ephemeral key pair, computes shared secret, and
 /// generate and signs exchange hash.
+/// https://datatracker.ietf.org/doc/html/rfc4253#section-8
 class MSG_KEX_ECDH_REPLY extends SSHMessage {
   static const int ID = 31;
-  Uint8List? kS, qS, hSig;
+
   MSG_KEX_ECDH_REPLY([this.qS, this.kS, this.hSig]) : super(ID);
+
+  /// server public host key and certificates (K_S)
+  Uint8List? kS;
+
+  /// S generates a random number y (0 < y < q) and computes f = g^y mod p
+  Uint8List? qS;
+
+  /// K = e^y mod p,
+  /// H = hash(V_C || V_S || I_C || I_S || K_S || e || f || K)
+  Uint8List? hSig;
 
   @override
   int get serializedHeaderSize => 4 * 3;
@@ -513,16 +541,18 @@ class MSG_KEX_ECDH_REPLY extends SSHMessage {
 /// https://tools.ietf.org/html/rfc4252#section-5
 class MSG_USERAUTH_REQUEST extends SSHMessage {
   static const int ID = 50;
+
+  MSG_USERAUTH_REQUEST([
+    this.userName,
+    this.serviceName,
+    this.methodName,
+    this.algoName,
+    this.secret,
+    this.sig,
+  ]) : super(ID);
+
   String? userName, serviceName, methodName, algoName;
   Uint8List? secret, sig;
-  MSG_USERAUTH_REQUEST(
-      [this.userName,
-      this.serviceName,
-      this.methodName,
-      this.algoName,
-      this.secret,
-      this.sig])
-      : super(ID);
 
   @override
   int get serializedHeaderSize => 4 * 3;
@@ -581,8 +611,10 @@ class MSG_USERAUTH_REQUEST extends SSHMessage {
     }
   }
 
-  String toString() =>
-      'userName=$userName, serviceName=$serviceName, methodName=$methodName';
+  @override
+  String toString() {
+    return 'MSG_USERAUTH_REQUEST[userName=$userName, serviceName=$serviceName, methodName=$methodName';
+  }
 }
 
 /// If the server rejects the authentication request, it MUST respond with the following:
@@ -669,8 +701,10 @@ class MSG_USERAUTH_INFO_REQUEST extends SSHMessage {
 /// https://tools.ietf.org/html/rfc4256#section-3.4
 class MSG_USERAUTH_INFO_RESPONSE extends SSHMessage {
   static const int ID = 61;
-  List<Uint8List?>? response;
+
   MSG_USERAUTH_INFO_RESPONSE([this.response]) : super(ID);
+
+  List<Uint8List?>? response;
 
   @override
   int get serializedHeaderSize => 4;
@@ -689,6 +723,11 @@ class MSG_USERAUTH_INFO_RESPONSE extends SSHMessage {
 
   @override
   void deserialize(SerializableInput input) {}
+
+  @override
+  String toString() {
+    return 'MSG_USERAUTH_INFO_RESPONSE[response=$response]';
+  }
 }
 
 /// https://tools.ietf.org/html/rfc4254#section-4

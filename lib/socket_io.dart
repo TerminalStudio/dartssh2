@@ -58,16 +58,19 @@ class SocketImpl extends SocketInterface {
         throw FormatException();
       }
     } else {
-      Socket.connect(uri.host, uri.port,
-              timeout: Duration(seconds: timeoutSeconds))
-          .then((Socket x) {
-        if (x == null) {
-          onError(null);
-        } else {
+      Socket.connect(
+        uri.host,
+        uri.port,
+        timeout: Duration(seconds: timeoutSeconds),
+      ).then(
+        (Socket x) {
           socket = x;
           connectSucceeded(onConnected);
-        }
-      });
+        },
+        onError: (error) {
+          onError(error.toString());
+        },
+      );
     }
   }
 
@@ -272,11 +275,10 @@ class SocketAdaptorStreamConsumer extends StreamConsumer<List<int>> {
 
   Future<Socket> addStream(Stream<List<int>> stream) {
     streamCompleter = Completer<Socket>();
-    if (socket.impl != null) {
-      subscription = stream.listen((data) {
+    subscription = stream.listen(
+      (data) {
         try {
           if (subscription != null) {
-            assert(data != null);
             socket.impl.sendRaw(data as Uint8List);
           }
         } catch (e) {
@@ -284,13 +286,16 @@ class SocketAdaptorStreamConsumer extends StreamConsumer<List<int>> {
           stop();
           done(e);
         }
-      }, onError: (error, [stackTrace]) {
+      },
+      onError: (error, [stackTrace]) {
         socket.destroy();
         done(error, stackTrace);
-      }, onDone: () {
+      },
+      onDone: () {
         done();
-      }, cancelOnError: true);
-    }
+      },
+      cancelOnError: true,
+    );
     return streamCompleter!.future.then((value) => value as Socket);
   }
 }
