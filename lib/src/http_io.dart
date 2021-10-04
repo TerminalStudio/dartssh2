@@ -5,8 +5,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io' as io;
 
-import 'package:dartssh2/http.dart';
-import 'package:dartssh2/transport.dart';
+import 'package:dartssh2/src/http.dart';
+import 'package:dartssh2/src/transport.dart';
 
 /// dart:io based alternative [HttpClient] implementation.
 class HttpClientImpl extends HttpClient {

@@ -4,15 +4,15 @@
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:dartssh2/bigint.dart';
+import 'package:dartssh2/src/bigint.dart';
 import 'package:pinenacl/tweetnacl.dart';
 import "package:pointycastle/api.dart";
 import 'package:pointycastle/digests/sha1.dart';
 import "package:pointycastle/digests/sha256.dart";
 import 'package:pointycastle/ecc/api.dart';
 
-import 'package:dartssh2/protocol.dart';
-import 'package:dartssh2/ssh.dart';
+import 'package:dartssh2/src/protocol.dart';
+import 'package:dartssh2/src/ssh.dart';
 
 /// Mixin providing a suite of key exchange methods.
 mixin SSHDiffieHellman {

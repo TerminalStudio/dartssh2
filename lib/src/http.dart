@@ -8,10 +8,10 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
-import 'package:dartssh2/client.dart';
-import 'package:dartssh2/serializable.dart';
-import 'package:dartssh2/socket.dart';
-import 'package:dartssh2/transport.dart';
+import 'package:dartssh2/src/client.dart';
+import 'package:dartssh2/src/serializable.dart';
+import 'package:dartssh2/src/socket.dart';
+import 'package:dartssh2/src/transport.dart';
 
 typedef HttpClientFactory = http.Client Function();
 typedef SocketFilter = Future<SocketInterface> Function(SocketInterface);

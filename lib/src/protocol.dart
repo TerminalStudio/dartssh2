@@ -6,8 +6,8 @@
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:dartssh2/bigint.dart';
-import 'package:dartssh2/serializable.dart';
+import 'package:dartssh2/src/bigint.dart';
+import 'package:dartssh2/src/serializable.dart';
 
 /// Rounds [input] up to the next [n]th, if necessary.
 int nextMultipleOfN(int input, int n) =>
@@ -753,6 +753,11 @@ class MSG_GLOBAL_REQUEST extends SSHMessage {
     request = deserializeString(input);
     wantReply = input.getUint8();
   }
+
+  @override
+  String toString() {
+    return 'MSG_GLOBAL_REQUEST[request=$request, wantReply=$wantReply]';
+  }
 }
 
 /// https://tools.ietf.org/html/rfc4254#section-7.1
@@ -1053,16 +1058,32 @@ class MSG_CHANNEL_REQUEST extends SSHMessage {
       pixelHeight = 0;
   bool wantReply = false;
   String? requestType, term, termMode;
+
   MSG_CHANNEL_REQUEST() : super(ID);
+
   MSG_CHANNEL_REQUEST.exec(
-      this.recipientChannel, this.requestType, this.term, this.wantReply)
-      : super(ID);
+    this.recipientChannel,
+    this.requestType,
+    this.term,
+    this.wantReply,
+  ) : super(ID);
+
   MSG_CHANNEL_REQUEST.exit(
-      this.recipientChannel, this.requestType, this.width, this.wantReply)
-      : super(ID);
-  MSG_CHANNEL_REQUEST.ptyReq(this.recipientChannel, this.requestType, Point d,
-      Point pd, this.term, this.termMode, this.wantReply)
-      : width = d.x as int?,
+    this.recipientChannel,
+    this.requestType,
+    this.width,
+    this.wantReply,
+  ) : super(ID);
+
+  MSG_CHANNEL_REQUEST.ptyReq(
+    this.recipientChannel,
+    this.requestType,
+    Point d,
+    Point pd,
+    this.term,
+    this.termMode,
+    this.wantReply,
+  )   : width = d.x as int?,
         height = d.y as int?,
         pixelWidth = pd.x as int?,
         pixelHeight = pd.y as int?,
@@ -1113,6 +1134,33 @@ class MSG_CHANNEL_REQUEST extends SSHMessage {
     } else if (requestType == 'exit-status') {
       output.addUint32(width!);
     }
+  }
+
+  @override
+  String toString() {
+    String ret = 'MSG_CHANNEL_REQUEST: [';
+    ret += 'recipientChannel: $recipientChannel, ';
+    ret += 'requestType: $requestType, ';
+    ret += 'wantReply: $wantReply, ';
+    if (requestType == 'pty-req') {
+      ret += 'width: $width, ';
+      ret += 'height: $height, ';
+      ret += 'pixelWidth: $pixelWidth, ';
+      ret += 'pixelHeight: $pixelHeight, ';
+      ret += 'term: $term, ';
+      ret += 'termMode: $termMode';
+    } else if (requestType == 'exec') {
+      ret += 'term: $term, ';
+    } else if (requestType == 'window-change') {
+      ret += 'width: $width, ';
+      ret += 'height: $height, ';
+      ret += 'pixelWidth: $pixelWidth, ';
+      ret += 'pixelHeight: $pixelHeight';
+    } else if (requestType == 'exit-status') {
+      ret += 'width: $width';
+    }
+    ret += ']';
+    return ret;
   }
 }
 

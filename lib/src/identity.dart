@@ -3,6 +3,8 @@
 
 import 'dart:typed_data';
 
+import 'package:dartssh2/src/pem.dart';
+import 'package:dartssh2/src/transport.dart';
 import 'package:pinenacl/ed25519.dart';
 import 'package:pointycastle/api.dart' hide Signature;
 import 'package:pointycastle/asymmetric/api.dart' as asymmetric;
@@ -12,11 +14,21 @@ import 'package:pointycastle/random/fortuna_random.dart';
 import 'package:pointycastle/signers/ecdsa_signer.dart';
 import 'package:pointycastle/signers/rsa_signer.dart';
 
-import 'package:dartssh2/protocol.dart';
-import 'package:dartssh2/serializable.dart';
-import 'package:dartssh2/ssh.dart';
+import 'package:dartssh2/src/protocol.dart';
+import 'package:dartssh2/src/serializable.dart';
+import 'package:dartssh2/src/ssh.dart';
 
-class Identity {
+class SSHIdentity {
+  SSHIdentity();
+
+  factory SSHIdentity.fromPem(
+    String pem, {
+    StringFunction? getPassword,
+    SSHIdentity? identity,
+  }) {
+    return parsePem(pem, getPassword: getPassword, identity: identity);
+  }
+
   SigningKey? ed25519;
   int? ecdsaKeyType;
   ECPublicKey? ecdsaPublic;

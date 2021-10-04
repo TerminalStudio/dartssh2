@@ -7,12 +7,12 @@ import 'dart:io' as io;
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:dartssh2/client.dart';
-import 'package:dartssh2/http.dart';
-import 'package:dartssh2/protocol.dart';
-import 'package:dartssh2/socket.dart';
-import 'package:dartssh2/socket_io.dart';
-import 'package:dartssh2/transport.dart';
+import 'package:dartssh2/src/client.dart';
+import 'package:dartssh2/src/http.dart';
+import 'package:dartssh2/src/protocol.dart';
+import 'package:dartssh2/src/socket.dart';
+import 'package:dartssh2/src/socket_io.dart';
+import 'package:dartssh2/src/transport.dart';
 
 /// dart:io [WebSocket] based implementation of [SocketInterface].
 class WebSocketImpl extends SocketInterface {

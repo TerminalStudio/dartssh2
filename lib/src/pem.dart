@@ -10,20 +10,20 @@ import 'package:pointycastle/api.dart' hide Signature;
 import 'package:pointycastle/asymmetric/api.dart' as asymmetric;
 import 'package:pointycastle/ecc/api.dart';
 
-import 'package:dartssh2/identity.dart';
-import 'package:dartssh2/protocol.dart';
-import 'package:dartssh2/serializable.dart';
-import 'package:dartssh2/ssh.dart';
-import 'package:dartssh2/transport.dart';
+import 'package:dartssh2/src/identity.dart';
+import 'package:dartssh2/src/protocol.dart';
+import 'package:dartssh2/src/serializable.dart';
+import 'package:dartssh2/src/ssh.dart';
+import 'package:dartssh2/src/transport.dart';
 
 /// Privacy-Enhanced Mail (PEM) is a de facto file format for storing and sending
 /// cryptographic keys, certificates, and other data.
-Identity parsePem(
+SSHIdentity parsePem(
   String text, {
   StringFunction? getPassword,
-  Identity? identity,
+  SSHIdentity? identity,
 }) {
-  identity ??= Identity();
+  identity ??= SSHIdentity();
   const String beginText = '-----BEGIN ',
       endText = '-----END ',
       termText = '-----';

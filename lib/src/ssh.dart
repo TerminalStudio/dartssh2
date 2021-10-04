@@ -5,7 +5,7 @@
 
 import 'dart:typed_data';
 
-import 'package:dartssh2/bigint.dart';
+import 'package:dartssh2/src/bigint.dart';
 import 'package:pointycastle/api.dart' hide Signature;
 import 'package:pointycastle/block/aes_fast.dart';
 import 'package:pointycastle/block/modes/cbc.dart';
@@ -22,25 +22,29 @@ import 'package:pointycastle/ecc/curves/secp521r1.dart';
 import 'package:pointycastle/macs/hmac.dart';
 import 'package:pointycastle/stream/ctr.dart';
 
-import 'package:dartssh2/identity.dart';
-import 'package:dartssh2/kex.dart';
-import 'package:dartssh2/protocol.dart';
-import 'package:dartssh2/serializable.dart';
+import 'package:dartssh2/src/identity.dart';
+import 'package:dartssh2/src/kex.dart';
+import 'package:dartssh2/src/protocol.dart';
+import 'package:dartssh2/src/serializable.dart';
 
 typedef NameFunction = String Function(int);
 typedef SupportedFunction = bool Function(int);
 
-/// Valid URLs include 127.0.0.1, 127.0.0.1:22, wss://webssh.
-Uri parseUri(String uriText) {
-  Uri uri;
-  try {
-    uri = Uri.parse(uriText);
-  } catch (_) {
-    uri = Uri.parse('ssh://$uriText');
+/// Utilities for working with dartssh2.
+class SSH {
+  /// Parse command line style ssh urls. Valid URLs include 127.0.0.1,
+  /// 127.0.0.1:22, wss://webssh.
+  static Uri parseUri(String uriText) {
+    Uri uri;
+    try {
+      uri = Uri.parse(uriText);
+    } catch (_) {
+      uri = Uri.parse('ssh://$uriText');
+    }
+    if (!uri.hasScheme) uri = uri = Uri.parse('ssh://$uriText');
+    if (uri.scheme == 'ssh' && !uri.hasPort) uri = Uri.parse('$uri:22');
+    return uri;
   }
-  if (!uri.hasScheme) uri = uri = Uri.parse('ssh://$uriText');
-  if (uri.scheme == 'ssh' && !uri.hasPort) uri = Uri.parse('$uri:22');
-  return uri;
 }
 
 /// Each of the algorithm name-lists MUST be a comma-separated list of algorithm names.

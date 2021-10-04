@@ -1,4 +1,15 @@
-## 1.1.0
+## 1.1.3-pre
+
+- Add `--verbose` option in `dartssh` command.
+
+## 1.1.2-pre
+
+- Fix typos.
+
+## 1.1.1-pre
+
+- Organize exports.
+## 1.1.0-pre
 
 - Dependency update.
 - Sound null safety.

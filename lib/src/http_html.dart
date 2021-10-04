@@ -4,18 +4,24 @@
 import 'dart:async';
 import 'dart:html' as html;
 
-import 'package:dartssh2/http.dart';
-import 'package:dartssh2/transport.dart';
+import 'package:dartssh2/src/http.dart';
+import 'package:dartssh2/src/transport.dart';
 
 /// dart:html based alternative [HttpClient] implementation.
 class HttpClientImpl extends HttpClient {
   static const String type = 'html';
-  HttpClientImpl({StringCallback? debugPrint, StringFilter? userAgent})
-      : super(debugPrint: debugPrint);
+  HttpClientImpl({
+    StringCallback? debugPrint,
+    StringFilter? userAgent,
+  }) : super(debugPrint: debugPrint);
 
   @override
-  Future<HttpResponse> request(String url,
-      {String? method, String? data, Map<String, String>? headers}) {
+  Future<HttpResponse> request(
+    String url, {
+    String? method,
+    String? data,
+    Map<String, String>? headers,
+  }) {
     numOutstanding++;
     Completer<HttpResponse> completer = Completer<HttpResponse>();
     html.HttpRequest.request(url, method: method, requestHeaders: headers)

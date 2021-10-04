@@ -9,26 +9,21 @@ import 'dart:typed_data';
 
 import "package:pointycastle/api.dart";
 
-import 'package:dartssh2/agent.dart';
-import 'package:dartssh2/identity.dart';
-import 'package:dartssh2/pem.dart';
-import 'package:dartssh2/protocol.dart';
-import 'package:dartssh2/serializable.dart';
-import 'package:dartssh2/socket.dart';
-import 'package:dartssh2/socket_html.dart'
-    if (dart.library.io) 'package:dartssh2/socket_io.dart';
-import 'package:dartssh2/ssh.dart';
-import 'package:dartssh2/transport.dart';
-import 'package:dartssh2/websocket_html.dart'
-    if (dart.library.io) 'package:dartssh2/websocket_io.dart';
+import 'package:dartssh2/dartssh2.dart';
+import 'package:dartssh2/src/agent.dart';
+import 'package:dartssh2/src/identity.dart';
+import 'package:dartssh2/src/pem.dart';
+import 'package:dartssh2/src/protocol.dart';
+import 'package:dartssh2/src/serializable.dart';
+import 'package:dartssh2/src/socket.dart';
+import 'package:dartssh2/src/ssh.dart';
+import 'package:dartssh2/src/transport.dart';
 
 /// The Secure Shell (SSH) is a protocol for secure remote login and
 /// other secure network services over an insecure network.
 class SSHClient extends SSHTransport with SSHAgentForwarding {
   // Parameters
-  String? login;
-  String? termvar, startupCommand;
-  bool? agentForwarding, closeOnDisconnect, startShell;
+  bool? agentForwarding, closeOnDisconnect;
   FingerprintCallback? acceptHostFingerprint;
   Uint8ListFunction? getPassword;
   IdentityFunction? loadIdentity;
@@ -38,15 +33,31 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   int loginPrompts = 0, passwordPrompts = 0, userauthFail = 0;
   bool acceptedHostkey = false, loadedPw = false, wrotePw = false;
   Uint8List? pw;
-  int termWidth, termHeight;
+
+  /// width of the terminal window in characters
+  int termWidth;
+
+  /// height of the terminal window in characters
+  int termHeight;
+
+  /// The username to authenticate as.
+  String login;
+
+  /// Whether to start an interactive shell session on the SSH server after the
+  /// connection is established. Default is true.
+  final bool startShell;
+
+  /// TERM environment variable value (e.g., vt100, xterm). 'xterm' by default.
+  /// Use `Platform.environment['TERM']` if you want to use the value of your
+  /// shell or `xterm-256color` for better color support.
+  final String termvar;
 
   SSHClient({
     Uri? hostport,
-    this.login,
-    this.termvar = '',
+    required this.login,
+    this.termvar = 'xterm',
     this.termWidth = 80,
     this.termHeight = 25,
-    this.startupCommand,
     bool compress = false,
     this.agentForwarding = false,
     this.closeOnDisconnect,
@@ -65,19 +76,21 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     SocketInterface? socketInput,
     Random? random,
     SecureRandom? secureRandom,
-  }) : super(false,
-            hostport: hostport,
-            compress: compress,
-            forwardLocal: forwardLocal,
-            forwardRemote: forwardRemote,
-            disconnected: disconnected,
-            response: response,
-            print: print,
-            debugPrint: debugPrint,
-            tracePrint: tracePrint,
-            socket: socketInput,
-            random: random,
-            secureRandom: secureRandom) {
+  }) : super(
+          false,
+          hostport: hostport,
+          compress: compress,
+          forwardLocal: forwardLocal,
+          forwardRemote: forwardRemote,
+          disconnected: disconnected,
+          response: response,
+          print: print,
+          debugPrint: debugPrint,
+          tracePrint: tracePrint,
+          socket: socketInput,
+          random: random,
+          secureRandom: secureRandom,
+        ) {
     if (success != null) {
       this.success.add(success);
     }
@@ -90,12 +103,15 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
           : SocketImpl();
 
       socket!.connect(
-          hostport, onConnected, (error) => disconnect('connect error'));
+        hostport,
+        onConnected,
+        (error) => disconnect('connect error'),
+      );
     }
   }
 
-  void responseText(SSHTransport trans, String text) {
-    response!(trans, Uint8List.fromList(text.codeUnits));
+  void responseText(String text) {
+    response?.call(Uint8List.fromList(text.codeUnits));
   }
 
   /// https://tools.ietf.org/html/rfc4253#section-6
@@ -328,9 +344,9 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   /// Handle accepted [MSG_SERVICE_REQUEST] sent in response to [MSG_NEWKEYS].
   void handleMSG_SERVICE_ACCEPT() {
     tracePrint?.call('<- $hostport: MSG_SERVICE_ACCEPT');
-    if (login == null || login!.isEmpty) {
+    if (login.isEmpty) {
       loginPrompts = 1;
-      responseText(this, 'login: ');
+      responseText('login: ');
     }
     if (identity == null && loadIdentity != null) {
       identity = loadIdentity!();
@@ -346,7 +362,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     if (!loadedPw) clearPassword();
     userauthFail++;
     if (userauthFail == 1 && !wrotePw) {
-      responseText(this, 'Password:');
+      responseText('Password:');
       passwordPrompts = 1;
       getThenSendPassword();
     } else {
@@ -359,7 +375,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     tracePrint?.call('<- $hostport: MSG_USERAUTH_SUCCESS');
 
     sessionChannel =
-        Channel(localId: nextChannelId, windowS: initialWindowSize);
+        SSHChannel(localId: nextChannelId, windowS: initialWindowSize);
     channels[nextChannelId] = sessionChannel!;
     nextChannelId++;
 
@@ -384,12 +400,12 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
         '<- $hostport: MSG_USERAUTH_INFO_REQUEST prompts=${msg.prompts.length}');
     if (msg.instruction.isNotEmpty) {
       tracePrint?.call('$hostport: instruction: ${msg.instruction}');
-      responseText(this, msg.instruction);
+      responseText(msg.instruction);
     }
 
     for (MapEntry<String, int> prompt in msg.prompts) {
       tracePrint?.call('$hostport: prompt: ${prompt.key}');
-      responseText(this, prompt.key);
+      responseText(prompt.key);
     }
 
     if (msg.prompts.isNotEmpty) {
@@ -406,7 +422,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
         '<- $hostport: MSG_CHANNEL_REQUEST ${msg.requestType} wantReply=${msg.wantReply}');
   }
 
-  /// Handles server-initiated [Channel] to client.  e.g. for remote port forwarding,
+  /// Handles server-initiated [SSHChannel] to client.  e.g. for remote port forwarding,
   /// or SSH agent request.
   void handleMSG_CHANNEL_OPEN(
     MSG_CHANNEL_OPEN msg,
@@ -414,7 +430,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   ) {
     tracePrint?.call('<- $hostport: MSG_CHANNEL_OPEN type=${msg.channelType}');
     if (msg.channelType == 'auth-agent@openssh.com' && agentForwarding!) {
-      Channel channel = acceptChannel(msg);
+      SSHChannel channel = acceptChannel(msg);
       channel.agentChannel = true;
       writeCipher(MSG_CHANNEL_OPEN_CONFIRMATION(
           channel.remoteId, channel.localId, channel.windowS, maxPacketSize));
@@ -428,7 +444,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
         this.print?.call('unknown port open ${openTcpIp.dstPort}');
         writeCipher(MSG_CHANNEL_OPEN_FAILURE(msg.senderChannel, 0, '', ''));
       } else {
-        Channel channel = acceptChannel(msg);
+        SSHChannel channel = acceptChannel(msg);
         remoteForward!(channel, forward.targetHost, forward.targetPort,
             openTcpIp.srcHost, openTcpIp.srcPort);
         writeCipher(MSG_CHANNEL_OPEN_CONFIRMATION(
@@ -440,21 +456,27 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     }
   }
 
-  /// Handles successfully opened client-initiated [Channel].
+  /// Handles successfully opened client-initiated [SSHChannel].
   @override
-  void handleChannelOpenConfirmation(Channel channel) {
+  void handleChannelOpenConfirmation(SSHChannel channel) {
     if (channel == sessionChannel) {
       handleSessionStarted();
     } else if (channel.connected != null) {
-      channel.connected!();
+      channel.connected?.call();
     }
   }
 
   /// After the session is established, initialize channel state.
   void handleSessionStarted() {
     if (agentForwarding!) {
-      writeCipher(MSG_CHANNEL_REQUEST.exec(
-          sessionChannel!.remoteId, 'auth-agent-req@openssh.com', '', true));
+      writeCipher(
+        MSG_CHANNEL_REQUEST.exec(
+          sessionChannel!.remoteId,
+          'auth-agent-req@openssh.com',
+          '',
+          true,
+        ),
+      );
     }
 
     if (forwardRemote != null) {
@@ -464,41 +486,45 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       }
     }
 
-    if (startShell!) {
-      writeCipher(MSG_CHANNEL_REQUEST.ptyReq(
+    if (startShell) {
+      writeCipher(
+        MSG_CHANNEL_REQUEST.ptyReq(
           sessionChannel!.remoteId,
           'pty-req',
           Point(termWidth, termHeight),
           Point(termWidth * 8, termHeight * 12),
           termvar,
           '',
-          true));
+          true,
+        ),
+      );
 
-      writeCipher(MSG_CHANNEL_REQUEST.exec(
-          sessionChannel!.remoteId, 'shell', '', true));
-
-      if ((startupCommand ?? '').isNotEmpty) {
-        sendToChannel(
-            sessionChannel!, utf8.encode(startupCommand!) as Uint8List);
-      }
+      writeCipher(
+        MSG_CHANNEL_REQUEST.exec(
+          sessionChannel!.remoteId,
+          'shell',
+          '',
+          true,
+        ),
+      );
     }
   }
 
-  /// Handles all [Channel] data for this session.
+  /// Handles all [SSHChannel] data for this session.
   @override
-  void handleChannelData(Channel chan, Uint8List data) {
+  void handleChannelData(SSHChannel chan, Uint8List data) {
     if (chan == sessionChannel) {
-      response!(this, data);
+      response?.call(data);
     } else if (chan.cb != null) {
-      chan.cb!(chan, data);
+      chan.cb!(data);
     } else if (chan.agentChannel) {
       handleAgentRead(chan, data);
     }
   }
 
-  /// Handles [Channel] closed by server.
+  /// Handles [SSHChannel] closed by server.
   @override
-  void handleChannelClose(Channel chan, [String? description]) {
+  void handleChannelClose(SSHChannel chan, [String? description]) {
     if (chan == sessionChannel) {
       writeCipher(MSG_DISCONNECT());
       sessionChannel = null;
@@ -507,7 +533,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       if (chan.error != null) {
         chan.error!(description);
       } else {
-        chan.cb!(chan, Uint8List(0));
+        chan.cb!(Uint8List(0));
       }
     }
   }
@@ -535,7 +561,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
 
   /// Sends [MSG_USERAUTH_REQUEST] with password [pw].
   void sendPassword() {
-    responseText(this, '\r\n');
+    responseText('\r\n');
     wrotePw = true;
     if (userauthFail != 0) {
       writeCipher(MSG_USERAUTH_REQUEST(
@@ -570,7 +596,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       final pubkey = identity.getEd25519PublicKey().toRaw();
       final challenge = deriveChallenge(
         sessionId!,
-        login!,
+        login,
         'ssh-connection',
         'publickey',
         'ssh-ed25519',
@@ -593,7 +619,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       final pubkey = identity.getECDSAPublicKey().toRaw();
       final challenge = deriveChallenge(
         sessionId!,
-        login!,
+        login,
         'ssh-connection',
         'publickey',
         keyType,
@@ -615,7 +641,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       final pubkey = identity.getRSAPublicKey().toRaw();
       final challenge = deriveChallenge(
         sessionId!,
-        login!,
+        login,
         'ssh-connection',
         'publickey',
         'ssh-rsa',
@@ -640,11 +666,11 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   @override
   void sendChannelData(Uint8List b) {
     if (loginPrompts != 0) {
-      response!(this, b);
+      response?.call(b);
       bool cr = b.isNotEmpty && b.last == '\n'.codeUnits[0];
-      login = login! + String.fromCharCodes(b, 0, b.length - (cr ? 1 : 0));
+      login = login + String.fromCharCodes(b, 0, b.length - (cr ? 1 : 0));
       if (cr) {
-        responseText(this, '\n');
+        responseText('\n');
         loginPrompts = 0;
         sendAuthenticationRequest();
       }
@@ -665,14 +691,17 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     termWidth = w;
     termHeight = h;
     if (socket == null || sessionChannel == null) return;
-    writeCipher(MSG_CHANNEL_REQUEST.ptyReq(
+    writeCipher(
+      MSG_CHANNEL_REQUEST.ptyReq(
         sessionChannel!.remoteId,
         'window-change',
         Point(termWidth, termHeight),
         Point(termWidth * 8, termHeight * 12),
         termvar,
         '',
-        false));
+        false,
+      ),
+    );
   }
 
   void exec(String command, {bool wantReply = true}) {
@@ -687,8 +716,8 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
 class SSHTunneledSocketImpl extends SocketInterface {
   bool clientOwner, shutdownSend = false, shutdownRecv = false;
   late SSHClient client;
-  Identity? identity;
-  Channel? channel;
+  SSHIdentity? identity;
+  SSHChannel? channel;
   String? sourceHost, tunnelToHost;
   int? sourcePort, tunnelToPort;
   VoidCallback? connectHandler;
@@ -707,22 +736,23 @@ class SSHTunneledSocketImpl extends SocketInterface {
   }) : clientOwner = true {
     identity = key == null ? null : parsePem(key);
     client = SSHClient(
-        socketInput: SocketImpl(),
-        hostport: url,
-        login: login,
-        getPassword: () => utf8.encode(password) as Uint8List,
-        // password == null ? null : () => utf8.encode(password) as Uint8List,
-        loadIdentity: identity == null ? null : () => identity!,
-        response: (_, m) {},
-        disconnected: () {
-          if (onDone != null) {
-            onDone!('SSHTunnelledSocketImpl.client disconnected');
-          }
-        },
-        startShell: false,
-        success: openTunnel,
-        print: print,
-        debugPrint: debugPrint);
+      socketInput: SocketImpl(),
+      hostport: url,
+      login: login,
+      getPassword: () => utf8.encode(password) as Uint8List,
+      // password == null ? null : () => utf8.encode(password) as Uint8List,
+      loadIdentity: identity == null ? null : () => identity!,
+      response: (m) {},
+      disconnected: () {
+        if (onDone != null) {
+          onDone!('SSHTunnelledSocketImpl.client disconnected');
+        }
+      },
+      startShell: false,
+      success: openTunnel,
+      print: print,
+      debugPrint: debugPrint,
+    );
   }
 
   @override
@@ -762,8 +792,12 @@ class SSHTunneledSocketImpl extends SocketInterface {
   /// Connects to [address] over SSH tunnel provided by [client].
   @override
   void connect(
-      Uri address, VoidCallback connectCallback, StringCallback errorHandler,
-      {int timeoutSeconds = 15, bool ignoreBadCert = false}) {
+    Uri address,
+    VoidCallback connectCallback,
+    StringCallback errorHandler, {
+    int timeoutSeconds = 15,
+    bool ignoreBadCert = false,
+  }) {
     tunnelToHost = address.host;
     tunnelToPort = address.port;
     connectHandler = connectCallback;
@@ -787,7 +821,7 @@ class SSHTunneledSocketImpl extends SocketInterface {
     this.sourceHost = sourceHost;
     this.sourcePort = sourcePort;
     channel = client.openTcpChannel(
-        sourceHost, sourcePort, tunnelToHost, tunnelToPort, (_, Uint8List? m) {
+        sourceHost, sourcePort, tunnelToHost, tunnelToPort, (Uint8List? m) {
       //client.debugPrint?.call('DEBUG SSHTunneledSocketImpl.recv: ${String.fromCharCodes(m)}');
       //client.debugPrint?.call('DEBUG SSHTunneledSocketImpl.recvRaw(${m.length}) = $m');
       onMessage(m!);

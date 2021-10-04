@@ -6,8 +6,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:dartssh2/socket.dart';
-import 'package:dartssh2/transport.dart';
+import 'package:dartssh2/src/socket.dart';
+import 'package:dartssh2/src/transport.dart';
 
 /// dart:io [Socket] based implementation of [SocketInterface].
 class SocketImpl extends SocketInterface {

@@ -4,9 +4,9 @@
 import 'dart:collection';
 import 'dart:typed_data';
 
-// import 'package:dartssh2/socket_html.dart'
+// import 'package:dartssh2/src/socket_html.dart'
 //     if (dart.library.io) 'package:dartssh2/socket_io.dart';
-import 'package:dartssh2/transport.dart';
+import 'package:dartssh2/src/transport.dart';
 
 enum ConnectionDirection { receive, send, both }
 

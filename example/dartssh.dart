@@ -7,15 +7,11 @@ import 'dart:typed_data';
 
 import 'package:args/args.dart';
 
-import 'package:dartssh2/client.dart';
-import 'package:dartssh2/identity.dart';
-import 'package:dartssh2/pem.dart';
-import 'package:dartssh2/ssh.dart';
-import 'package:dartssh2/transport.dart';
+import 'package:dartssh2/dartssh2.dart';
 
-Identity? identity;
+SSHIdentity? identity;
 SSHClient? client;
-Channel? forwardChannel;
+SSHChannel? forwardChannel;
 
 void main(List<String> arguments) async {
   stdin.lineMode = false;
@@ -32,7 +28,7 @@ void main(List<String> arguments) async {
   exitCode = await ssh(
     arguments,
     stdin,
-    (_, Uint8List v) => stdout.write(utf8.decode(v)),
+    (Uint8List v) => stdout.write(utf8.decode(v)),
     () => exit(0),
     termWidth: stdout.terminalColumns,
     termHeight: stdout.terminalLines,
@@ -50,8 +46,8 @@ void send(Uint8List x) {
 Future<int> ssh(
   List<String> arguments,
   Stream<List<int>> input,
-  ResponseCallback response,
-  VoidCallback done, {
+  void Function(Uint8List) response,
+  void Function() done, {
   int termWidth = 80,
   int termHeight = 25,
 }) async {
@@ -95,12 +91,12 @@ Future<int> ssh(
     return 2;
   }
 
-  applyCipherSuiteOverrides(
-      args['kex'], args['key'], args['cipher'], args['mac']);
+  // applyCipherSuiteOverrides(
+  //     args['kex'], args['key'], args['cipher'], args['mac']);
 
   try {
     client = SSHClient(
-      hostport: parseUri(host),
+      hostport: SSH.parseUri(host),
       login: login,
       print: print,
       termWidth: termWidth,
@@ -115,7 +111,7 @@ Future<int> ssh(
       response: response,
       loadIdentity: () {
         if (identity == null && identityFile != null) {
-          identity = parsePem(File(identityFile).readAsStringSync());
+          identity = SSHIdentity.fromPem(File(identityFile).readAsStringSync());
         }
         return identity;
       },
@@ -130,7 +126,7 @@ Future<int> ssh(
                 1234,
                 tunnelTarget[0],
                 int.parse(tunnelTarget[1]),
-                (_, Uint8List? m) => response(client!, m!),
+                (Uint8List? m) => response(m!),
               );
             },
     );

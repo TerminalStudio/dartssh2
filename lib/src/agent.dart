@@ -5,19 +5,19 @@
 
 import 'dart:typed_data';
 
-import 'package:dartssh2/protocol.dart';
-import 'package:dartssh2/serializable.dart';
-import 'package:dartssh2/ssh.dart';
-import 'package:dartssh2/transport.dart';
+import 'package:dartssh2/src/protocol.dart';
+import 'package:dartssh2/src/serializable.dart';
+import 'package:dartssh2/src/ssh.dart';
+import 'package:dartssh2/src/transport.dart';
 
 /// Mixin providing SSH Agent forwarding.
 mixin SSHAgentForwarding on SSHTransport {
   /// Frames SSH Agent [channel] data into packets.
-  void handleAgentRead(Channel channel, Uint8List msg) =>
+  void handleAgentRead(SSHChannel channel, Uint8List msg) =>
       dispatchAgentRead(channel, msg, handleAgentPacket);
 
   static void dispatchAgentRead(
-    Channel channel,
+    SSHChannel channel,
     Uint8List msg,
     ChannelInputCallback handleAgentPacket,
   ) {
@@ -35,7 +35,7 @@ mixin SSHAgentForwarding on SSHTransport {
   }
 
   // Dispatches SSH Agent messages to handlers.
-  void handleAgentPacket(Channel channel, SerializableInput agentPacketS) {
+  void handleAgentPacket(SSHChannel channel, SerializableInput agentPacketS) {
     int agentPacketId = agentPacketS.getUint8();
     switch (agentPacketId) {
       case AGENTC_REQUEST_IDENTITIES.ID:
@@ -56,7 +56,7 @@ mixin SSHAgentForwarding on SSHTransport {
   }
 
   /// Responds with any identities we're forwarding.
-  void handleAGENTC_REQUEST_IDENTITIES(Channel channel) {
+  void handleAGENTC_REQUEST_IDENTITIES(SSHChannel channel) {
     tracePrint?.call('$hostport: agent channel: AGENTC_REQUEST_IDENTITIES');
     AGENT_IDENTITIES_ANSWER reply = AGENT_IDENTITIES_ANSWER();
     if (identity != null) {
@@ -66,7 +66,7 @@ mixin SSHAgentForwarding on SSHTransport {
   }
 
   /// Signs challenge authenticating a descendent channel.
-  void handleAGENTC_SIGN_REQUEST(Channel channel, AGENTC_SIGN_REQUEST msg) {
+  void handleAGENTC_SIGN_REQUEST(SSHChannel channel, AGENTC_SIGN_REQUEST msg) {
     tracePrint?.call('$hostport: agent channel: AGENTC_SIGN_REQUEST');
     SerializableInput keyStream = SerializableInput(msg.key!);
     String keyType = deserializeString(keyStream);

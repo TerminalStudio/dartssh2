@@ -10,15 +10,15 @@ import 'dart:typed_data';
 import 'package:convert/convert.dart';
 import 'package:test/test.dart';
 
-import 'package:dartssh2/client.dart';
-import 'package:dartssh2/http.dart';
-import 'package:dartssh2/identity.dart';
-import 'package:dartssh2/pem.dart';
-import 'package:dartssh2/protocol.dart';
-import 'package:dartssh2/serializable.dart';
-import 'package:dartssh2/socket.dart';
-import 'package:dartssh2/ssh.dart';
-import 'package:dartssh2/websocket_io.dart';
+import 'package:dartssh2/src/client.dart';
+import 'package:dartssh2/src/http.dart';
+import 'package:dartssh2/src/identity.dart';
+import 'package:dartssh2/src/pem.dart';
+import 'package:dartssh2/src/protocol.dart';
+import 'package:dartssh2/src/serializable.dart';
+import 'package:dartssh2/src/socket.dart';
+import 'package:dartssh2/src/ssh.dart';
+import 'package:dartssh2/src/websocket_io.dart';
 
 import '../example/dartssh.dart' as ssh;
 import '../example/dartsshd.dart' as sshd;
@@ -53,18 +53,20 @@ void main() {
   });
 
   test('pem', () {
-    Identity rsa1 = parsePem(File('test/id_rsa').readAsStringSync());
-    Identity rsa2 = parsePem(File('test/id_rsa.openssh').readAsStringSync());
+    SSHIdentity rsa1 = parsePem(File('test/id_rsa').readAsStringSync());
+    SSHIdentity rsa2 = parsePem(File('test/id_rsa.openssh').readAsStringSync());
     expect(rsa1.rsaPublic!.exponent, rsa2.rsaPublic!.exponent);
   });
 
   test('TestSocket', () {
     TestSocket socket = TestSocket();
     SSHClient ssh = SSHClient(
-        socketInput: socket,
-        print: print,
-        debugPrint: print,
-        tracePrint: print);
+      login: 'whoever',
+      socketInput: socket,
+      print: print,
+      debugPrint: print,
+      tracePrint: print,
+    );
     socket.connect(Uri.parse('tcp://foobar:22'), ssh.onConnected, (_) {});
     expect(socket.sent.removeFirst(), 'SSH-2.0-dartssh_1.0\r\n');
     ssh.disconnect('done');
@@ -142,7 +144,7 @@ void main() {
           '--trace',
         ],
         sshInput.stream,
-        (_, Uint8List v) => sshResponse += v,
+        (Uint8List v) => sshResponse += v,
         () => sshInput.close(),
       );
 
@@ -210,7 +212,7 @@ void main() {
         '--trace',
       ],
       sshInput.stream,
-      (_, Uint8List v) => sshResponse += v,
+      (Uint8List v) => sshResponse += v,
       () => sshInput.close(),
     );
 
@@ -263,7 +265,7 @@ void main() {
       '127.0.0.1:42022',
       '--debug',
       '--trace',
-    ], sshInput.stream, (_, Uint8List v) => sshResponse += v,
+    ], sshInput.stream, (Uint8List v) => sshResponse += v,
         () => sshInput.close());
 
     while (ssh.client!.sessionChannel == null) {

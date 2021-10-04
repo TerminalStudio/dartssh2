@@ -5,8 +5,8 @@ import 'dart:async';
 import 'dart:html' as html;
 import 'dart:typed_data';
 
-import 'package:dartssh2/socket.dart';
-import 'package:dartssh2/transport.dart';
+import 'package:dartssh2/src/socket.dart';
+import 'package:dartssh2/src/transport.dart';
 
 /// dart:html [WebSocket] based implementation of [SocketInterface].
 class WebSocketImpl extends SocketInterface {

@@ -8,13 +8,13 @@ import 'dart:typed_data';
 
 import "package:pointycastle/api.dart";
 
-import 'package:dartssh2/identity.dart';
-import 'package:dartssh2/kex.dart';
-import 'package:dartssh2/socket.dart';
-import 'package:dartssh2/ssh.dart';
-import 'package:dartssh2/protocol.dart';
-import 'package:dartssh2/serializable.dart';
-import 'package:dartssh2/transport.dart';
+import 'package:dartssh2/src/identity.dart';
+import 'package:dartssh2/src/kex.dart';
+import 'package:dartssh2/src/socket.dart';
+import 'package:dartssh2/src/ssh.dart';
+import 'package:dartssh2/src/protocol.dart';
+import 'package:dartssh2/src/serializable.dart';
+import 'package:dartssh2/src/transport.dart';
 
 typedef ChannelRequest = bool Function(SSHServer server, String? request);
 typedef UserAuthRequest = bool Function(MSG_USERAUTH_REQUEST msg);
@@ -27,37 +27,40 @@ class SSHServer extends SSHTransport {
   ChannelRequest? sessionChannelRequest;
   GexRequest? gexRequest;
 
-  SSHServer(Identity hostkey,
-      {Uri? hostport,
-      bool compress = false,
-      List<Forward>? forwardLocal,
-      List<Forward>? forwardRemote,
-      VoidCallback? disconnected,
-      ResponseCallback? response,
-      StringCallback? print,
-      StringCallback? debugPrint,
-      StringCallback? tracePrint,
-      SocketInterface? socket,
-      Random? random,
-      SecureRandom? secureRandom,
-      this.directTcpRequest,
-      this.userAuthRequest,
-      this.sessionChannelRequest,
-      this.gexRequest})
-      : super(true,
-            identity: hostkey,
-            hostport: hostport,
-            compress: compress,
-            forwardLocal: forwardLocal,
-            forwardRemote: forwardRemote,
-            disconnected: disconnected,
-            response: response,
-            print: print,
-            debugPrint: debugPrint,
-            tracePrint: tracePrint,
-            socket: socket,
-            random: random,
-            secureRandom: secureRandom) {
+  SSHServer(
+    SSHIdentity hostkey, {
+    Uri? hostport,
+    bool compress = false,
+    List<Forward>? forwardLocal,
+    List<Forward>? forwardRemote,
+    VoidCallback? disconnected,
+    required ResponseCallback response,
+    StringCallback? print,
+    StringCallback? debugPrint,
+    StringCallback? tracePrint,
+    SocketInterface? socket,
+    Random? random,
+    SecureRandom? secureRandom,
+    this.directTcpRequest,
+    this.userAuthRequest,
+    this.sessionChannelRequest,
+    this.gexRequest,
+  }) : super(
+          true,
+          identity: hostkey,
+          hostport: hostport,
+          compress: compress,
+          forwardLocal: forwardLocal,
+          forwardRemote: forwardRemote,
+          disconnected: disconnected,
+          response: response,
+          print: print,
+          debugPrint: debugPrint,
+          tracePrint: tracePrint,
+          socket: socket,
+          random: random,
+          secureRandom: secureRandom,
+        ) {
     onConnected();
   }
 
@@ -237,7 +240,7 @@ class SSHServer extends SSHTransport {
     } else if (msg.channelType == 'direct-tcpip' && directTcpRequest != null) {
       MSG_CHANNEL_OPEN_TCPIP tcpip = MSG_CHANNEL_OPEN_TCPIP()
         ..deserialize(packetS!);
-      Channel tcpipChannel = acceptChannel(msg);
+      SSHChannel tcpipChannel = acceptChannel(msg);
       directTcpRequest!(tcpipChannel, tcpip.srcHost, tcpip.srcPort,
               tcpip.dstHost, tcpip.dstPort)
           .then(
@@ -261,7 +264,7 @@ class SSHServer extends SSHTransport {
       tracePrint?.call(
           '$hostport: MSG_CHANNEL_REQUEST ${msg.requestType} wantReply=${msg.wantReply}');
     }
-    Channel? chan = channels[msg.recipientChannel!];
+    SSHChannel? chan = channels[msg.recipientChannel!];
     if (chan == sessionChannel &&
         sessionChannelRequest != null &&
         sessionChannelRequest!(this, msg.requestType)) {
@@ -276,28 +279,28 @@ class SSHServer extends SSHTransport {
   }
 
   @override
-  void handleChannelOpenConfirmation(Channel channel) {
+  void handleChannelOpenConfirmation(SSHChannel channel) {
     if (channel.connected != null) {
       channel.connected!();
     }
   }
 
   @override
-  void handleChannelData(Channel channel, Uint8List data) {
+  void handleChannelData(SSHChannel channel, Uint8List data) {
     if (channel == sessionChannel) {
-      response!(this, data);
+      response?.call(data);
     } else if (channel.cb != null) {
-      channel.cb!(channel, data);
+      channel.cb!(data);
     }
   }
 
   @override
-  void handleChannelClose(Channel channel, [String? description]) {
+  void handleChannelClose(SSHChannel channel, [String? description]) {
     if (channel == sessionChannel) {
       sessionChannel = null;
     } else if (channel.cb != null) {
       channel.opened = false;
-      channel.cb!(channel, Uint8List(0));
+      channel.cb!(Uint8List(0));
     }
   }
 
@@ -308,7 +311,7 @@ class SSHServer extends SSHTransport {
     }
   }
 
-  Channel? openAgentChannel(
+  SSHChannel? openAgentChannel(
     ChannelCallback cb, {
     VoidCallback? connected,
     StringCallback? error,
@@ -318,7 +321,7 @@ class SSHServer extends SSHTransport {
         state.index <= SSHTransportState.FIRST_NEWKEYS.index) {
       return null;
     }
-    Channel chan = channels[nextChannelId] = Channel(
+    SSHChannel chan = channels[nextChannelId] = SSHChannel(
         localId: nextChannelId++,
         windowS: initialWindowSize,
         cb: cb,
@@ -326,8 +329,14 @@ class SSHServer extends SSHTransport {
         connected: connected)
       ..agentChannel = true;
     nextChannelId++;
-    writeCipher(MSG_CHANNEL_OPEN(
-        'auth-agent@openssh.com', chan.localId, chan.windowS, maxPacketSize));
+    writeCipher(
+      MSG_CHANNEL_OPEN(
+        'auth-agent@openssh.com',
+        chan.localId,
+        chan.windowS,
+        maxPacketSize,
+      ),
+    );
     return chan;
   }
 }
