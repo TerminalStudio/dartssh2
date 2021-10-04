@@ -1,3 +1,7 @@
+## 1.1.4-pre
+
+- `dartssh` command now supports terminal window resize.
+
 ## 1.1.3-pre
 
 - Add `--verbose` option in `dartssh` command.
