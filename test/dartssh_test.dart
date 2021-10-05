@@ -232,7 +232,7 @@ void main() {
     ssh.client!.sendChannelData(utf8.encode('debugTest\nexit\n') as Uint8List);
     await sshMain;
     await sshdMain;
-    expect(utf8.decode(sshResponse), 'Password:\r\n\$ debugTest\nexit\n');
+    expect(utf8.decode(sshResponse), '\$ debugTest\nexit\n');
   });
 
   test('tunneled websocket test', () async {

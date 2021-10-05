@@ -105,8 +105,8 @@ Future<int> ssh(
       agentForwarding: args['agentForwarding'] == true,
       debugPrint: args['debug'] == true ? print : null,
       tracePrint: args['trace'] == true ? print : null,
-      onUserauthRequest:
-          (args['password'] != null) ? (_) => [args['password']] : null,
+      onPasswordRequest:
+          (args['password'] != null) ? () => args['password'] : null,
       response: response,
       loadIdentity: () {
         if (identity == null && identityFile != null) {
