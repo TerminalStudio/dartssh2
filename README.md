@@ -77,6 +77,13 @@ SSH client: [example/dartssh.dart](example/dartssh.dart)
 
 SSH server: [example/dartsshs.dart](example/dartsshs.dart)
 
+## Roadmap
+
+- [x] Fix broken tests
+- [x] Sound null safety
+- [ ] Redesign API to allow starting multiple sessions. **In progress...**
+- [ ] SFTP
+
 ## References
 
 - [`RFC 4251`](https://datatracker.ietf.org/doc/html/rfc4251) The Secure Shell (SSH) Protocol Architecture
