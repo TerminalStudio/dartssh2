@@ -8,6 +8,7 @@ import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:convert/convert.dart';
+import 'package:meta/meta.dart';
 import "package:pointycastle/api.dart";
 import 'package:pointycastle/macs/hmac.dart';
 import 'package:pointycastle/random/fortuna_random.dart';
@@ -200,17 +201,30 @@ abstract class SSHTransport with SSHDiffieHellman {
   }) : random = random ?? Random.secure();
 
   // Interface
+  @visibleForOverriding
   void sendDiffileHellmanInit();
+
+  @visibleForOverriding
   void sendChannelData(Uint8List b);
+
+  @visibleForOverriding
   void handlePacket(Uint8List packet);
+
+  @visibleForOverriding
   void handleChannelOpenConfirmation(SSHChannel channel);
+
+  @visibleForOverriding
   void handleChannelData(SSHChannel channel, Uint8List data);
+
+  @visibleForOverriding
   void handleChannelClose(SSHChannel channel, [String? description]);
 
   /// Whether we've initiated the connection.
+  @internal
   bool get client => !server!;
 
   /// PointyCastle random number generator interface.
+  @internal
   SecureRandom getSecureRandom() {
     if (secureRandom != null) return secureRandom!;
     return (secureRandom = FortunaRandom())
@@ -235,6 +249,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   /// Callback supplied to [socket.connect].
+  @internal
   void onConnected() {
     socket!.handleError((error) => disconnect('SSHTransport.error: $error'));
     socket!.handleDone((v) => disconnect('SSHTransport.done: $v'));
@@ -244,6 +259,7 @@ abstract class SSHTransport with SSHDiffieHellman {
 
   /// When the connection has been established, both sides MUST send an identification string.
   /// https://tools.ietf.org/html/rfc4253#section-4.2
+  @internal
   void handleConnected() {
     debugPrint?.call('SSHTransport.handleConnected');
     if (state != SSHTransportState.INIT) throw StateError('$state');
@@ -253,6 +269,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   /// Key exchange begins by each side sending SSH_MSG_KEXINIT.
+  @internal
   void sendKeyExchangeInit(bool guess) {
     final keyPref = Key.preferenceCsv();
     final kexPref = KEX.preferenceCsv();
@@ -291,6 +308,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   /// Callback supplied to [socket.listen].
+  @internal
   void handleRead(Uint8List dataChunk) {
     readBuffer.add(dataChunk);
 
@@ -370,6 +388,7 @@ abstract class SSHTransport with SSHDiffieHellman {
 
   /// Consumes the initial Protocol Version Exchange.
   /// https://tools.ietf.org/html/rfc4253#section-4.2
+  @internal
   void handleInitialState() {
     int processed = 0, newlineIndex;
     while ((newlineIndex =
@@ -392,6 +411,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   /// https://tools.ietf.org/html/rfc4253#section-7.1
+  @internal
   void handleMSG_KEXINIT(MSG_KEXINIT msg, Uint8List packet) {
     tracePrint?.call('<- $hostport: MSG_KEXINIT\n$msg');
 
@@ -472,6 +492,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   /// When MSG_NEWKEYS is received, the new keys and algorithms MUST be used for receiving.
+  @internal
   void handleMSG_NEWKEYS() {
     if (state != SSHTransportState.FIRST_NEWKEYS &&
         state != SSHTransportState.NEWKEYS) {
@@ -514,6 +535,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   /// If the remote side can open the channel, it responds with SSH_MSG_CHANNEL_OPEN_CONFIRMATION.
+  @internal
   void handleMSG_CHANNEL_OPEN_CONFIRMATION(MSG_CHANNEL_OPEN_CONFIRMATION msg) {
     tracePrint?.call(
         '<- $hostport: MSG_CHANNEL_OPEN_CONFIRMATION local_id=${msg.recipientChannel} remote_id=${msg.senderChannel}');
@@ -529,6 +551,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   /// If the remote side can't open the channel, it responds with SSH_MSG_CHANNEL_OPEN_FAILURE.
+  @internal
   void handleMSG_CHANNEL_OPEN_FAILURE(MSG_CHANNEL_OPEN_FAILURE msg) {
     tracePrint?.call(
         '<- $hostport: MSG_CHANNEL_OPEN_FAILURE local_id=${msg.recipientChannel}');
@@ -544,6 +567,7 @@ abstract class SSHTransport with SSHDiffieHellman {
 
   /// After receiving this message, the recipient MAY send the given number of bytes
   /// more than it was previously allowed to send; the window size is incremented.
+  @internal
   void handleMSG_CHANNEL_WINDOW_ADJUST(MSG_CHANNEL_WINDOW_ADJUST msg) {
     tracePrint?.call(
         '<- $hostport: MSG_CHANNEL_WINDOW_ADJUST add ${msg.bytesToAdd} to channel ${msg.recipientChannel}');
@@ -555,6 +579,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   /// Data transfer is done with messages of the type SSH_MSG_CHANNEL_DATA.
+  @internal
   void handleMSG_CHANNEL_DATA(MSG_CHANNEL_DATA msg) {
     tracePrint?.call(
         '<- $hostport: MSG_CHANNEL_DATA: channel ${msg.recipientChannel} : ${msg.data!.length} bytes');
@@ -573,6 +598,7 @@ abstract class SSHTransport with SSHDiffieHellman {
 
   /// No explicit response is sent to this message.  However, the application
   /// may send EOF to whatever is at the other end of the channel.
+  @internal
   void handleMSG_CHANNEL_EOF(MSG_CHANNEL_EOF msg) {
     tracePrint?.call('<-$hostport: MSG_CHANNEL_EOF ${msg.recipientChannel}');
 
@@ -591,6 +617,7 @@ abstract class SSHTransport with SSHDiffieHellman {
 
   /// Upon receiving this message, a party MUST send back an SSH_MSG_CHANNEL_CLOSE
   /// unless it has already sent this message for the channel.
+  @internal
   void handleMSG_CHANNEL_CLOSE(MSG_CHANNEL_CLOSE msg) {
     tracePrint?.call('<- $hostport: MSG_CHANNEL_CLOSE ${msg.recipientChannel}');
 
@@ -613,12 +640,14 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   /// https://tools.ietf.org/html/rfc4254#section-4
+  @internal
   void handleMSG_GLOBAL_REQUEST(MSG_GLOBAL_REQUEST msg) {
     tracePrint?.call('<- $hostport: $msg');
     // writeClearOrEncrypted(MSG_REQUEST_FAILURE())
   }
 
   /// The recipient MUST NOT accept any data after receiving MSG_DISCONNECT.
+  @internal
   void handleMSG_DISCONNECT(MSG_DISCONNECT msg) {
     tracePrint?.call(
         '<- $hostport: MSG_DISCONNECT ${msg.reasonCode} ${msg.description}');
@@ -628,16 +657,19 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   /// MSG_IGNORE can be used as an additional protection measure against advanced traffic analysis techniques.
+  @internal
   void handleMSG_IGNORE(MSG_IGNORE msg) {
     tracePrint?.call('<- $hostport: MSG_IGNORE');
   }
 
   /// All implementations MUST understand MSG_DEBUG, but they are allowed to ignore it.
+  @internal
   void handleMSG_DEBUG(MSG_DEBUG msg) {
     tracePrint?.call('<- $hostport: MSG_DEBUG ${msg.message}');
   }
 
   /// Computes a new exchange hash [exH] given the server key [kS].
+  @internal
   void updateExchangeHash(Uint8List kS) {
     exH = computeExchangeHash(
       server!,
@@ -661,6 +693,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   /// Initializes the block cipher used for encrypted transport.
+  @internal
   BlockCipher initCipher(int cipherId, Uint8List IV, Uint8List key, bool dir) {
     BlockCipher cipher = Cipher.cipher(cipherId);
 
@@ -684,9 +717,11 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   /// Decrypt data using the negotiated block cipher.
+  @internal
   Uint8List readCipher(Uint8List m) => applyBlockCipher(decrypt!, m);
 
   /// Encrypt Binary Packet data using the negotiated block cipher and MAC.
+  @internal
   void writeCipher(SSHMessage msg) {
     sequenceNumberC2s++;
     final m = msg.toBytes(zwriter, random, encryptBlockSize);
@@ -699,6 +734,7 @@ abstract class SSHTransport with SSHDiffieHellman {
 
   /// Send a Binary Packet (e.g. KEX_INIT) that is initially sent in the clear,
   /// but encryped when keys are being renegotiated.
+  @internal
   void writeClearOrEncrypted(SSHMessage msg) {
     if (state.index > SSHTransportState.FIRST_NEWKEYS.index) {
       return writeCipher(msg);
@@ -709,6 +745,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   // Enable the most recently negotiated encryption algorithms.
+  @internal
   void sendNewKeys() {
     writeClearOrEncrypted(MSG_NEWKEYS());
     if (state == SSHTransportState.FIRST_KEXREPLY) {
@@ -725,6 +762,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   /// Accepts [MSG_CHANNEL_OPEN] request to open a new [SSHChannel].
+  @internal
   SSHChannel acceptChannel(MSG_CHANNEL_OPEN msg) {
     SSHChannel channel = channels[nextChannelId] = SSHChannel();
     channel.localId = nextChannelId;

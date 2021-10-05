@@ -236,6 +236,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
 
   /// Initialize a shared-secret negotiation culminating with [MSG_NEWKEYS].
   @override
+  @internal
   void sendDiffileHellmanInit() {
     initializeDiffieHellman(kexMethod, random);
     if (KEX.x25519DiffieHellman(kexMethod)) {

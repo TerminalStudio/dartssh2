@@ -6,6 +6,7 @@
 import 'dart:typed_data';
 
 import 'package:dartssh2/src/bigint.dart';
+import 'package:meta/meta.dart';
 import 'package:pointycastle/api.dart' hide Signature;
 import 'package:pointycastle/block/aes_fast.dart';
 import 'package:pointycastle/block/modes/cbc.dart';
@@ -50,6 +51,7 @@ class SSH {
 /// Each of the algorithm name-lists MUST be a comma-separated list of algorithm names.
 /// Each supported (allowed) algorithm MUST be listed in order of preference, from most to least.
 /// https://tools.ietf.org/html/rfc4253#section-7.1
+@internal
 String buildPreferenceCsv(
     NameFunction name, SupportedFunction supported, int end,
     [int startAfter = 0]) {
@@ -61,6 +63,7 @@ String buildPreferenceCsv(
 }
 
 /// Choose the first algorithm that satisfies the conditions.
+@internal
 String preferenceIntersection(String? intersectCsv, String? supportedCsv,
     [bool server = false]) {
   if (server) {
@@ -118,6 +121,7 @@ void applyCipherSuiteOverrides(
 
 /// This protocol has been designed to operate with almost any public key
 /// format, encoding, and algorithm (signature and/or encryption).
+@internal
 class Key {
   static const int ED25519 = 1,
       ECDSA_SHA2_NISTP256 = 2,
@@ -231,6 +235,7 @@ class Key {
 
 /// The key exchange method specifies how one-time session keys are generated for
 /// encryption and for authentication, and how the server authentication is done.
+@internal
 class KEX {
   static const int ECDH_SHA2_X25519 = 1,
       ECDH_SHA2_NISTP256 = 2,
@@ -356,6 +361,7 @@ class KEX {
 
 // When encryption is in effect, the packet length, padding length, payload,
 // and padding fields of each packet MUST be encrypted with the given algorithm.
+@internal
 class Cipher {
   static const int AES128_CTR = 1,
       AES128_CBC = 2,
@@ -453,6 +459,7 @@ class Cipher {
 
 /// Data integrity is protected by including with each packet a MAC that is computed
 /// from a shared secret, packet sequence number, and the contents of the packet.
+@internal
 class MAC {
   static const int MD5 = 1,
       SHA1 = 2,
@@ -592,6 +599,7 @@ class MAC {
 
 /// If compression has been negotiated, the 'payload' field (and only it)
 /// will be compressed using the negotiated algorithm.
+@internal
 class Compression {
   static const int OpenSSHZLib = 1, None = 2, End = 2;
 
@@ -629,6 +637,7 @@ class Compression {
 }
 
 /// Hashes SSH protocol data without first serializing it.
+@internal
 class Digester {
   Digest digest;
   Digester(this.digest) {
@@ -674,6 +683,7 @@ class Digester {
 
 /// The exchange hash is used to authenticate the key exchange and SHOULD be kept secret.
 /// H = hash(V_C || V_S || I_C || I_S || K_S || e || f || K)
+@internal
 Uint8List computeExchangeHash(
   bool server,
   int kexMethod,
@@ -746,6 +756,7 @@ Uint8List computeExchangeHash(
 }
 
 /// Verifies that [key] signed [exH] producing [sig].
+@internal
 bool verifyHostKey(
   Uint8List? exH,
   int hostkeyType,
@@ -772,8 +783,15 @@ bool verifyHostKey(
 }
 
 /// https://tools.ietf.org/html/rfc4253#section-7.2
-Uint8List deriveKey(Digest? algo, Uint8List? sessionId, Uint8List? exH,
-    BigInt? K, int id, int bytes) {
+@internal
+Uint8List deriveKey(
+  Digest? algo,
+  Uint8List? sessionId,
+  Uint8List? exH,
+  BigInt? K,
+  int id,
+  int bytes,
+) {
   Uint8List ret = Uint8List(0);
   while (ret.length < bytes) {
     Digester digest = Digester(algo!);
@@ -791,6 +809,7 @@ Uint8List deriveKey(Digest? algo, Uint8List? sessionId, Uint8List? exH,
 }
 
 /// https://tools.ietf.org/html/rfc4252#section-7
+@internal
 Uint8List deriveChallenge(
   Uint8List sessionId,
   String userName,
@@ -826,6 +845,7 @@ Uint8List deriveChallenge(
 }
 
 /// Transforms [m] by [cipher] provided [m.length] is a multiple of [cipher.blockSize].
+@internal
 Uint8List applyBlockCipher(BlockCipher cipher, Uint8List m) {
   Uint8List out = Uint8List(m.length);
   if (m.length % cipher.blockSize != 0) {
@@ -838,8 +858,15 @@ Uint8List applyBlockCipher(BlockCipher cipher, Uint8List m) {
 }
 
 /// Signs [seq] | [m] with [k] using [mac].
+@internal
 Uint8List computeMAC(
-    HMac mac, int macLen, Uint8List m, int seq, Uint8List k, int prefix) {
+  HMac mac,
+  int macLen,
+  Uint8List m,
+  int seq,
+  Uint8List k,
+  int prefix,
+) {
   mac.init(KeyParameter(k));
 
   Uint8List buf = Uint8List(4);

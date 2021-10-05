@@ -1,4 +1,4 @@
-export 'src/agent.dart' show SSHAgentForwarding, AgentMessage;
+export 'src/agent.dart' show SSHAgentForwarding;
 export 'src/client.dart' show SSHClient, SSHTunneledSocketImpl;
 
 export 'package:dartssh2/src/http_io.dart'
