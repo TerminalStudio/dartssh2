@@ -440,8 +440,8 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     // Authentication method priority on failure:
     //   1. "none"
     //   2. "publickey"
-    //   4. "keyboard-interactive"
-    //   3. "password"
+    //   3. "keyboard-interactive"
+    //   4. "password"
 
     if (msg.authLeft.contains(kAuthMethodNone)) {
       if (!_triedAuthWithNone) {
