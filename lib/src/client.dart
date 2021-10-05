@@ -3,6 +3,7 @@
 
 // ignore_for_file: non_constant_identifier_names
 
+import 'dart:async';
 import 'dart:math';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -20,29 +21,32 @@ import 'package:dartssh2/src/socket.dart';
 import 'package:dartssh2/src/ssh.dart';
 import 'package:dartssh2/src/transport.dart';
 
+typedef SSHPasswordRequestHandler = FutureOr<String> Function();
+
+/// https://datatracker.ietf.org/doc/html/rfc4256#section-3.3
+typedef SSHUserauthRequestHandler = FutureOr<List<String>> Function(
+  SSHUserauthRequest request,
+);
+
+typedef SSHIdentityRequestHandler = SSHIdentity? Function();
+
+class SSHUserauthRequest {
+  SSHUserauthRequest({this.name, this.instruction, required this.prompts});
+
+  final String? name;
+  final String? instruction;
+  final List<SSHAuthPrompt> prompts;
+}
+
+const kAuthMethodPassword = 'password';
+const kAuthMethodPublicKey = 'publickey';
+const kAuthMethodKeyboardInteractive = 'keyboard-interactive';
+const kAuthMethodHostbased = 'hostbased';
+const kAuthMethodNone = 'none';
+
 /// The Secure Shell (SSH) is a protocol for secure remote login and
 /// other secure network services over an insecure network.
 class SSHClient extends SSHTransport with SSHAgentForwarding {
-  // Parameters
-  bool? agentForwarding, closeOnDisconnect;
-  FingerprintCallback? acceptHostFingerprint;
-  Uint8ListFunction? getPassword;
-  IdentityFunction? loadIdentity;
-  List<VoidCallback> success = <VoidCallback>[];
-
-  // State
-  @internal
-  int passwordPrompts = 0;
-
-  @internal
-  int userauthFail = 0;
-
-  @internal
-  bool acceptedHostkey = false, loadedPw = false, wrotePw = false;
-
-  @internal
-  Uint8List? pw;
-
   /// width of the terminal window in characters
   int termWidth;
 
@@ -50,7 +54,16 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   int termHeight;
 
   /// The username to authenticate as.
-  String login;
+  final String username;
+
+  /// Set this field to enable the 'password' authentication method.
+  final SSHPasswordRequestHandler? onPasswordRequest;
+
+  /// Set this field to enable the 'keyboard-interactive' authentication method.
+  final SSHUserauthRequestHandler? onUserauthRequest;
+
+  /// Set this field to enable the 'publickey' authentication method.
+  final SSHIdentityRequestHandler? loadIdentity;
 
   /// Whether to start an interactive shell session on the SSH server after the
   /// connection is established. Default is true.
@@ -63,7 +76,10 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
 
   SSHClient({
     Uri? hostport,
-    required this.login,
+    required this.username,
+    this.loadIdentity,
+    this.onUserauthRequest,
+    this.onPasswordRequest,
     this.termvar = 'xterm',
     this.termWidth = 80,
     this.termHeight = 25,
@@ -80,8 +96,6 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     StringCallback? tracePrint,
     VoidCallback? success,
     this.acceptHostFingerprint,
-    this.loadIdentity,
-    this.getPassword,
     SocketInterface? socketInput,
     Random? random,
     SecureRandom? secureRandom,
@@ -118,6 +132,33 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       );
     }
   }
+
+  // Parameters
+  bool? agentForwarding, closeOnDisconnect;
+  FingerprintCallback? acceptHostFingerprint;
+  List<VoidCallback> success = <VoidCallback>[];
+
+  // State
+  // @internal
+  // int passwordPrompts = 0;
+
+  // @internal
+  // int userauthFail = 0;
+
+  @internal
+  bool acceptedHostkey = false;
+
+  /// If we have tried to authenticate with "publickey" method.
+  bool _triedAuthWithPublicKey = false;
+
+  /// If we have tried to authenticate with "password" method.
+  bool _triedAuthWithPassword = false;
+
+  /// If we have tried to authenticate with "keyboard-interactive" method.
+  bool _triedAuthWithKeyboardInteractive = false;
+
+  /// If we have tried to authenticate with "none" method.
+  bool _triedAuthWithNone = false;
 
   @internal
   void responseText(String text) {
@@ -356,26 +397,86 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   /// Handle accepted [MSG_SERVICE_REQUEST] sent in response to [MSG_NEWKEYS].
   void handleMSG_SERVICE_ACCEPT() {
     tracePrint?.call('<- $hostport: MSG_SERVICE_ACCEPT');
+
     if (identity == null && loadIdentity != null) {
       identity = loadIdentity!();
+      debugPrint?.call('$hostport: loaded identity');
     }
-    sendAuthenticationRequest();
+
+    // Authentication method priority in first try:
+    //   1. "publickey"
+    //   3. "keyboard-interactive"
+    //   2. "password"
+    //   4. "none" if no other authentication method is provided.
+
+    if (identity != null) {
+      _triedAuthWithPublicKey = true;
+      sendPublicKey();
+      return;
+    }
+
+    if (onUserauthRequest != null) {
+      _triedAuthWithKeyboardInteractive = true;
+      sendKeyboardInteractive();
+      return;
+    }
+
+    if (onPasswordRequest != null) {
+      _triedAuthWithPassword = true;
+      getThenSendPassword();
+      return;
+    }
+
+    _triedAuthWithNone = true;
+    sendNoneAuthenticationRequest();
   }
 
   /// If key authentication failed, then try password authentication.
   void handleMSG_USERAUTH_FAILURE(MSG_USERAUTH_FAILURE msg) {
     tracePrint?.call(
-        '<- $hostport: MSG_USERAUTH_FAILURE: auth_left="${msg.authLeft}" loadedPw=$loadedPw useauthFail=$userauthFail');
+      '<- $hostport: MSG_USERAUTH_FAILURE: auth_left="${msg.authLeft}"',
+    );
 
-    if (!loadedPw) clearPassword();
-    userauthFail++;
-    if (userauthFail == 1 && !wrotePw) {
-      responseText('Password:');
-      passwordPrompts = 1;
-      getThenSendPassword();
-    } else {
-      throw FormatException('$hostport: authorization failed');
+    // Authentication method priority on failure:
+    //   1. "none"
+    //   2. "publickey"
+    //   4. "keyboard-interactive"
+    //   3. "password"
+
+    if (msg.authLeft.contains(kAuthMethodNone)) {
+      if (!_triedAuthWithNone) {
+        _triedAuthWithNone = true;
+        sendNoneAuthenticationRequest();
+        return;
+      }
     }
+
+    if (msg.authLeft.contains(kAuthMethodPublicKey)) {
+      if (!_triedAuthWithPublicKey && identity != null) {
+        _triedAuthWithPublicKey = true;
+        sendPublicKey();
+        return;
+      }
+    }
+
+    if (msg.authLeft.contains(kAuthMethodKeyboardInteractive)) {
+      if (!_triedAuthWithKeyboardInteractive && onUserauthRequest != null) {
+        _triedAuthWithKeyboardInteractive = true;
+        sendKeyboardInteractive();
+        return;
+      }
+    }
+
+    if (msg.authLeft.contains(kAuthMethodPassword)) {
+      if (!_triedAuthWithPassword && onPasswordRequest != null) {
+        _triedAuthWithPassword = true;
+        getThenSendPassword();
+        return;
+      }
+    }
+
+    throw FormatException(
+        '$hostport: authorization failed after trying all methods');
   }
 
   /// After successfull authentication, open the session channel and start compression.
@@ -403,25 +504,22 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   }
 
   /// The server can optionally request authentication information from the client.
-  void handleMSG_USERAUTH_INFO_REQUEST(MSG_USERAUTH_INFO_REQUEST msg) {
-    tracePrint?.call(
-        '<- $hostport: MSG_USERAUTH_INFO_REQUEST prompts=${msg.prompts.length}');
-    if (msg.instruction.isNotEmpty) {
-      tracePrint?.call('$hostport: instruction: ${msg.instruction}');
-      responseText(msg.instruction);
-    }
+  FutureOr<void> handleMSG_USERAUTH_INFO_REQUEST(
+    MSG_USERAUTH_INFO_REQUEST request,
+  ) async {
+    tracePrint?.call('<- $hostport: $request');
 
-    for (MapEntry<String, int> prompt in msg.prompts) {
-      tracePrint?.call('$hostport: prompt: ${prompt.key}');
-      responseText(prompt.key);
-    }
-
-    if (msg.prompts.isNotEmpty) {
-      passwordPrompts = msg.prompts.length;
-      getThenSendPassword();
-    } else {
+    if (request.prompts.isEmpty || onUserauthRequest == null) {
       writeCipher(MSG_USERAUTH_INFO_RESPONSE(<Uint8List>[]));
     }
+
+    final userAuthRequest = SSHUserauthRequest(
+      name: request.name,
+      instruction: request.instruction,
+      prompts: request.prompts,
+    );
+    final responses = await onUserauthRequest!(userAuthRequest);
+    sendUserauthInfoResponse(responses);
   }
 
   /// Logs any (unhandled) channel specific requests from server.
@@ -553,58 +651,85 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     return verifyHostKey(exH, hostkeyType, kS, hSig);
   }
 
-  /// Calls [sendPassword()] if [getPassword] succeeds.
-  void getThenSendPassword() {
-    if (getPassword != null && (pw = getPassword!()) != null) sendPassword();
+  /// Sends [MSG_USERAUTH_REQUEST] in "none" method.
+  void sendNoneAuthenticationRequest() {
+    writeCipher(
+      MSG_USERAUTH_REQUEST(
+        username,
+        'ssh-connection',
+        'none',
+        '',
+        Uint8List(0),
+        Uint8List(0),
+      ),
+    );
   }
 
-  /// "Securely" clears the local password storage.
-  void clearPassword() {
-    if (pw == null) return;
-    for (int i = 0; i < pw!.length; i++) {
-      pw![i] ^= random.nextInt(255);
+  Future<void> getThenSendPassword() async {
+    if (onPasswordRequest == null) {
+      debugPrint?.call('no password request handler');
+      return;
     }
-    pw = null;
+
+    final password = await onPasswordRequest!();
+    sendPassword(password);
   }
 
-  /// Sends [MSG_USERAUTH_REQUEST] with password [pw].
-  void sendPassword() {
-    responseText('\r\n');
-    wrotePw = true;
-    if (userauthFail != 0) {
-      writeCipher(MSG_USERAUTH_REQUEST(
-          login, 'ssh-connection', 'password', '', pw, Uint8List(0)));
-    } else {
-      List<Uint8List?> prompt =
-          List<Uint8List?>.filled(passwordPrompts, Uint8List(0));
-      prompt.last = pw;
-      writeCipher(MSG_USERAUTH_INFO_RESPONSE(prompt));
-    }
-    passwordPrompts = 0;
-    clearPassword();
+  /// Sends [MSG_USERAUTH_REQUEST] with [password].
+  void sendPassword(String pasword) {
+    writeCipher(
+      MSG_USERAUTH_REQUEST(
+        username,
+        'ssh-connection',
+        'password',
+        '',
+        utf8.encode(pasword) as Uint8List,
+        Uint8List(0),
+      ),
+    );
   }
 
-  /// Sends [MSG_USERAUTH_REQUEST] optionally using [identity] or keyboard-interactive.
-  void sendAuthenticationRequest() {
+  /// Request authentication in 'keyboard-interactive' method.
+  void sendKeyboardInteractive() {
+    debugPrint?.call('$hostport: Keyboard interactive');
+    writeCipher(
+      MSG_USERAUTH_REQUEST(
+        username,
+        'ssh-connection',
+        'keyboard-interactive',
+        '',
+        Uint8List(0),
+        Uint8List(0),
+      ),
+    );
+  }
+
+  /// Sends [MSG_USERAUTH_INFO_RESPONSE] with [responses] for [MSG_USERAUTH_INFO_REQUEST.prompts].
+  void sendUserauthInfoResponse(List<String> responses) {
+    writeCipher(
+      MSG_USERAUTH_INFO_RESPONSE(
+        responses.map(utf8.encode).cast<Uint8List>().toList(),
+      ),
+    );
+  }
+
+  /// Sends [MSG_USERAUTH_REQUEST] using [identity].
+  void sendPublicKey() {
     final identity = this.identity;
+
     if (identity == null) {
-      debugPrint?.call('$hostport: Keyboard interactive');
-      writeCipher(
-        MSG_USERAUTH_REQUEST(
-          login,
-          'ssh-connection',
-          'keyboard-interactive',
-          '',
-          Uint8List(0),
-          Uint8List(0),
-        ),
-      );
-    } else if (identity.ed25519 != null) {
+      debugPrint?.call('$hostport: No identity');
+      return;
+    }
+
+    _triedAuthWithPublicKey = true;
+
+    if (identity.ed25519 != null) {
       debugPrint?.call('$hostport: Sending Ed25519 authorization request');
       final pubkey = identity.getEd25519PublicKey().toRaw();
       final challenge = deriveChallenge(
         sessionId!,
-        login,
+        username,
         'ssh-connection',
         'publickey',
         'ssh-ed25519',
@@ -613,7 +738,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       final sig = identity.signWithEd25519Key(challenge);
       writeCipher(
         MSG_USERAUTH_REQUEST(
-          login,
+          username,
           'ssh-connection',
           'publickey',
           'ssh-ed25519',
@@ -627,7 +752,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       final pubkey = identity.getECDSAPublicKey().toRaw();
       final challenge = deriveChallenge(
         sessionId!,
-        login,
+        username,
         'ssh-connection',
         'publickey',
         keyType,
@@ -636,7 +761,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       final sig = identity.signWithECDSAKey(challenge, getSecureRandom());
       writeCipher(
         MSG_USERAUTH_REQUEST(
-          login,
+          username,
           'ssh-connection',
           'publickey',
           keyType,
@@ -649,7 +774,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       final pubkey = identity.getRSAPublicKey().toRaw();
       final challenge = deriveChallenge(
         sessionId!,
-        login,
+        username,
         'ssh-connection',
         'publickey',
         'ssh-rsa',
@@ -658,7 +783,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       final sig = identity.signWithRSAKey(challenge);
       writeCipher(
         MSG_USERAUTH_REQUEST(
-          login,
+          username,
           'ssh-connection',
           'publickey',
           'ssh-rsa',
@@ -673,15 +798,8 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   /// Optionally [b] is captured by [loginPrompts] or [passwordPrompts].
   @override
   void sendChannelData(Uint8List b) {
-    if (passwordPrompts != 0) {
-      bool cr = b.isNotEmpty && b.last == '\n'.codeUnits[0];
-      pw = appendUint8List(
-          pw ?? Uint8List(0), viewUint8List(b, 0, b.length - (cr ? 1 : 0)));
-      if (cr) sendPassword();
-    } else {
-      if (sessionChannel != null) {
-        sendToChannel(sessionChannel!, b);
-      }
+    if (sessionChannel != null) {
+      sendToChannel(sessionChannel!, b);
     }
   }
 
@@ -737,8 +855,8 @@ class SSHTunneledSocketImpl extends SocketInterface {
     client = SSHClient(
       socketInput: SocketImpl(),
       hostport: url,
-      login: login,
-      getPassword: () => utf8.encode(password) as Uint8List,
+      username: login,
+      onUserauthRequest: (_) => [password],
       // password == null ? null : () => utf8.encode(password) as Uint8List,
       loadIdentity: identity == null ? null : () => identity!,
       response: (m) {},

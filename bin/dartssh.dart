@@ -1,11 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:args/args.dart';
 import 'package:dart_console/dart_console.dart';
 import 'package:dartssh2/dartssh2.dart';
+
+final console = Console();
 
 void main(List<String> arguments) {
   return runApp(arguments);
@@ -63,14 +64,13 @@ Never printUsageAndExit([int exitCode = 0]) {
 void startSSH(Uri url, {String? password, bool verbose = false}) {
   StreamSubscription<ProcessSignal>? winchSignalSubscription;
   late SSHClient client;
-  final console = Console();
 
   final remoteStdout = StreamController<List<int>>();
   remoteStdout.stream.listen(stdout.add);
 
   client = SSHClient(
     hostport: url,
-    login: url.userInfo,
+    username: url.userInfo,
     print: verbose ? print : null,
     debugPrint: verbose ? print : null,
     tracePrint: verbose ? print : null,
@@ -85,11 +85,37 @@ void startSSH(Uri url, {String? password, bool verbose = false}) {
       console.rawMode = true;
       client.setTerminalWindowSize(console.windowWidth, console.windowHeight);
     },
-    getPassword: () {
-      stdout.write('Enter your password: ');
-      final password = console.readLine();
-      if (password == null) throw Exception('No password provided');
-      return utf8.encode(password) as Uint8List;
+    loadIdentity: () {
+      final home = Platform.environment['HOME'];
+      final keyFile = File('$home/.ssh/id_rsa');
+
+      if (keyFile.existsSync()) {
+        return SSHIdentity.fromPem(keyFile.readAsStringSync());
+      }
+    },
+    onPasswordRequest: () {
+      final password = readline("$url's password: ", echo: false);
+      if (password == null) {
+        quit('No password provided.', exitCode: 1);
+      }
+      return password;
+    },
+    onUserauthRequest: (request) {
+      if (request.name != null && request.name!.isNotEmpty) {
+        print(request.name);
+      }
+      if (request.instruction != null && request.instruction!.isNotEmpty) {
+        print(request.instruction);
+      }
+      final responses = <String>[];
+      for (var prompt in request.prompts) {
+        final password = readline(prompt.prompt, echo: prompt.echo);
+        if (password == null) {
+          quit('No ${prompt.prompt} provided.', exitCode: 1);
+        }
+        responses.add(password);
+      }
+      return responses;
     },
     disconnected: () async {
       winchSignalSubscription?.cancel();
@@ -109,4 +135,18 @@ void startSSH(Uri url, {String? password, bool verbose = false}) {
   stdin.listen((data) {
     client.sendChannelData(data as Uint8List);
   });
+}
+
+String? readline(String message, {bool echo = true}) {
+  stdin.echoMode = echo;
+  stdout.write(message);
+  final result = stdin.readLineSync();
+  print(''); // line break
+  stdin.echoMode = true;
+  return result;
+}
+
+Never quit(String message, {int exitCode = 0}) {
+  print(message);
+  exit(exitCode);
 }

@@ -108,6 +108,10 @@ class SerializableOutput extends SerializableBuffer {
   SerializableOutput(Uint8List buffer, {Endian endian = Endian.big})
       : super(buffer, endian: endian);
 
+  void addBool(bool x) {
+    addUint8(x ? 1 : 0);
+  }
+
   void addUint8(int x) {
     data.setUint8(offset, x);
     offset++;

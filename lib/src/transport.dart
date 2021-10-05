@@ -28,7 +28,6 @@ typedef StringFunction = String Function();
 typedef StringFilter = String Function(String?);
 typedef Uint8ListCallback = void Function(Uint8List);
 typedef Uint8ListFunction = Uint8List? Function();
-typedef IdentityFunction = SSHIdentity? Function();
 typedef FingerprintCallback = bool Function(int, Uint8List?);
 typedef ChannelCallback = void Function(Uint8List?);
 typedef ChannelInputCallback = void Function(SSHChannel, SerializableInput);

@@ -97,7 +97,7 @@ Future<int> ssh(
   try {
     client = SSHClient(
       hostport: SSH.parseUri(host),
-      login: login,
+      username: login,
       print: print,
       termWidth: termWidth,
       termHeight: termHeight,
@@ -105,9 +105,8 @@ Future<int> ssh(
       agentForwarding: args['agentForwarding'] == true,
       debugPrint: args['debug'] == true ? print : null,
       tracePrint: args['trace'] == true ? print : null,
-      getPassword: (args['password'] != null)
-          ? () => utf8.encode(args['password']) as Uint8List
-          : null,
+      onUserauthRequest:
+          (args['password'] != null) ? (_) => [args['password']] : null,
       response: response,
       loadIdentity: () {
         if (identity == null && identityFile != null) {

@@ -61,7 +61,7 @@ void main() {
   test('TestSocket', () {
     TestSocket socket = TestSocket();
     SSHClient ssh = SSHClient(
-      login: 'whoever',
+      username: 'whoever',
       socketInput: socket,
       print: print,
       debugPrint: print,

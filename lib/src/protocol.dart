@@ -623,9 +623,12 @@ class MSG_USERAUTH_REQUEST extends SSHMessage {
 /// https://tools.ietf.org/html/rfc4252#section-5.1
 class MSG_USERAUTH_FAILURE extends SSHMessage {
   static const int ID = 51;
-  String authLeft;
-  int partialSuccess = 0;
+
   MSG_USERAUTH_FAILURE([this.authLeft = '']) : super(ID);
+
+  String authLeft;
+
+  bool partialSuccess = false;
 
   @override
   int get serializedHeaderSize => 5;
@@ -636,13 +639,13 @@ class MSG_USERAUTH_FAILURE extends SSHMessage {
   @override
   void serialize(SerializableOutput output) {
     serializeString(output, authLeft);
-    output.addUint8(partialSuccess);
+    output.addBool(partialSuccess);
   }
 
   @override
   void deserialize(SerializableInput input) {
     authLeft = deserializeString(input);
-    partialSuccess = input.getUint8();
+    partialSuccess = input.getBool();
   }
 }
 
@@ -664,13 +667,28 @@ class MSG_USERAUTH_SUCCESS extends SSHMessage {
   void deserialize(SerializableInput input) {}
 }
 
+/// https://tools.ietf.org/html/rfc4256#section-3.2
+class SSHAuthPrompt {
+  SSHAuthPrompt(this.prompt, this.echo);
+
+  /// The prompt string. For example, "Password: ".
+  final String prompt;
+
+  /// Indicates whether or not the user input should be echoed as characters are typed.
+  final bool echo;
+
+  @override
+  String toString() => 'SSHAuthPrompt[prompt=$prompt, echo=$echo]';
+}
+
 /// https://tools.ietf.org/html/rfc4256#section-3.1
+/// See also: [MSG_USERAUTH_INFO_RESPONSE]
 class MSG_USERAUTH_INFO_REQUEST extends SSHMessage {
   static const int ID = 60;
 
   MSG_USERAUTH_INFO_REQUEST() : super(ID);
 
-  late List<MapEntry<String, int>> prompts;
+  late List<SSHAuthPrompt> prompts;
 
   late String name, instruction, language;
 
@@ -680,45 +698,50 @@ class MSG_USERAUTH_INFO_REQUEST extends SSHMessage {
   @override
   int get serializedSize => prompts.fold(
       serializedHeaderSize + name.length + instruction.length + language.length,
-      (v, e) => v + 4 + 1 + e.key.length);
+      (v, e) => v + 4 + 1 + e.prompt.length);
 
   @override
   void serialize(SerializableOutput output) {}
 
   @override
   void deserialize(SerializableInput input) {
-    int numPrompts = 0;
+    var numPrompts = 0;
     name = deserializeString(input);
     instruction = deserializeString(input);
     language = deserializeString(input);
     numPrompts = input.getUint32();
-    prompts = <MapEntry<String, int>>[];
+    prompts = <SSHAuthPrompt>[];
     for (int i = 0; i < numPrompts; i++) {
-      prompts.add(
-          MapEntry<String, int>(deserializeString(input), input.getUint8()));
+      prompts.add(SSHAuthPrompt(deserializeString(input), input.getBool()));
     }
+  }
+
+  @override
+  String toString() {
+    return 'MSG_USERAUTH_INFO_REQUEST[name=$name, instruction=$instruction, language=$language, prompts=$prompts]';
   }
 }
 
 /// https://tools.ietf.org/html/rfc4256#section-3.4
+/// See also: [MSG_USERAUTH_INFO_REQUEST]
 class MSG_USERAUTH_INFO_RESPONSE extends SSHMessage {
   static const int ID = 61;
 
-  MSG_USERAUTH_INFO_RESPONSE([this.response]) : super(ID);
+  MSG_USERAUTH_INFO_RESPONSE([this.responses]) : super(ID);
 
-  List<Uint8List?>? response;
+  List<Uint8List?>? responses;
 
   @override
   int get serializedHeaderSize => 4;
 
   @override
   int get serializedSize =>
-      response!.fold(serializedHeaderSize, (v, e) => v + 4 + e!.length);
+      responses!.fold(serializedHeaderSize, (v, e) => v + 4 + e!.length);
 
   @override
   void serialize(SerializableOutput output) {
-    output.addUint32(response!.length);
-    for (Uint8List? r in response!) {
+    output.addUint32(responses!.length);
+    for (Uint8List? r in responses!) {
       serializeString(output, r);
     }
   }
@@ -728,7 +751,7 @@ class MSG_USERAUTH_INFO_RESPONSE extends SSHMessage {
 
   @override
   String toString() {
-    return 'MSG_USERAUTH_INFO_RESPONSE[response=$response]';
+    return 'MSG_USERAUTH_INFO_RESPONSE[response=$responses]';
   }
 }
 
