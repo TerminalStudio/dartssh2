@@ -7,6 +7,7 @@ import 'dart:math';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:meta/meta.dart';
 import "package:pointycastle/api.dart";
 
 import 'package:dartssh2/dartssh2.dart';
@@ -30,8 +31,19 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   List<VoidCallback> success = <VoidCallback>[];
 
   // State
-  int loginPrompts = 0, passwordPrompts = 0, userauthFail = 0;
+  @internal
+  int loginPrompts = 0;
+
+  @internal
+  int passwordPrompts = 0;
+
+  @internal
+  int userauthFail = 0;
+
+  @internal
   bool acceptedHostkey = false, loadedPw = false, wrotePw = false;
+
+  @internal
   Uint8List? pw;
 
   /// width of the terminal window in characters
@@ -116,6 +128,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
 
   /// https://tools.ietf.org/html/rfc4253#section-6
   @override
+  @internal
   void handlePacket(Uint8List packet) {
     packetId = packetS!.getUint8();
     switch (packetId) {

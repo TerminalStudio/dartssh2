@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:meta/meta.dart';
+
 final _byteMask = BigInt.from(0xff);
 final _negativeFlag = BigInt.from(0x80);
 
@@ -8,6 +10,7 @@ final _negativeFlag = BigInt.from(0x80);
 /// sign == 0: Zero regardless of magnitude
 /// sign < 0: Negative
 /// sign > 0: Positive
+@internal
 BigInt decodeBigIntWithSign(int sign, List<int> magnitude) {
   if (sign == 0) {
     return BigInt.zero;
@@ -38,6 +41,7 @@ BigInt decodeBigIntWithSign(int sign, List<int> magnitude) {
 /// Encode a BigInt into bytes using big-endian encoding.
 /// It encodes the integer to a minimal twos-compliment integer as defined by
 /// ASN.1
+@internal
 Uint8List encodeBigInt(BigInt? number) {
   if (number == BigInt.zero) {
     return Uint8List.fromList([0]);
@@ -67,6 +71,7 @@ Uint8List encodeBigInt(BigInt? number) {
 }
 
 /// Encode as Big Endian unsigned byte array.
+@internal
 Uint8List encodeBigIntAsUnsigned(BigInt number) {
   if (number == BigInt.zero) {
     return Uint8List.fromList([0]);

@@ -9,13 +9,16 @@ import 'package:dartssh2/src/protocol.dart';
 import 'package:dartssh2/src/serializable.dart';
 import 'package:dartssh2/src/ssh.dart';
 import 'package:dartssh2/src/transport.dart';
+import 'package:meta/meta.dart';
 
 /// Mixin providing SSH Agent forwarding.
 mixin SSHAgentForwarding on SSHTransport {
   /// Frames SSH Agent [channel] data into packets.
+  @internal
   void handleAgentRead(SSHChannel channel, Uint8List msg) =>
       dispatchAgentRead(channel, msg, handleAgentPacket);
 
+  @internal
   static void dispatchAgentRead(
     SSHChannel channel,
     Uint8List msg,
@@ -35,6 +38,7 @@ mixin SSHAgentForwarding on SSHTransport {
   }
 
   // Dispatches SSH Agent messages to handlers.
+  @internal
   void handleAgentPacket(SSHChannel channel, SerializableInput agentPacketS) {
     int agentPacketId = agentPacketS.getUint8();
     switch (agentPacketId) {
@@ -56,6 +60,7 @@ mixin SSHAgentForwarding on SSHTransport {
   }
 
   /// Responds with any identities we're forwarding.
+  @internal
   void handleAGENTC_REQUEST_IDENTITIES(SSHChannel channel) {
     tracePrint?.call('$hostport: agent channel: AGENTC_REQUEST_IDENTITIES');
     AGENT_IDENTITIES_ANSWER reply = AGENT_IDENTITIES_ANSWER();
@@ -66,6 +71,7 @@ mixin SSHAgentForwarding on SSHTransport {
   }
 
   /// Signs challenge authenticating a descendent channel.
+  @internal
   void handleAGENTC_SIGN_REQUEST(SSHChannel channel, AGENTC_SIGN_REQUEST msg) {
     tracePrint?.call('$hostport: agent channel: AGENTC_SIGN_REQUEST');
     SerializableInput keyStream = SerializableInput(msg.key!);
