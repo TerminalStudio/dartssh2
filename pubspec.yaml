@@ -1,5 +1,5 @@
 name: dartssh2
-version: 1.1.4-pre
+version: 1.2.0-pre
 description: A pure dart SSH implementation based on dartssh with bug fixes, up-to-date dependencies and sound null safety.
 # author is a deprecated pubspec field.
 # author: Green Appers, Inc. <greenappers@gmail.com>

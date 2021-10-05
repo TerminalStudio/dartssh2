@@ -1,3 +1,8 @@
+## 1.2.0-pre
+
+- Rework login logic.
+- `dartssh` command now supports login with public key.
+
 ## 1.1.4-pre
 
 - `dartssh` command now supports terminal window resize.
