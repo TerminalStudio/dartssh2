@@ -32,9 +32,6 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
 
   // State
   @internal
-  int loginPrompts = 0;
-
-  @internal
   int passwordPrompts = 0;
 
   @internal
@@ -122,6 +119,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     }
   }
 
+  @internal
   void responseText(String text) {
     response?.call(Uint8List.fromList(text.codeUnits));
   }
@@ -358,10 +356,6 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   /// Handle accepted [MSG_SERVICE_REQUEST] sent in response to [MSG_NEWKEYS].
   void handleMSG_SERVICE_ACCEPT() {
     tracePrint?.call('<- $hostport: MSG_SERVICE_ACCEPT');
-    if (login.isEmpty) {
-      loginPrompts = 1;
-      responseText('login: ');
-    }
     if (identity == null && loadIdentity != null) {
       identity = loadIdentity!();
     }
@@ -679,16 +673,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   /// Optionally [b] is captured by [loginPrompts] or [passwordPrompts].
   @override
   void sendChannelData(Uint8List b) {
-    if (loginPrompts != 0) {
-      response?.call(b);
-      bool cr = b.isNotEmpty && b.last == '\n'.codeUnits[0];
-      login = login + String.fromCharCodes(b, 0, b.length - (cr ? 1 : 0));
-      if (cr) {
-        responseText('\n');
-        loginPrompts = 0;
-        sendAuthenticationRequest();
-      }
-    } else if (passwordPrompts != 0) {
+    if (passwordPrompts != 0) {
       bool cr = b.isNotEmpty && b.last == '\n'.codeUnits[0];
       pw = appendUint8List(
           pw ?? Uint8List(0), viewUint8List(b, 0, b.length - (cr ? 1 : 0)));
