@@ -14,7 +14,7 @@ import 'package:dartssh2/src/socket.dart';
 import 'package:dartssh2/src/transport.dart';
 
 typedef HttpClientFactory = http.Client Function();
-typedef SocketFilter = Future<SocketInterface> Function(SocketInterface);
+typedef SocketFilter = Future<SSHSocket> Function(SSHSocket);
 
 /// Asynchronous HTTP request
 class HttpRequest {
@@ -44,8 +44,12 @@ abstract class HttpClient {
   StringCallback? debugPrint;
   HttpClient({this.debugPrint});
 
-  Future<HttpResponse> request(String url,
-      {String? method, String? data, Map<String, String>? headers});
+  Future<HttpResponse> request(
+    String url, {
+    String? method,
+    String? data,
+    Map<String, String>? headers,
+  });
 }
 
 /// Shim [HttpClient] for testing
@@ -53,8 +57,12 @@ class TestHttpClient extends HttpClient {
   Queue<HttpRequest> requests = Queue<HttpRequest>();
 
   @override
-  Future<HttpResponse> request(String url,
-      {String? method, String? data, Map<String, String>? headers}) {
+  Future<HttpResponse> request(
+    String url, {
+    String? method,
+    String? data,
+    Map<String, String>? headers,
+  }) {
     HttpRequest httpRequest = HttpRequest(url, method, data: data);
     requests.add(httpRequest);
     return httpRequest.completer.future;
@@ -136,10 +144,12 @@ class UserAgentBaseClient extends http.BaseClient {
   }
 }
 
-/// [http.BaseClient] running over [SSHTunneledSocketImpl].
+/// [http.BaseClient] running over [SSHTunneledSocket].
 class SSHTunneledBaseClient extends http.BaseClient {
   final String? userAgent;
+
   final SSHClient client;
+
   SSHTunneledBaseClient(this.client, {this.userAgent});
 
   @override
@@ -151,7 +161,7 @@ class SSHTunneledBaseClient extends http.BaseClient {
     HttpResponse response = await httpRequest(
       request.url,
       request.method,
-      SSHTunneledSocketImpl.fromClient(client),
+      SSHTunneledSocket.fromClient(client),
       requestHeaders: request.headers,
       body: await request.finalize().toBytes(),
       debugPrint: client.debugPrint,
@@ -174,14 +184,20 @@ class SSHTunneledBaseClient extends http.BaseClient {
 /// and password joined by a single colon.
 /// https://en.wikipedia.org/wiki/Basic_access_authentication
 Map<String, String> addBasicAuthenticationHeader(
-    Map<String, String> headers, String username, String password) {
+  Map<String, String> headers,
+  String username,
+  String password,
+) {
   headers['authorization'] =
       'Basic ' + base64.encode(utf8.encode('$username:$password'));
   return headers;
 }
 
-Future<SocketInterface> connectUri(Uri uri, SocketInterface socket,
-    {SocketFilter? secureUpgrade}) async {
+Future<SSHSocket> connectUri(
+  Uri uri,
+  SSHSocket socket, {
+  SocketFilter? secureUpgrade,
+}) async {
   /// We might be asking the remote to open an SSH tunnel to [uri].
   final connectCompleter = Completer<String?>();
   socket.connect(uri, () => connectCompleter.complete(null),
@@ -198,12 +214,16 @@ Future<SocketInterface> connectUri(Uri uri, SocketInterface socket,
   return socket;
 }
 
-/// Makes HTTP request over [SocketInterface], e.g. [SSHTunneledSocketImpl].
-Future<HttpResponse> httpRequest(Uri uri, String method, SocketInterface socket,
-    {required Map<String, String> requestHeaders,
-    Uint8List? body,
-    StringCallback? debugPrint,
-    bool persistentConnection = true}) async {
+/// Makes HTTP request over [SSHSocket], e.g. [SSHTunneledSocket].
+Future<HttpResponse> httpRequest(
+  Uri uri,
+  String method,
+  SSHSocket socket, {
+  required Map<String, String> requestHeaders,
+  Uint8List? body,
+  StringCallback? debugPrint,
+  bool persistentConnection = true,
+}) async {
   /// Initialize connection state.
   String? headerText;
   late List<String> statusLine;
@@ -218,29 +238,22 @@ Future<HttpResponse> httpRequest(Uri uri, String method, SocketInterface socket,
   }
 
   socket.handleDone((String? reason) {
-    {
-      debugPrint?.call('SSHTunneledBaseClient.socket.handleDone');
-    }
+    debugPrint?.call('SSHTunneledBaseClient.socket.handleDone');
     socket.close();
     contentController.close();
     if (headerText == null) readHeadersCompleter.complete('done');
   });
 
   socket.handleError((error) {
-    {
-      debugPrint?.call('SSHTunneledBaseClient.socket.handleError');
-    }
+    debugPrint?.call('SSHTunneledBaseClient.socket.handleError');
     socket.close();
     contentController.close();
     if (headerText == null) readHeadersCompleter.complete('$error');
   });
 
   socket.listen((Uint8List m) {
-    {
-      debugPrint
-          ?.call('SSHTunneledBaseClient.socket.listen: read ${m.length} bytes');
-    }
-
+    debugPrint
+        ?.call('SSHTunneledBaseClient.socket.listen: read ${m.length} bytes');
     if (headerText == null) {
       buffer.add(m);
       final headersEnd = searchUint8List(
@@ -268,11 +281,9 @@ Future<HttpResponse> httpRequest(Uri uri, String method, SocketInterface socket,
 
         /// If there's no content then we're already done.
         if (contentLength == 0) {
-          {
-            debugPrint?.call(
-              'SSHTunneledBaseClient.socket.listen: Content-Length: 0, remaining=${buffer.data.length}',
-            );
-          }
+          debugPrint?.call(
+            'SSHTunneledBaseClient.socket.listen: Content-Length: 0, remaining=${buffer.data.length}',
+          );
           contentController.close();
           if (!persistentConnection) {
             socket.close();
@@ -311,7 +322,7 @@ Future<HttpResponse> httpRequest(Uri uri, String method, SocketInterface socket,
           .map((header) => '${header.key}: ${header.value}')
           .join('\r\n') +
       '\r\n\r\n');
-  if (method == 'POST') socket.sendRaw(body!);
+  if (method == 'POST') socket.sendBinary(body!);
 
   final readHeadersError = await readHeadersCompleter.future;
   if (readHeadersError != null) throw FormatException(readHeadersError);

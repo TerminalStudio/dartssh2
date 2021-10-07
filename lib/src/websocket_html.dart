@@ -8,10 +8,8 @@ import 'dart:typed_data';
 import 'package:dartssh2/src/socket.dart';
 import 'package:dartssh2/src/transport.dart';
 
-/// dart:html [WebSocket] based implementation of [SocketInterface].
-class WebSocketImpl extends SocketInterface {
-  static const String type = 'html';
-
+/// dart:html [WebSocket] based implementation of [SSHSocket].
+class SSHWebSocket extends SSHSocket {
   html.WebSocket? socket;
   Uint8ListCallback? messageHandler;
   StringCallback? errorHandler, doneHandler;
@@ -121,5 +119,5 @@ class WebSocketImpl extends SocketInterface {
   void send(String text) => socket!.sendString(text);
 
   @override
-  void sendRaw(Uint8List raw) => socket!.send(raw);
+  void sendBinary(Uint8List data) => socket!.send(data);
 }

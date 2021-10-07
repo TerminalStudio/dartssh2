@@ -96,7 +96,7 @@ Future<int> ssh(
 
   try {
     client = SSHClient(
-      hostport: SSH.parseUri(host),
+      hostname: SSH.parseUri(host),
       username: login,
       print: print,
       termWidth: termWidth,

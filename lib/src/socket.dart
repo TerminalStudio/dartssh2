@@ -8,10 +8,10 @@ import 'dart:typed_data';
 //     if (dart.library.io) 'package:dartssh2/socket_io.dart';
 import 'package:dartssh2/src/transport.dart';
 
-enum ConnectionDirection { receive, send, both }
+enum SSHConnectionDirection { receive, send, both }
 
 /// Interface for connections, e.g. Socket or WebSocket.
-abstract class ConnectionInterface {
+abstract class SSHConnection {
   /// Invokes [messageHandler] upon reading input from the connection.
   void listen(Uint8ListCallback messageHandler);
 
@@ -26,7 +26,7 @@ abstract class ConnectionInterface {
 }
 
 /// Websocket style interface for BSD sockets and/or RFC6455 WebSockets.
-abstract class SocketInterface extends ConnectionInterface {
+abstract class SSHSocket extends SSHConnection {
   // True if this socket is connected.
   bool get connected;
 
@@ -45,13 +45,13 @@ abstract class SocketInterface extends ConnectionInterface {
   /// Sends [text] over the socket.
   void send(String text);
 
-  /// Sends [raw] over the socket.
-  void sendRaw(Uint8List raw);
+  /// Sends [data] over the socket.
+  void sendBinary(Uint8List data);
 
-  void shutdown(ConnectionDirection direction) {}
+  // void shutdown(SSHConnectionDirection direction) {/*NOOP*/}
 }
 
-/// Mixin for testing with shim [ConnectionInterface]s.
+/// Mixin for testing with shim [SSHConnection]s.
 mixin TestConnection {
   bool connected = false, connecting = false, closed = false;
   Uint8ListCallback? messageHandler;
@@ -67,7 +67,7 @@ mixin TestConnection {
 }
 
 /// Shim [Socket] for testing
-class TestSocket extends SocketInterface with TestConnection {
+class TestSocket extends SSHSocket with TestConnection {
   @override
   void connect(
     // ignore: avoid_renaming_method_parameters
@@ -84,6 +84,7 @@ class TestSocket extends SocketInterface with TestConnection {
 
   @override
   void send(String text) => sent.add(text);
+
   @override
-  void sendRaw(Uint8List raw) => sent.add(String.fromCharCodes(raw));
+  void sendBinary(Uint8List data) => sent.add(String.fromCharCodes(data));
 }

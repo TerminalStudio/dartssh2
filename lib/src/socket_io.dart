@@ -9,8 +9,8 @@ import 'dart:typed_data';
 import 'package:dartssh2/src/socket.dart';
 import 'package:dartssh2/src/transport.dart';
 
-/// dart:io [Socket] based implementation of [SocketInterface].
-class SocketImpl extends SocketInterface {
+/// dart:io [Socket] based implementation of [SSHSocket].
+class SSHNativeSocket extends SSHSocket {
   Socket? socket;
   StreamSubscription? messageSubscription;
   Uint8ListCallback? messageHandler;
@@ -22,7 +22,7 @@ class SocketImpl extends SocketInterface {
   @override
   bool connecting = false;
 
-  SocketImpl([this.socket]);
+  SSHNativeSocket([this.socket]);
 
   @override
   void close() {
@@ -108,15 +108,15 @@ class SocketImpl extends SocketInterface {
   }
 
   @override
-  void send(String text) => sendRaw(utf8.encode(text) as Uint8List);
+  void send(String text) => sendBinary(utf8.encode(text) as Uint8List);
 
   @override
-  void sendRaw(Uint8List raw) => socket!.add(raw);
+  void sendBinary(Uint8List data) => socket!.add(data);
 }
 
 /// https://github.com/dart-lang/sdk/blob/master/sdk/lib/_internal/vm/bin/socket_patch.dart#L1651
 class SocketAdaptor extends Stream<Uint8List> implements Socket {
-  SocketInterface impl;
+  SSHSocket impl;
   late StreamController<Uint8List> controller;
   late SocketAdaptorStreamConsumer consumer;
   late IOSink sink;
@@ -292,7 +292,7 @@ class SocketAdaptorStreamConsumer extends StreamConsumer<List<int>> {
       (data) {
         try {
           if (subscription != null) {
-            socket.impl.sendRaw(data as Uint8List);
+            socket.impl.sendBinary(data as Uint8List);
           }
         } catch (e) {
           socket.destroy();

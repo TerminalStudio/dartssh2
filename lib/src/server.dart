@@ -3,10 +3,7 @@
 
 // ignore_for_file: non_constant_identifier_names
 
-import 'dart:math';
 import 'dart:typed_data';
-
-import "package:pointycastle/api.dart";
 
 import 'package:dartssh2/src/identity.dart';
 import 'package:dartssh2/src/kex.dart';
@@ -38,9 +35,7 @@ class SSHServer extends SSHTransport {
     StringCallback? print,
     StringCallback? debugPrint,
     StringCallback? tracePrint,
-    SocketInterface? socket,
-    Random? random,
-    SecureRandom? secureRandom,
+    SSHSocket? socket,
     this.directTcpRequest,
     this.userAuthRequest,
     this.sessionChannelRequest,
@@ -48,7 +43,7 @@ class SSHServer extends SSHTransport {
   }) : super(
           true,
           identity: hostkey,
-          hostport: hostport,
+          hostname: hostport,
           compress: compress,
           forwardLocal: forwardLocal,
           forwardRemote: forwardRemote,
@@ -58,8 +53,6 @@ class SSHServer extends SSHTransport {
           debugPrint: debugPrint,
           tracePrint: tracePrint,
           socket: socket,
-          random: random,
-          secureRandom: secureRandom,
         ) {
     onConnected();
   }
@@ -134,7 +127,7 @@ class SSHServer extends SSHTransport {
 
       default:
         this.print?.call(
-            '$hostport: unknown packet number: $packetId, len $packetLen');
+            '$hostname: unknown packet number: $packetId, len $packetLen');
         break;
     }
   }
@@ -162,7 +155,7 @@ class SSHServer extends SSHTransport {
     Uint8List kS = identity!.getRawPublicKey(hostkeyType);
     updateExchangeHash(kS);
     writeClearOrEncrypted(MSG_KEX_ECDH_REPLY(x25519dh.myPubKey, kS,
-        identity!.signMessage(hostkeyType, exH, getSecureRandom())));
+        identity!.signMessage(hostkeyType, exH, secureRandom)));
     sendNewKeys();
   }
 
@@ -171,8 +164,8 @@ class SSHServer extends SSHTransport {
     K = ecdh.computeSecret(msg.qC!);
     Uint8List kS = identity!.getRawPublicKey(hostkeyType);
     updateExchangeHash(kS);
-    writeClearOrEncrypted(MSG_KEX_ECDH_REPLY(ecdh.cText, kS,
-        identity!.signMessage(hostkeyType, exH, getSecureRandom())));
+    writeClearOrEncrypted(MSG_KEX_ECDH_REPLY(
+        ecdh.cText, kS, identity!.signMessage(hostkeyType, exH, secureRandom)));
     sendNewKeys();
   }
 
@@ -183,7 +176,7 @@ class SSHServer extends SSHTransport {
     K = dh.computeSecret(msg.e);
     Uint8List kS = identity!.getRawPublicKey(hostkeyType);
     updateExchangeHash(kS);
-    Uint8List hSig = identity!.signMessage(hostkeyType, exH, getSecureRandom());
+    Uint8List hSig = identity!.signMessage(hostkeyType, exH, secureRandom);
     writeClearOrEncrypted(packetId == MSG_KEX_DH_GEX_INIT.ID
         ? MSG_KEX_DH_GEX_REPLY(dh.e, kS, hSig)
         : MSG_KEXDH_REPLY(dh.e, kS, hSig));
@@ -215,7 +208,7 @@ class SSHServer extends SSHTransport {
 
   void handleMSG_USERAUTH_REQUEST(MSG_USERAUTH_REQUEST msg) {
     if (tracePrint != null) {
-      tracePrint?.call('$hostport: MSG_USERAUTH_REQUEST: $msg');
+      tracePrint?.call('$hostname: MSG_USERAUTH_REQUEST: $msg');
     }
 
     if (userAuthRequest != null && userAuthRequest!(msg)) {
@@ -228,7 +221,7 @@ class SSHServer extends SSHTransport {
   void handleMSG_CHANNEL_OPEN(
       MSG_CHANNEL_OPEN msg, SerializableInput? packetS) {
     if (tracePrint != null) {
-      tracePrint?.call('$hostport: MSG_CHANNEL_OPEN type=${msg.channelType}');
+      tracePrint?.call('$hostname: MSG_CHANNEL_OPEN type=${msg.channelType}');
     }
     if (msg.channelType == 'session') {
       if (sessionChannel != null) {
@@ -262,7 +255,7 @@ class SSHServer extends SSHTransport {
   void handleMSG_CHANNEL_REQUEST(MSG_CHANNEL_REQUEST msg) {
     if (tracePrint != null) {
       tracePrint?.call(
-          '$hostport: MSG_CHANNEL_REQUEST ${msg.requestType} wantReply=${msg.wantReply}');
+          '$hostname: MSG_CHANNEL_REQUEST ${msg.requestType} wantReply=${msg.wantReply}');
     }
     SSHChannel? chan = channels[msg.recipientChannel!];
     if (chan == sessionChannel &&
@@ -317,8 +310,7 @@ class SSHServer extends SSHTransport {
     StringCallback? error,
   }) {
     debugPrint?.call('openAgentChannel');
-    if (socket == null ||
-        state.index <= SSHTransportState.FIRST_NEWKEYS.index) {
+    if (socket == null || state <= SSHTransportState.FIRST_NEWKEYS) {
       return null;
     }
     SSHChannel chan = channels[nextChannelId] = SSHChannel(
@@ -328,7 +320,9 @@ class SSHServer extends SSHTransport {
         error: error,
         connected: connected)
       ..agentChannel = true;
+
     nextChannelId++;
+
     writeCipher(
       MSG_CHANNEL_OPEN(
         'auth-agent@openssh.com',

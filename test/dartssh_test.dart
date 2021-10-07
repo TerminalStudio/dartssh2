@@ -237,12 +237,12 @@ void main() {
 
   test('tunneled websocket test', () async {
     expect(
-      await websocketEchoTest(WebSocketImpl(), proto: 'ws'),
+      await websocketEchoTest(SSHWebSocket(), proto: 'ws'),
       isTrue,
     );
 
     expect(
-      await websocketEchoTest(WebSocketImpl(), ignoreBadCert: true),
+      await websocketEchoTest(SSHWebSocket(), ignoreBadCert: true),
       isTrue,
     );
 
@@ -273,7 +273,7 @@ void main() {
     }
 
     bool tunneledWebsocketTest = await websocketEchoTest(
-        SSHTunneledWebSocketImpl(SSHTunneledSocketImpl.fromClient(ssh.client!)),
+        SSHTunneledWebSocket(SSHTunneledSocket.fromClient(ssh.client!)),
         proto: 'ws');
     expect(tunneledWebsocketTest, true);
 
@@ -290,7 +290,7 @@ Future<bool> httpTest(HttpClient httpClient, {String proto = 'https'}) async {
 }
 
 Future<bool> websocketEchoTest(
-  WebSocketImpl websocket, {
+  SSHWebSocket websocket, {
   bool ignoreBadCert = false,
   String proto = 'wss',
 }) async {

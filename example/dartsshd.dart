@@ -61,7 +61,7 @@ Future<void> sshd(List<String> arguments) async {
 
         server = SSHServer(
           hostkey,
-          socket: SocketImpl()..socket = socket,
+          socket: SSHNativeSocket()..socket = socket,
           hostport: SSH.parseUri(hostport),
           print: print,
           debugPrint: debug ? print : null,
@@ -155,7 +155,7 @@ Future<String?> forwardTcpChannel(
   String? targetHost,
   int? targetPort,
 ) async {
-  SocketImpl tunneledSocket = SocketImpl();
+  SSHNativeSocket tunneledSocket = SSHNativeSocket();
   final connectCompleter = Completer<String?>();
   print('dartsshd: Forwarding connection to $targetHost:$targetPort');
   tunneledSocket.connect(
@@ -178,7 +178,7 @@ Future<String?> forwardTcpChannel(
   tunneledSocket.handleError(closeTunneledSocket);
   tunneledSocket.handleDone(closeTunneledSocket);
 
-  channel.cb = (Uint8List? m) => tunneledSocket.sendRaw(m!);
+  channel.cb = (Uint8List? m) => tunneledSocket.sendBinary(m!);
   channel.error = closeTunneledSocket;
   channel.closed = () => closeTunneledSocket('remote closed');
   return null;

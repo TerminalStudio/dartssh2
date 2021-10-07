@@ -28,7 +28,6 @@ typedef StringFunction = String Function();
 typedef StringFilter = String Function(String?);
 typedef Uint8ListCallback = void Function(Uint8List);
 typedef Uint8ListFunction = Uint8List? Function();
-typedef FingerprintCallback = bool Function(int, Uint8List?);
 typedef ChannelCallback = void Function(Uint8List?);
 typedef ChannelInputCallback = void Function(SSHChannel, SerializableInput);
 typedef ResponseCallback = void Function(Uint8List);
@@ -77,12 +76,12 @@ enum SSHTransportState {
   NEWKEYS,
 }
 
-// extension SSHTransportStateX on SSHTransportState {
-//   operator <(SSHTransportState other) => this.index < other.index;
-//   operator >(SSHTransportState other) => this.index > other.index;
-//   operator <=(SSHTransportState other) => this.index <= other.index;
-//   operator >=(SSHTransportState other) => this.index >= other.index;
-// }
+extension SSHTransportStateX on SSHTransportState {
+  operator <(SSHTransportState other) => index < other.index;
+  operator >(SSHTransportState other) => index > other.index;
+  operator <=(SSHTransportState other) => index <= other.index;
+  operator >=(SSHTransportState other) => index >= other.index;
+}
 
 /// SSH Transport Layer Protocol implementation providing KEX, ciphers, and MAC.
 /// https://tools.ietf.org/html/rfc4253
@@ -91,16 +90,18 @@ abstract class SSHTransport with SSHDiffieHellman {
   SSHIdentity? identity;
 
   /// Remote endpoint of SSH connection.  Parameter on client-side.
-  Uri? hostport;
+  Uri? hostname;
 
-  /// Whether compression is supported.
+  /// Whether to compress the data sent to the SSH server. Not supported yet.
   final bool compress;
 
   /// Source of randomness, e.g [Random.secure()].
-  final Random random;
+  @internal
+  final random = Random.secure();
 
   /// Pointycastle's random interface.
-  SecureRandom? secureRandom;
+  @internal
+  final secureRandom = FortunaRandom();
 
   /// Parameter invoked on connection close.
   VoidCallback? disconnected;
@@ -172,7 +173,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   Uint8List? integrityC2s;
   Uint8List? integrityS2c;
 
-  SocketInterface? socket;
+  SSHSocket? socket;
   QueueBuffer readBuffer = QueueBuffer(Uint8List(0));
   SerializableInput? packetS;
   BlockCipher? encrypt, decrypt;
@@ -185,7 +186,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   SSHTransport(
     this.server, {
     this.identity,
-    this.hostport,
+    this.hostname,
     this.compress = false,
     this.forwardLocal,
     this.forwardRemote,
@@ -195,9 +196,9 @@ abstract class SSHTransport with SSHDiffieHellman {
     this.debugPrint,
     this.tracePrint,
     this.socket,
-    Random? random,
-    this.secureRandom,
-  }) : random = random ?? Random.secure();
+  }) {
+    secureRandom.seed(KeyParameter(randBytes(random, 32)));
+  }
 
   // Interface
   @visibleForOverriding
@@ -221,14 +222,6 @@ abstract class SSHTransport with SSHDiffieHellman {
   /// Whether we've initiated the connection.
   @internal
   bool get client => !server!;
-
-  /// PointyCastle random number generator interface.
-  @internal
-  SecureRandom getSecureRandom() {
-    if (secureRandom != null) return secureRandom!;
-    return (secureRandom = FortunaRandom())
-      ..seed(KeyParameter(randBytes(random, 32)));
-  }
 
   /// If anything goes wrong, disconnect with [reason].
   void disconnect(String reason) {
@@ -263,7 +256,7 @@ abstract class SSHTransport with SSHDiffieHellman {
     debugPrint?.call('SSHTransport.handleConnected');
     if (state != SSHTransportState.INIT) throw StateError('$state');
     socket!.send(verC + '\r\n');
-    tracePrint?.call('-> $hostport $verC');
+    tracePrint?.call('-> $hostname $verC');
     if (client) sendKeyExchangeInit(false);
   }
 
@@ -299,10 +292,10 @@ abstract class SSHTransport with SSHDiffieHellman {
       kexInitS = kexInit;
     }
 
-    socket!.sendRaw(kexInit);
+    socket!.sendBinary(kexInit);
 
     debugPrint?.call(
-      '-> $hostport KEXINIT { kex=$kexPref key=$keyPref, cipher=$cipherPref, mac=$macPref, compress=$compressPref }',
+      '-> $hostname KEXINIT { kex=$kexPref key=$keyPref, cipher=$cipherPref, mac=$macPref, compress=$compressPref }',
     );
   }
 
@@ -319,7 +312,7 @@ abstract class SSHTransport with SSHDiffieHellman {
 
     /// Thereafter we speak RFC4253 Binary Packet Protocol.
     while (true) {
-      bool encrypted = state.index > SSHTransportState.FIRST_NEWKEYS.index;
+      final encrypted = state > SSHTransportState.FIRST_NEWKEYS;
 
       /// We only need to decrypt one cipher block to determine the next packet length.
       if (packetLen == 0) {
@@ -365,7 +358,7 @@ abstract class SSHTransport with SSHDiffieHellman {
             mac,
             viewUint8List(
                 readBuffer.data, packetLen - packetMacLen, packetMacLen))) {
-          throw FormatException('$hostport: verify MAC failed');
+          throw FormatException('$hostname: verify MAC failed');
         }
       }
 
@@ -396,7 +389,7 @@ abstract class SSHTransport with SSHDiffieHellman {
       final line = String.fromCharCodes(
         viewUint8List(readBuffer.data, processed, newlineIndex - processed),
       ).trim();
-      tracePrint?.call('<- $hostport: SSH_INIT: $line');
+      tracePrint?.call('<- $hostname: SSH_INIT: $line');
       processed = newlineIndex + 1;
       if (line.startsWith('SSH-')) {
         verS = line;
@@ -412,7 +405,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   /// https://tools.ietf.org/html/rfc4253#section-7.1
   @internal
   void handleMSG_KEXINIT(MSG_KEXINIT msg, Uint8List packet) {
-    tracePrint?.call('<- $hostport: MSG_KEXINIT\n$msg');
+    tracePrint?.call('<- $hostname: MSG_KEXINIT\n$msg');
 
     if (client) {
       guessedS = msg.firstKexPacketFollows;
@@ -425,39 +418,39 @@ abstract class SSHTransport with SSHDiffieHellman {
     /// Make sure we can agree on an algorithm suite.
     if (0 ==
         (kexMethod = KEX.preferenceIntersect(msg.kexAlgorithms, server!))) {
-      throw FormatException('$hostport: negotiate kex');
+      throw FormatException('$hostname: negotiate kex');
     } else if (0 ==
         (hostkeyType =
             Key.preferenceIntersect(msg.serverHostKeyAlgorithms, server!))) {
-      throw FormatException('$hostport: negotiate hostkey');
+      throw FormatException('$hostname: negotiate hostkey');
     } else if (0 ==
         (cipherIdC2s = Cipher.preferenceIntersect(
             msg.encryptionAlgorithmsClientToServer, server!))) {
-      throw FormatException('$hostport: negotiate c2s cipher');
+      throw FormatException('$hostname: negotiate c2s cipher');
     } else if (0 ==
         (cipherIdS2c = Cipher.preferenceIntersect(
             msg.encryptionAlgorithmsServerToClient, server!))) {
-      throw FormatException('$hostport: negotiate s2c cipher');
+      throw FormatException('$hostname: negotiate s2c cipher');
     } else if (0 ==
         (macIdC2s = MAC.preferenceIntersect(
             msg.macAlgorithmsClientToServer, server!))) {
-      throw FormatException('$hostport: negotiate c2s mac');
+      throw FormatException('$hostname: negotiate c2s mac');
     } else if (0 ==
         (macIdS2c = MAC.preferenceIntersect(
             msg.macAlgorithmsServerToClient, server!))) {
-      throw FormatException('$hostport: negotiate s2c mac');
+      throw FormatException('$hostname: negotiate s2c mac');
     } else if (0 ==
         (compressIdC2s = Compression.preferenceIntersect(
             msg.compressionAlgorithmsClientToServer,
             server!,
             compress ? 0 : 1))) {
-      throw FormatException('$hostport: negotiate c2s compression');
+      throw FormatException('$hostname: negotiate c2s compression');
     } else if (0 ==
         (compressIdS2c = Compression.preferenceIntersect(
             msg.compressionAlgorithmsServerToClient,
             server!,
             compress ? 0 : 1))) {
-      throw FormatException('$hostport: negotiate s2c compression');
+      throw FormatException('$hostname: negotiate s2c compression');
     }
 
     /// Setup connection and start Diffie Hellman key exchange.
@@ -473,7 +466,7 @@ abstract class SSHTransport with SSHDiffieHellman {
     sendDiffileHellmanInit();
 
     if (print != null) {
-      print!('$hostport: ssh negotiated { kex=${KEX.name(kexMethod)}, hostkey=${Key.name(hostkeyType)}' +
+      print!('$hostname: ssh negotiated { kex=${KEX.name(kexMethod)}, hostkey=${Key.name(hostkeyType)}' +
           (cipherIdC2s == cipherIdS2c
               ? ', cipher=${Cipher.name(cipherIdC2s)}'
               : ', cipherC2s=${Cipher.name(cipherIdC2s)}, cipherS2c=${Cipher.name(cipherIdS2c)}') +
@@ -487,7 +480,7 @@ abstract class SSHTransport with SSHDiffieHellman {
     }
 
     tracePrint?.call(
-        '$hostport: blockSize=$encryptBlockSize,$decryptBlockSize, macHashLen=$macHashLenC,$macHashLenS');
+        '$hostname: blockSize=$encryptBlockSize,$decryptBlockSize, macHashLen=$macHashLenC,$macHashLenS');
   }
 
   /// When MSG_NEWKEYS is received, the new keys and algorithms MUST be used for receiving.
@@ -495,10 +488,10 @@ abstract class SSHTransport with SSHDiffieHellman {
   void handleMSG_NEWKEYS() {
     if (state != SSHTransportState.FIRST_NEWKEYS &&
         state != SSHTransportState.NEWKEYS) {
-      throw FormatException('$hostport: unexpected state $state');
+      throw FormatException('$hostname: unexpected state $state');
     }
 
-    tracePrint?.call('<- $hostport: MSG_NEWKEYS');
+    tracePrint?.call('<- $hostname: MSG_NEWKEYS');
 
     int keyLenC = Cipher.keySize(cipherIdC2s),
         keyLenS = Cipher.keySize(cipherIdS2c);
@@ -513,9 +506,9 @@ abstract class SSHTransport with SSHDiffieHellman {
         deriveKey(kexHash, sessionId, exH, K, 'D'.codeUnits[0], keyLenS),
         client ? false : true);
     if ((macHashLenC = MAC.hashSize(macIdC2s)) <= 0) {
-      throw FormatException('$hostport: invalid maclen $encryptBlockSize');
+      throw FormatException('$hostname: invalid maclen $encryptBlockSize');
     } else if ((macHashLenS = MAC.hashSize(macIdS2c)) <= 0) {
-      throw FormatException('$hostport: invalid maclen $encryptBlockSize');
+      throw FormatException('$hostname: invalid maclen $encryptBlockSize');
     }
     integrityC2s =
         deriveKey(kexHash, sessionId, exH, K, 'E'.codeUnits[0], macHashLenC);
@@ -537,11 +530,11 @@ abstract class SSHTransport with SSHDiffieHellman {
   @internal
   void handleMSG_CHANNEL_OPEN_CONFIRMATION(MSG_CHANNEL_OPEN_CONFIRMATION msg) {
     tracePrint?.call(
-        '<- $hostport: MSG_CHANNEL_OPEN_CONFIRMATION local_id=${msg.recipientChannel} remote_id=${msg.senderChannel}');
+        '<- $hostname: MSG_CHANNEL_OPEN_CONFIRMATION local_id=${msg.recipientChannel} remote_id=${msg.senderChannel}');
 
     SSHChannel? chan = channels[msg.recipientChannel!];
     if (chan == null) {
-      throw FormatException('$hostport: open invalid channel');
+      throw FormatException('$hostname: open invalid channel');
     }
     chan.remoteId = msg.senderChannel!;
     chan.windowC = msg.initialWinSize!;
@@ -553,11 +546,11 @@ abstract class SSHTransport with SSHDiffieHellman {
   @internal
   void handleMSG_CHANNEL_OPEN_FAILURE(MSG_CHANNEL_OPEN_FAILURE msg) {
     tracePrint?.call(
-        '<- $hostport: MSG_CHANNEL_OPEN_FAILURE local_id=${msg.recipientChannel}');
+        '<- $hostname: MSG_CHANNEL_OPEN_FAILURE local_id=${msg.recipientChannel}');
 
     SSHChannel? chan = channels[msg.recipientChannel!];
     if (chan == null) {
-      throw FormatException('$hostport: fail invalid channel');
+      throw FormatException('$hostname: fail invalid channel');
     }
 
     handleChannelClose(chan, msg.description);
@@ -569,10 +562,10 @@ abstract class SSHTransport with SSHDiffieHellman {
   @internal
   void handleMSG_CHANNEL_WINDOW_ADJUST(MSG_CHANNEL_WINDOW_ADJUST msg) {
     tracePrint?.call(
-        '<- $hostport: MSG_CHANNEL_WINDOW_ADJUST add ${msg.bytesToAdd} to channel ${msg.recipientChannel}');
+        '<- $hostname: MSG_CHANNEL_WINDOW_ADJUST add ${msg.bytesToAdd} to channel ${msg.recipientChannel}');
     SSHChannel? chan = channels[msg.recipientChannel!];
     if (chan == null) {
-      throw FormatException('$hostport: window adjust invalid channel');
+      throw FormatException('$hostname: window adjust invalid channel');
     }
     chan.windowC += msg.bytesToAdd!;
   }
@@ -581,10 +574,10 @@ abstract class SSHTransport with SSHDiffieHellman {
   @internal
   void handleMSG_CHANNEL_DATA(MSG_CHANNEL_DATA msg) {
     tracePrint?.call(
-        '<- $hostport: MSG_CHANNEL_DATA: channel ${msg.recipientChannel} : ${msg.data!.length} bytes');
+        '<- $hostname: MSG_CHANNEL_DATA: channel ${msg.recipientChannel} : ${msg.data!.length} bytes');
     SSHChannel? chan = channels[msg.recipientChannel!];
     if (chan == null) {
-      throw FormatException('$hostport: data for invalid channel');
+      throw FormatException('$hostname: data for invalid channel');
     }
     chan.windowS -= (packetLen - packetMacLen - 4);
     if (chan.windowS < initialWindowSize ~/ 2) {
@@ -599,12 +592,12 @@ abstract class SSHTransport with SSHDiffieHellman {
   /// may send EOF to whatever is at the other end of the channel.
   @internal
   void handleMSG_CHANNEL_EOF(MSG_CHANNEL_EOF msg) {
-    tracePrint?.call('<-$hostport: MSG_CHANNEL_EOF ${msg.recipientChannel}');
+    tracePrint?.call('<-$hostname: MSG_CHANNEL_EOF ${msg.recipientChannel}');
 
     SSHChannel? chan = channels[msg.recipientChannel!];
     if (chan == null) {
       if (print != null) {
-        print!('$hostport: close invalid channel');
+        print!('$hostname: close invalid channel');
         return;
       }
     }
@@ -618,12 +611,12 @@ abstract class SSHTransport with SSHDiffieHellman {
   /// unless it has already sent this message for the channel.
   @internal
   void handleMSG_CHANNEL_CLOSE(MSG_CHANNEL_CLOSE msg) {
-    tracePrint?.call('<- $hostport: MSG_CHANNEL_CLOSE ${msg.recipientChannel}');
+    tracePrint?.call('<- $hostname: MSG_CHANNEL_CLOSE ${msg.recipientChannel}');
 
     SSHChannel? chan = channels[msg.recipientChannel!];
     if (chan == null) {
       if (print != null) {
-        print!('$hostport: Close invalid channel');
+        print!('$hostname: Close invalid channel');
       }
       return;
     }
@@ -641,7 +634,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   /// https://tools.ietf.org/html/rfc4254#section-4
   @internal
   void handleMSG_GLOBAL_REQUEST(MSG_GLOBAL_REQUEST msg) {
-    tracePrint?.call('<- $hostport: $msg');
+    tracePrint?.call('<- $hostname: $msg');
     // writeClearOrEncrypted(MSG_REQUEST_FAILURE())
   }
 
@@ -649,7 +642,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   @internal
   void handleMSG_DISCONNECT(MSG_DISCONNECT msg) {
     tracePrint?.call(
-        '<- $hostport: MSG_DISCONNECT ${msg.reasonCode} ${msg.description}');
+        '<- $hostname: MSG_DISCONNECT ${msg.reasonCode} ${msg.description}');
     if (server!) {
       disconnect('MSG_DISCONNECT ${msg.reasonCode} ${msg.description}');
     }
@@ -658,13 +651,13 @@ abstract class SSHTransport with SSHDiffieHellman {
   /// MSG_IGNORE can be used as an additional protection measure against advanced traffic analysis techniques.
   @internal
   void handleMSG_IGNORE(MSG_IGNORE msg) {
-    tracePrint?.call('<- $hostport: MSG_IGNORE');
+    tracePrint?.call('<- $hostname: MSG_IGNORE');
   }
 
   /// All implementations MUST understand MSG_DEBUG, but they are allowed to ignore it.
   @internal
   void handleMSG_DEBUG(MSG_DEBUG msg) {
-    tracePrint?.call('<- $hostport: MSG_DEBUG ${msg.message}');
+    tracePrint?.call('<- $hostname: MSG_DEBUG ${msg.message}');
   }
 
   /// Computes a new exchange hash [exH] given the server key [kS].
@@ -688,7 +681,7 @@ abstract class SSHTransport with SSHDiffieHellman {
     /// The exchange hash H from the first key exchange is used as the session identifier.
     if (state == SSHTransportState.FIRST_KEXREPLY) sessionId = exH;
 
-    tracePrint?.call('$hostport: H = "${hex.encode(exH!)}"');
+    tracePrint?.call('$hostname: H = "${hex.encode(exH!)}"');
   }
 
   /// Initializes the block cipher used for encrypted transport.
@@ -697,11 +690,11 @@ abstract class SSHTransport with SSHDiffieHellman {
     BlockCipher cipher = Cipher.cipher(cipherId);
 
     tracePrint?.call(
-      '$hostport: ${dir ? 'C->S' : 'S->C'} IV  = "${hex.encode(IV)}"',
+      '$hostname: ${dir ? 'C->S' : 'S->C'} IV  = "${hex.encode(IV)}"',
     );
 
     tracePrint?.call(
-      '$hostport: ${dir ? 'C->S' : 'S->C'} key = "${hex.encode(key)}"',
+      '$hostname: ${dir ? 'C->S' : 'S->C'} key = "${hex.encode(key)}"',
     );
 
     cipher.init(
@@ -727,20 +720,20 @@ abstract class SSHTransport with SSHDiffieHellman {
     final encM = applyBlockCipher(encrypt!, m);
     final mac = computeMAC(MAC.mac(macIdC2s), macHashLenC, m,
         sequenceNumberC2s - 1, integrityC2s!, macPrefixC2s);
-    socket!.sendRaw(Uint8List.fromList(encM + mac));
-    tracePrint?.call('-> $hostport: $msg');
+    socket!.sendBinary(Uint8List.fromList(encM + mac));
+    tracePrint?.call('-> $hostname: $msg');
   }
 
   /// Send a Binary Packet (e.g. KEX_INIT) that is initially sent in the clear,
   /// but encryped when keys are being renegotiated.
   @internal
   void writeClearOrEncrypted(SSHMessage msg) {
-    if (state.index > SSHTransportState.FIRST_NEWKEYS.index) {
+    if (state > SSHTransportState.FIRST_NEWKEYS) {
       return writeCipher(msg);
     }
     sequenceNumberC2s++;
-    socket!.sendRaw(msg.toBytes(null, random, encryptBlockSize));
-    tracePrint?.call('-> $hostport: $msg in clear');
+    socket!.sendBinary(msg.toBytes(null, random, encryptBlockSize));
+    tracePrint?.call('-> $hostname: $msg in clear');
   }
 
   // Enable the most recently negotiated encryption algorithms.
@@ -802,8 +795,7 @@ abstract class SSHTransport with SSHDiffieHellman {
     VoidCallback? connected,
     StringCallback? error,
   }) {
-    if (socket == null ||
-        state.index <= SSHTransportState.FIRST_NEWKEYS.index) {
+    if (socket == null || state <= SSHTransportState.FIRST_NEWKEYS) {
       return null;
     }
     debugPrint?.call('openTcpChannel to $destHost:$destPort');

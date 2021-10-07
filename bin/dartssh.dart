@@ -2,151 +2,122 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:args/args.dart';
 import 'package:dart_console/dart_console.dart';
 import 'package:dartssh2/dartssh2.dart';
 
-final console = Console();
+import 'src/ssh_args.dart';
+import 'src/utils.dart';
 
 void main(List<String> arguments) {
-  return runApp(arguments);
+  SSHCommand.start(arguments);
 }
 
-void runApp(List<String> arguments) {
-  final argParser = buildArgParser();
-  final args = argParser.parse(arguments);
+class SSHCommand {
+  final console = Console();
 
-  if (args['help']) {
-    printUsageAndExit(0);
+  final SSHCommandArgs args;
+
+  SSHCommand.start(List<String> arguments) : args = mustParseArgs(arguments) {
+    // TODO: This is temp fix!!!!!
+    _client = startSSH(Uri.base);
+    _remoteStdout.stream.listen(stdout.add);
+    stdin.cast<Uint8List>().listen(_client.sendChannelData);
+
+    if (!Platform.isWindows) {
+      _winchSignalSubscription = ProcessSignal.sigwinch.watch().listen((_) {
+        onLocalTerminalSizeChange();
+      });
+    }
   }
 
-  if (args.rest.length != 1) {
-    printUsageAndExit(1);
+  final _remoteStdout = StreamController<List<int>>();
+
+  late SSHClient _client;
+
+  StreamSubscription<ProcessSignal>? _winchSignalSubscription;
+
+  SSHClient startSSH(Uri url, {String? password, bool verbose = false}) {
+    return SSHClient(
+      hostname: url,
+      username: url.userInfo,
+      // password: password,
+      print: verbose ? print : null,
+      debugPrint: verbose ? print : null,
+      tracePrint: verbose ? print : null,
+      response: onResponse,
+      termvar: Platform.environment['TERM'] ?? 'xterm',
+      success: onSuccess,
+      loadIdentity: loadIdentity,
+      onPasswordRequest: onPasswordRequest,
+      onUserauthRequest: onUserauthRequest,
+      disconnected: onDisconnect,
+    );
   }
 
-  final urlString = args.rest.first.startsWith('ssh://')
-      ? args.rest.first
-      : 'ssh://' + args.rest.first;
+  SSHIdentity? loadIdentity() {
+    final home = Platform.environment['HOME'];
+    final keyFile = File('$home/.ssh/id_rsa');
 
-  var url = Uri.tryParse(urlString);
-
-  if (url == null) {
-    print('Invalid URL: $urlString');
-    exit(1);
+    if (keyFile.existsSync()) {
+      return SSHIdentity.fromPem(keyFile.readAsStringSync());
+    }
   }
 
-  if (!url.hasPort) {
-    url = url.replace(port: 22);
+  String onPasswordRequest() {
+    final url = '${args.user}@${args.host}';
+    final password = readline("$url's password: ", echo: false);
+    if (password == null) {
+      quit('No password provided.', exitCode: 1);
+    }
+    return password;
   }
 
-  startSSH(url, verbose: args['verbose']);
-}
+  List<String> onUserauthRequest(SSHUserauthRequest request) {
+    if (request.name != null && request.name!.isNotEmpty) {
+      print(request.name);
+    }
+    if (request.instruction != null && request.instruction!.isNotEmpty) {
+      print(request.instruction);
+    }
+    final responses = <String>[];
+    for (var prompt in request.prompts) {
+      final password = readline(prompt.prompt, echo: prompt.echo);
+      if (password == null) {
+        quit('No ${prompt.prompt} provided.', exitCode: 1);
+      }
+      responses.add(password);
+    }
+    return responses;
+  }
 
-ArgParser buildArgParser() {
-  final parser = ArgParser();
-  parser.addFlag('help', abbr: 'h', help: 'Show this help message.');
-  parser.addFlag('verbose', abbr: 'v', help: 'Verbose output.');
-  return parser;
-}
+  void onSuccess() {
+    // console.clearScreen();
+    // console.resetCursorPosition();
+    console.rawMode = true;
+    _client.setTerminalWindowSize(console.windowWidth, console.windowHeight);
+  }
 
-void printUsage(ArgParser parser) {
-  print('Usage: dartssh [options] [user@]host[:port]');
-  print('');
-  print('Options:');
-  print(parser.usage);
+  void onResponse(Uint8List data) {
+    stdout.add(data);
+  }
+
+  Future<void> onDisconnect() async {
+    _winchSignalSubscription?.cancel();
+    await _remoteStdout.close();
+    console.rawMode = false;
+    print('Disconnected.');
+    exit(0);
+  }
+
+  void onLocalTerminalSizeChange() {
+    _client.setTerminalWindowSize(
+      console.windowWidth,
+      console.windowHeight,
+    );
+  }
 }
 
 Never printUsageAndExit([int exitCode = 0]) {
-  printUsage(buildArgParser());
-  exit(exitCode);
-}
-
-void startSSH(Uri url, {String? password, bool verbose = false}) {
-  StreamSubscription<ProcessSignal>? winchSignalSubscription;
-  late SSHClient client;
-
-  final remoteStdout = StreamController<List<int>>();
-  remoteStdout.stream.listen(stdout.add);
-
-  client = SSHClient(
-    hostport: url,
-    username: url.userInfo,
-    print: verbose ? print : null,
-    debugPrint: verbose ? print : null,
-    tracePrint: verbose ? print : null,
-    // password: password,
-    response: (data) {
-      remoteStdout.sink.add(data);
-    },
-    termvar: Platform.environment['TERM'] ?? 'xterm',
-    success: () {
-      // console.clearScreen();
-      // console.resetCursorPosition();
-      console.rawMode = true;
-      client.setTerminalWindowSize(console.windowWidth, console.windowHeight);
-    },
-    loadIdentity: () {
-      final home = Platform.environment['HOME'];
-      final keyFile = File('$home/.ssh/id_rsa');
-
-      if (keyFile.existsSync()) {
-        return SSHIdentity.fromPem(keyFile.readAsStringSync());
-      }
-    },
-    onPasswordRequest: () {
-      final password = readline("$url's password: ", echo: false);
-      if (password == null) {
-        quit('No password provided.', exitCode: 1);
-      }
-      return password;
-    },
-    onUserauthRequest: (request) {
-      if (request.name != null && request.name!.isNotEmpty) {
-        print(request.name);
-      }
-      if (request.instruction != null && request.instruction!.isNotEmpty) {
-        print(request.instruction);
-      }
-      final responses = <String>[];
-      for (var prompt in request.prompts) {
-        final password = readline(prompt.prompt, echo: prompt.echo);
-        if (password == null) {
-          quit('No ${prompt.prompt} provided.', exitCode: 1);
-        }
-        responses.add(password);
-      }
-      return responses;
-    },
-    disconnected: () async {
-      winchSignalSubscription?.cancel();
-      await remoteStdout.close();
-      console.rawMode = false;
-      print('Disconnected');
-      exit(0);
-    },
-  );
-
-  if (!Platform.isWindows) {
-    winchSignalSubscription = ProcessSignal.sigwinch.watch().listen((_) {
-      client.setTerminalWindowSize(console.windowWidth, console.windowHeight);
-    });
-  }
-
-  stdin.listen((data) {
-    client.sendChannelData(data as Uint8List);
-  });
-}
-
-String? readline(String message, {bool echo = true}) {
-  stdin.echoMode = echo;
-  stdout.write(message);
-  final result = stdin.readLineSync();
-  print(''); // line break
-  stdin.echoMode = true;
-  return result;
-}
-
-Never quit(String message, {int exitCode = 0}) {
-  print(message);
+  print(getUsage());
   exit(exitCode);
 }

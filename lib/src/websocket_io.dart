@@ -14,10 +14,8 @@ import 'package:dartssh2/src/socket.dart';
 import 'package:dartssh2/src/socket_io.dart';
 import 'package:dartssh2/src/transport.dart';
 
-/// dart:io [WebSocket] based implementation of [SocketInterface].
-class WebSocketImpl extends SocketInterface {
-  static const String type = 'io';
-
+/// dart:io [WebSocket] based implementation of [SSHSocket].
+class SSHWebSocket extends SSHSocket {
   io.WebSocket? socket;
   StreamSubscription? messageSubscription;
   Uint8ListCallback? messageHandler;
@@ -135,19 +133,19 @@ class WebSocketImpl extends SocketInterface {
   void send(String text) => socket!.addUtf8Text(utf8.encode(text));
 
   @override
-  void sendRaw(Uint8List raw) => socket!.add(raw);
+  void sendBinary(Uint8List data) => socket!.add(data);
 }
 
-/// The initial [SSHTunneledSocketImpl] (which implements same [SocketInteface]
-/// as [SSHTunneledWebSocketImpl]), is bridged via [SSHTunneledSocket] adaptor
+/// The initial [SSHTunneledSocket] (which implements same [SocketInteface]
+/// as [SSHTunneledWebSocket]), is bridged via [SSHTunneledSocket] adaptor
 /// to initialize [io.WebSocket.fromUpgradedSocket()].
-class SSHTunneledWebSocketImpl extends WebSocketImpl {
-  SocketInterface? tunneledSocket;
+class SSHTunneledWebSocket extends SSHWebSocket {
+  SSHSocket? tunneledSocket;
   final String? sourceHost, tunnelToHost;
   final int? sourcePort, tunnelToPort;
   final StringCallback? debugPrint;
 
-  SSHTunneledWebSocketImpl(SSHTunneledSocketImpl inputSocket)
+  SSHTunneledWebSocket(SSHTunneledSocket inputSocket)
       : tunneledSocket = inputSocket,
         sourceHost = inputSocket.sourceHost,
         tunnelToHost = inputSocket.tunnelToHost,
@@ -156,8 +154,13 @@ class SSHTunneledWebSocketImpl extends WebSocketImpl {
         debugPrint = inputSocket.client.debugPrint;
 
   @override
-  void connect(Uri uri, VoidCallback onConnected, StringCallback onError,
-      {int timeoutSeconds = 15, bool ignoreBadCert = false}) async {
+  void connect(
+    Uri uri,
+    VoidCallback onConnected,
+    StringCallback onError, {
+    int timeoutSeconds = 15,
+    bool ignoreBadCert = false,
+  }) async {
     uri = '$uri'.startsWith('wss')
         ? Uri.parse('https' + '$uri'.substring(3))
         : Uri.parse('http' + '$uri'.substring(2));
@@ -166,7 +169,7 @@ class SSHTunneledWebSocketImpl extends WebSocketImpl {
       tunneledSocket = await connectUri(
         uri,
         tunneledSocket!,
-        secureUpgrade: (SocketInterface x) async => SocketImpl(
+        secureUpgrade: (SSHSocket x) async => SSHNativeSocket(
           await io.SecureSocket.secure(
             SocketAdaptor(
               x,

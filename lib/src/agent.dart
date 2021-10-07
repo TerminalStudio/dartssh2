@@ -53,7 +53,7 @@ mixin SSHAgentForwarding on SSHTransport {
 
       default:
         if (this.print != null) {
-          this.print!('$hostport: unknown agent packet number: $agentPacketId');
+          this.print!('$hostname: unknown agent packet number: $agentPacketId');
         }
         break;
     }
@@ -62,7 +62,7 @@ mixin SSHAgentForwarding on SSHTransport {
   /// Responds with any identities we're forwarding.
   @internal
   void handleAGENTC_REQUEST_IDENTITIES(SSHChannel channel) {
-    tracePrint?.call('$hostport: agent channel: AGENTC_REQUEST_IDENTITIES');
+    tracePrint?.call('$hostname: agent channel: AGENTC_REQUEST_IDENTITIES');
     AGENT_IDENTITIES_ANSWER reply = AGENT_IDENTITIES_ANSWER();
     if (identity != null) {
       reply.keys = identity!.getRawPublicKeyList();
@@ -73,15 +73,15 @@ mixin SSHAgentForwarding on SSHTransport {
   /// Signs challenge authenticating a descendent channel.
   @internal
   void handleAGENTC_SIGN_REQUEST(SSHChannel channel, AGENTC_SIGN_REQUEST msg) {
-    tracePrint?.call('$hostport: agent channel: AGENTC_SIGN_REQUEST');
+    tracePrint?.call('$hostname: agent channel: AGENTC_SIGN_REQUEST');
     SerializableInput keyStream = SerializableInput(msg.key!);
     String keyType = deserializeString(keyStream);
     try {
       final sig =
-          identity!.signMessage(Key.id(keyType), msg.data, getSecureRandom());
+          identity!.signMessage(Key.id(keyType), msg.data, secureRandom);
       sendToChannel(channel, AGENT_SIGN_RESPONSE(sig).toRaw());
     } catch (e) {
-      tracePrint?.call('$hostport: agent channel: AGENTC_SIGN_REQUEST: $e');
+      tracePrint?.call('$hostname: agent channel: AGENTC_SIGN_REQUEST: $e');
       sendToChannel(channel, AGENT_FAILURE().toRaw());
     }
   }
