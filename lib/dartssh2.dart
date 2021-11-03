@@ -1,5 +1,6 @@
 export 'src/agent.dart' show SSHAgentForwarding;
-export 'src/client.dart' show SSHClient, SSHTunneledSocketImpl;
+export 'src/client.dart'
+    show SSHClient, SSHTunneledSocketImpl, SSHUserauthRequest;
 
 export 'package:dartssh2/src/http_io.dart'
     if (dart.library.html) 'package:dartssh2/http_html.dart'
