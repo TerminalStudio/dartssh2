@@ -154,9 +154,6 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   /// If we have tried to authenticate with "password" method.
   bool _triedAuthWithPassword = false;
 
-  /// If we have tried to authenticate with "keyboard-interactive" method.
-  bool _triedAuthWithKeyboardInteractive = false;
-
   /// If we have tried to authenticate with "none" method.
   bool _triedAuthWithNone = false;
 
@@ -416,7 +413,6 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     }
 
     if (onUserauthRequest != null) {
-      _triedAuthWithKeyboardInteractive = true;
       sendKeyboardInteractive();
       return;
     }
@@ -460,8 +456,7 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
     }
 
     if (msg.authLeft.contains(kAuthMethodKeyboardInteractive)) {
-      if (!_triedAuthWithKeyboardInteractive && onUserauthRequest != null) {
-        _triedAuthWithKeyboardInteractive = true;
+      if (onUserauthRequest != null) {
         sendKeyboardInteractive();
         return;
       }
