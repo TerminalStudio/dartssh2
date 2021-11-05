@@ -266,6 +266,14 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
         handleMSG_DEBUG(MSG_DEBUG()..deserialize(packetS!));
         break;
 
+      case MSG_REQUEST_FAILURE_MESSAGE.ID:
+        handleMSG_REQUEST_FAILURE_MESSAGE(MSG_REQUEST_FAILURE_MESSAGE());
+        break;
+
+      case MSG_REQUEST_SUCCESS_MESSAGE.ID:
+        handleMSG_REQUEST_SUCCESS_MESSAGE(MSG_REQUEST_SUCCESS_MESSAGE());
+        break;
+
       default:
         this.print?.call(
             '$hostport: unknown packet number: $packetId, len $packetLen');

@@ -319,6 +319,13 @@ abstract class SSHTransport with SSHDiffieHellman {
     }
   }
 
+  @internal
+  void resetPingCount() {
+    if (pingCount > 0) {
+      tracePrint?.call('reset ping count');
+      pingCount = 0;
+    }
+  }
 
   /// Key exchange begins by each side sending SSH_MSG_KEXINIT.
   @internal
@@ -363,9 +370,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   @internal
   void handleRead(Uint8List dataChunk) {
     readBuffer.add(dataChunk);
-    if (pingCount > 0) {
-      pingCount = 0;
-    }
+
     /// Initialze with an ASCII version exchange.
     if (state == SSHTransportState.INIT) {
       handleInitialState();
@@ -693,6 +698,11 @@ abstract class SSHTransport with SSHDiffieHellman {
     channels.remove(msg.recipientChannel);
   }
 
+  @internal
+  void handleMSG_GLOBAL_REQUEST_KEEPALIVE(MSG_GLOBAL_REQUEST_KEEPALIVE msg){
+
+  }
+
   /// https://tools.ietf.org/html/rfc4254#section-4
   @internal
   void handleMSG_GLOBAL_REQUEST(MSG_GLOBAL_REQUEST msg) {
@@ -721,6 +731,18 @@ abstract class SSHTransport with SSHDiffieHellman {
   @internal
   void handleMSG_DEBUG(MSG_DEBUG msg) {
     tracePrint?.call('<- $hostport: MSG_DEBUG ${msg.message}');
+  }
+
+  @internal
+  void handleMSG_REQUEST_FAILURE_MESSAGE(MSG_REQUEST_FAILURE_MESSAGE msg) {
+    tracePrint?.call('<- $hostport: MSG_REQUEST_FAILURE_MESSAGE');
+    resetPingCount();
+  }
+
+  @internal
+  void handleMSG_REQUEST_SUCCESS_MESSAGE(MSG_REQUEST_SUCCESS_MESSAGE msg) {
+    tracePrint?.call('<- $hostport: MSG_REQUEST_SUCCESS_MESSAGE');
+    resetPingCount();
   }
 
   /// Computes a new exchange hash [exH] given the server key [kS].

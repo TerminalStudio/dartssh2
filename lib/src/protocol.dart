@@ -783,36 +783,55 @@ class MSG_GLOBAL_REQUEST extends SSHMessage {
   }
 }
 
-class MSG_GLOBAL_REQUEST_KEEPALIVE extends SSHMessage {
+class MSG_GLOBAL_REQUEST_KEEPALIVE extends MSG_GLOBAL_REQUEST {
   static const int ID = 80;
-  final PING_PACKET = Uint8List.fromList([
-    // "keepalive@openssh.com"
-    0, 0, 0, 21,
-    107, 101, 101, 112, 97, 108, 105, 118, 101, 64, 111, 112, 101, 110, 115,
-    115, 104, 46, 99, 111, 109,
-    // Request a reply
-    1
-  ]);
-
-  MSG_GLOBAL_REQUEST_KEEPALIVE() : super(ID);
-    @override
-  int get serializedHeaderSize => PING_PACKET.length;
-
   @override
-  int get serializedSize => PING_PACKET.length;
+  final String request = "keepalive@openssh.com";
 
-  @override
-  void serialize(SerializableOutput output) {
-    output.addBytes(PING_PACKET);
-  }
+  int wantReply = 1;
+}
+
+class MSG_REQUEST_SUCCESS_MESSAGE extends SSHMessage {
+  static const int ID = 81;
+
+  MSG_REQUEST_SUCCESS_MESSAGE() : super(ID);
 
   @override
   void deserialize(SerializableInput input) {
   }
 
+  @override
+  void serialize(SerializableOutput output) {
+  }
 
+  @override
+  int get serializedHeaderSize => 4;
+
+  @override
+  // TODO: implement serializedSize
+  int get serializedSize => 4;
 }
 
+class MSG_REQUEST_FAILURE_MESSAGE extends SSHMessage {
+  static const int ID = 82;
+
+  MSG_REQUEST_FAILURE_MESSAGE() : super(ID);
+
+  @override
+  void deserialize(SerializableInput input) {
+  }
+
+  @override
+  void serialize(SerializableOutput output) {
+  }
+
+  @override
+  int get serializedHeaderSize => 4;
+
+  @override
+  // TODO: implement serializedSize
+  int get serializedSize => 4;
+}
 /// https://tools.ietf.org/html/rfc4254#section-7.1
 class MSG_GLOBAL_REQUEST_TCPIP extends SSHMessage {
   static const int ID = 80;
