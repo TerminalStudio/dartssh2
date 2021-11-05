@@ -8,6 +8,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:convert/convert.dart';
+import 'package:dartssh2/src/transport.dart';
 import 'package:test/test.dart';
 
 import 'package:dartssh2/src/client.dart';
@@ -69,6 +70,26 @@ void main() {
     );
     socket.connect(Uri.parse('tcp://foobar:22'), ssh.onConnected, (_) {});
     expect(socket.sent.removeFirst(), 'SSH-2.0-dartssh_1.0\r\n');
+    ssh.disconnect('done');
+    expect(socket.closed, true);
+  });
+
+  test('TestKeepAlive', () async {
+    TestSocket socket = TestSocket();
+    SSHClient ssh = SSHClient(
+        username: 'whoever',
+        socketInput: socket,
+        print: print,
+        debugPrint: print,
+        tracePrint: print,
+        keepaliveConfig: KeepaliveConfig(
+            keepaliveCountMax: 3,
+            keepaliveInterval: Duration(milliseconds: 10)));
+    socket.connect(Uri.parse('tcp://foobar:22'), ssh.onConnected, (_) {});
+
+    await Future.delayed(Duration(milliseconds: 200));
+    expect(ssh.pingCount < 10, true);
+
     ssh.disconnect('done');
     expect(socket.closed, true);
   });

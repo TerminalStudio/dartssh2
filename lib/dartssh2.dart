@@ -25,7 +25,8 @@ export 'package:dartssh2/src/socket_io.dart'
 
 export 'src/ssh.dart' show SSH;
 
-export 'src/transport.dart' show SSHChannel, Forward, SSHTransportState;
+export 'src/transport.dart'
+    show SSHChannel, Forward, SSHTransportState, KeepaliveConfig;
 
 export 'package:dartssh2/src/websocket_io.dart'
     if (dart.library.html) 'package:dartssh2/websocket_html.dart'

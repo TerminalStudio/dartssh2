@@ -769,7 +769,10 @@ class MSG_GLOBAL_REQUEST extends SSHMessage {
   int get serializedSize => serializedHeaderSize + request.length;
 
   @override
-  void serialize(SerializableOutput output) {}
+  void serialize(SerializableOutput output) {
+    serializeString(output, request);
+    output.addUint8(wantReply);
+  }
 
   @override
   void deserialize(SerializableInput input) {
@@ -781,6 +784,52 @@ class MSG_GLOBAL_REQUEST extends SSHMessage {
   String toString() {
     return 'MSG_GLOBAL_REQUEST[request=$request, wantReply=$wantReply]';
   }
+}
+
+class MSG_GLOBAL_REQUEST_KEEPALIVE extends MSG_GLOBAL_REQUEST {
+  static const int ID = 80;
+  @override
+  final String request = "keepalive@openssh.com";
+
+  int wantReply = 1;
+}
+
+class MSG_REQUEST_SUCCESS_MESSAGE extends SSHMessage {
+  static const int ID = 81;
+
+  MSG_REQUEST_SUCCESS_MESSAGE() : super(ID);
+
+  @override
+  void deserialize(SerializableInput input) {}
+
+  @override
+  void serialize(SerializableOutput output) {}
+
+  @override
+  int get serializedHeaderSize => 4;
+
+  @override
+  // TODO: implement serializedSize
+  int get serializedSize => 4;
+}
+
+class MSG_REQUEST_FAILURE_MESSAGE extends SSHMessage {
+  static const int ID = 82;
+
+  MSG_REQUEST_FAILURE_MESSAGE() : super(ID);
+
+  @override
+  void deserialize(SerializableInput input) {}
+
+  @override
+  void serialize(SerializableOutput output) {}
+
+  @override
+  int get serializedHeaderSize => 4;
+
+  @override
+  // TODO: implement serializedSize
+  int get serializedSize => 4;
 }
 
 /// https://tools.ietf.org/html/rfc4254#section-7.1

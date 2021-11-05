@@ -6,6 +6,7 @@
 import 'dart:math';
 import 'dart:collection';
 import 'dart:typed_data';
+import 'dart:async';
 
 import 'package:convert/convert.dart';
 import 'package:meta/meta.dart';
@@ -40,6 +41,14 @@ typedef RemoteForwardCallback = Future<String?> Function(
 class Forward {
   int? port, targetPort;
   String? targetHost;
+}
+
+class KeepaliveConfig {
+  KeepaliveConfig(
+      {required this.keepaliveCountMax, required this.keepaliveInterval});
+
+  final Duration keepaliveInterval;
+  final int keepaliveCountMax;
 }
 
 /// All terminal sessions, forwarded connections, etc., are [SSHChannel]s.
@@ -158,6 +167,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   var nextChannelId = 1;
   var maxPacketSize = 32768;
   var initialWindowSize = 1048576;
+  var pingCount = 0;
 
   num serverVersion = 0;
 
@@ -181,23 +191,24 @@ abstract class SSHTransport with SSHDiffieHellman {
   SSHChannel? sessionChannel;
   HashMap<int, SSHChannel> channels = HashMap<int, SSHChannel>();
   HashMap<int?, Forward>? forwardingRemote;
+  KeepaliveConfig? keepaliveConfig;
 
-  SSHTransport(
-    this.server, {
-    this.identity,
-    this.hostport,
-    this.compress = false,
-    this.forwardLocal,
-    this.forwardRemote,
-    this.disconnected,
-    this.response,
-    this.print,
-    this.debugPrint,
-    this.tracePrint,
-    this.socket,
-    Random? random,
-    this.secureRandom,
-  }) : random = random ?? Random.secure();
+  SSHTransport(this.server,
+      {this.identity,
+      this.hostport,
+      this.compress = false,
+      this.forwardLocal,
+      this.forwardRemote,
+      this.disconnected,
+      this.response,
+      this.print,
+      this.debugPrint,
+      this.tracePrint,
+      this.socket,
+      Random? random,
+      this.secureRandom,
+      this.keepaliveConfig})
+      : random = random ?? Random.secure();
 
   // Interface
   @visibleForOverriding
@@ -265,6 +276,53 @@ abstract class SSHTransport with SSHDiffieHellman {
     socket!.send(verC + '\r\n');
     tracePrint?.call('-> $hostport $verC');
     if (client) sendKeyExchangeInit(false);
+
+    if (keepaliveConfig != null) {
+      handleKeepalive(keepaliveConfig!);
+    }
+  }
+
+  @internal
+  void handleKeepalive(KeepaliveConfig config) {
+    if (config.keepaliveInterval.inMilliseconds <= 0) {
+      return;
+    }
+
+    if (socket == null) {
+      return;
+    }
+    if (!socket!.connected) {
+      return;
+    }
+
+    pingCount = 0;
+    Timer.periodic(config.keepaliveInterval, (timer) {
+      if (++pingCount > config.keepaliveCountMax) {
+        timer.cancel();
+        return;
+      }
+
+      if (socket!.connected) {
+        ping();
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  @internal
+  void ping() {
+    if (socket != null && socket!.connected && encrypt != null) {
+      writeCipher(MSG_GLOBAL_REQUEST_KEEPALIVE());
+    }
+  }
+
+  @internal
+  void resetPingCount() {
+    if (pingCount > 0) {
+      tracePrint?.call('reset ping count');
+      pingCount = 0;
+    }
   }
 
   /// Key exchange begins by each side sending SSH_MSG_KEXINIT.
@@ -638,10 +696,14 @@ abstract class SSHTransport with SSHDiffieHellman {
     channels.remove(msg.recipientChannel);
   }
 
+  @internal
+  void handleMSG_GLOBAL_REQUEST_KEEPALIVE(MSG_GLOBAL_REQUEST_KEEPALIVE msg) {}
+
   /// https://tools.ietf.org/html/rfc4254#section-4
   @internal
   void handleMSG_GLOBAL_REQUEST(MSG_GLOBAL_REQUEST msg) {
     tracePrint?.call('<- $hostport: $msg');
+
     // writeClearOrEncrypted(MSG_REQUEST_FAILURE())
   }
 
@@ -665,6 +727,18 @@ abstract class SSHTransport with SSHDiffieHellman {
   @internal
   void handleMSG_DEBUG(MSG_DEBUG msg) {
     tracePrint?.call('<- $hostport: MSG_DEBUG ${msg.message}');
+  }
+
+  @internal
+  void handleMSG_REQUEST_FAILURE_MESSAGE(MSG_REQUEST_FAILURE_MESSAGE msg) {
+    tracePrint?.call('<- $hostport: MSG_REQUEST_FAILURE_MESSAGE');
+    resetPingCount();
+  }
+
+  @internal
+  void handleMSG_REQUEST_SUCCESS_MESSAGE(MSG_REQUEST_SUCCESS_MESSAGE msg) {
+    tracePrint?.call('<- $hostport: MSG_REQUEST_SUCCESS_MESSAGE');
+    resetPingCount();
   }
 
   /// Computes a new exchange hash [exH] given the server key [kS].

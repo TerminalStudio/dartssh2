@@ -74,46 +74,46 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
   /// shell or `xterm-256color` for better color support.
   final String termvar;
 
-  SSHClient({
-    Uri? hostport,
-    required this.username,
-    this.loadIdentity,
-    this.onUserauthRequest,
-    this.onPasswordRequest,
-    this.termvar = 'xterm',
-    this.termWidth = 80,
-    this.termHeight = 25,
-    bool compress = false,
-    this.agentForwarding = false,
-    this.closeOnDisconnect,
-    this.startShell = true,
-    List<Forward>? forwardLocal,
-    List<Forward>? forwardRemote,
-    VoidCallback? disconnected,
-    ResponseCallback? response,
-    StringCallback? print,
-    StringCallback? debugPrint,
-    StringCallback? tracePrint,
-    VoidCallback? success,
-    this.acceptHostFingerprint,
-    SocketInterface? socketInput,
-    Random? random,
-    SecureRandom? secureRandom,
-  }) : super(
-          false,
-          hostport: hostport,
-          compress: compress,
-          forwardLocal: forwardLocal,
-          forwardRemote: forwardRemote,
-          disconnected: disconnected,
-          response: response,
-          print: print,
-          debugPrint: debugPrint,
-          tracePrint: tracePrint,
-          socket: socketInput,
-          random: random,
-          secureRandom: secureRandom,
-        ) {
+  SSHClient(
+      {Uri? hostport,
+      required this.username,
+      this.loadIdentity,
+      this.onUserauthRequest,
+      this.onPasswordRequest,
+      this.termvar = 'xterm',
+      this.termWidth = 80,
+      this.termHeight = 25,
+      bool compress = false,
+      this.agentForwarding = false,
+      this.closeOnDisconnect,
+      this.startShell = true,
+      List<Forward>? forwardLocal,
+      List<Forward>? forwardRemote,
+      VoidCallback? disconnected,
+      ResponseCallback? response,
+      StringCallback? print,
+      StringCallback? debugPrint,
+      StringCallback? tracePrint,
+      VoidCallback? success,
+      this.acceptHostFingerprint,
+      SocketInterface? socketInput,
+      Random? random,
+      SecureRandom? secureRandom,
+      KeepaliveConfig? keepaliveConfig})
+      : super(false,
+            hostport: hostport,
+            compress: compress,
+            forwardLocal: forwardLocal,
+            forwardRemote: forwardRemote,
+            disconnected: disconnected,
+            response: response,
+            print: print,
+            debugPrint: debugPrint,
+            tracePrint: tracePrint,
+            socket: socketInput,
+            random: random,
+            secureRandom: secureRandom,
+            keepaliveConfig: keepaliveConfig) {
     if (success != null) {
       this.success.add(success);
     }
@@ -261,6 +261,14 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
 
       case MSG_DEBUG.ID:
         handleMSG_DEBUG(MSG_DEBUG()..deserialize(packetS!));
+        break;
+
+      case MSG_REQUEST_FAILURE_MESSAGE.ID:
+        handleMSG_REQUEST_FAILURE_MESSAGE(MSG_REQUEST_FAILURE_MESSAGE());
+        break;
+
+      case MSG_REQUEST_SUCCESS_MESSAGE.ID:
+        handleMSG_REQUEST_SUCCESS_MESSAGE(MSG_REQUEST_SUCCESS_MESSAGE());
         break;
 
       default:
