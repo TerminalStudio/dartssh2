@@ -43,14 +43,13 @@ class Forward {
   String? targetHost;
 }
 
-
 class KeepaliveConfig {
-  KeepaliveConfig({required this.keepaliveCountMax, required this.keepaliveInterval});
+  KeepaliveConfig(
+      {required this.keepaliveCountMax, required this.keepaliveInterval});
 
   final Duration keepaliveInterval;
   final int keepaliveCountMax;
 }
-
 
 /// All terminal sessions, forwarded connections, etc., are [SSHChannel]s.
 /// Multiple [SSHChannel]s are multiplexed into a single connection and
@@ -309,11 +308,10 @@ abstract class SSHTransport with SSHDiffieHellman {
         timer.cancel();
       }
     });
-
   }
 
   @internal
-  void ping() {    
+  void ping() {
     if (socket != null && socket!.connected && encrypt != null) {
       writeCipher(MSG_GLOBAL_REQUEST_KEEPALIVE());
     }
@@ -699,9 +697,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   @internal
-  void handleMSG_GLOBAL_REQUEST_KEEPALIVE(MSG_GLOBAL_REQUEST_KEEPALIVE msg){
-
-  }
+  void handleMSG_GLOBAL_REQUEST_KEEPALIVE(MSG_GLOBAL_REQUEST_KEEPALIVE msg) {}
 
   /// https://tools.ietf.org/html/rfc4254#section-4
   @internal

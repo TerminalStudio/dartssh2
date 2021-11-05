@@ -83,9 +83,8 @@ void main() {
         debugPrint: print,
         tracePrint: print,
         keepaliveConfig: KeepaliveConfig(
-            keepaliveCountMax: 3, keepaliveInterval: Duration(milliseconds: 10)
-        )
-    );
+            keepaliveCountMax: 3,
+            keepaliveInterval: Duration(milliseconds: 10)));
     socket.connect(Uri.parse('tcp://foobar:22'), ssh.onConnected, (_) {});
 
     await Future.delayed(Duration(milliseconds: 200));

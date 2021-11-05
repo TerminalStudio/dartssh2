@@ -800,12 +800,10 @@ class MSG_REQUEST_SUCCESS_MESSAGE extends SSHMessage {
   MSG_REQUEST_SUCCESS_MESSAGE() : super(ID);
 
   @override
-  void deserialize(SerializableInput input) {
-  }
+  void deserialize(SerializableInput input) {}
 
   @override
-  void serialize(SerializableOutput output) {
-  }
+  void serialize(SerializableOutput output) {}
 
   @override
   int get serializedHeaderSize => 4;
@@ -821,12 +819,10 @@ class MSG_REQUEST_FAILURE_MESSAGE extends SSHMessage {
   MSG_REQUEST_FAILURE_MESSAGE() : super(ID);
 
   @override
-  void deserialize(SerializableInput input) {
-  }
+  void deserialize(SerializableInput input) {}
 
   @override
-  void serialize(SerializableOutput output) {
-  }
+  void serialize(SerializableOutput output) {}
 
   @override
   int get serializedHeaderSize => 4;
@@ -835,6 +831,7 @@ class MSG_REQUEST_FAILURE_MESSAGE extends SSHMessage {
   // TODO: implement serializedSize
   int get serializedSize => 4;
 }
+
 /// https://tools.ietf.org/html/rfc4254#section-7.1
 class MSG_GLOBAL_REQUEST_TCPIP extends SSHMessage {
   static const int ID = 80;

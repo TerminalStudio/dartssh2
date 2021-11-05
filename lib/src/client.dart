@@ -99,24 +99,21 @@ class SSHClient extends SSHTransport with SSHAgentForwarding {
       SocketInterface? socketInput,
       Random? random,
       SecureRandom? secureRandom,
-      KeepaliveConfig? keepaliveConfig
-      })
-      : super(
-          false,
-          hostport: hostport,
-          compress: compress,
-          forwardLocal: forwardLocal,
-          forwardRemote: forwardRemote,
-          disconnected: disconnected,
-          response: response,
-          print: print,
-          debugPrint: debugPrint,
-          tracePrint: tracePrint,
-          socket: socketInput,
-          random: random,
-          secureRandom: secureRandom,
-          keepaliveConfig: keepaliveConfig
-        ) {
+      KeepaliveConfig? keepaliveConfig})
+      : super(false,
+            hostport: hostport,
+            compress: compress,
+            forwardLocal: forwardLocal,
+            forwardRemote: forwardRemote,
+            disconnected: disconnected,
+            response: response,
+            print: print,
+            debugPrint: debugPrint,
+            tracePrint: tracePrint,
+            socket: socketInput,
+            random: random,
+            secureRandom: secureRandom,
+            keepaliveConfig: keepaliveConfig) {
     if (success != null) {
       this.success.add(success);
     }
