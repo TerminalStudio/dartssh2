@@ -313,16 +313,12 @@ abstract class SSHTransport with SSHDiffieHellman {
   }
 
   @internal
-  void ping() {
-    sendRawIfConnected(PING_PACKET);
-  }
-
-  @internal
-  void sendRawIfConnected(Uint8List chunk) {
-    if (socket != null && socket!.connected) {
-      socket!.sendRaw(chunk);
+  void ping() {    
+    if (socket != null && socket!.connected && encrypt != null) {
+      writeCipher(MSG_GLOBAL_REQUEST_KEEPALIVE());
     }
   }
+
 
   /// Key exchange begins by each side sending SSH_MSG_KEXINIT.
   @internal
