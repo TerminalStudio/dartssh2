@@ -769,7 +769,10 @@ class MSG_GLOBAL_REQUEST extends SSHMessage {
   int get serializedSize => serializedHeaderSize + request.length;
 
   @override
-  void serialize(SerializableOutput output) {}
+  void serialize(SerializableOutput output) {
+    serializeString(output, request);
+    output.addUint8(wantReply);
+  }
 
   @override
   void deserialize(SerializableInput input) {
