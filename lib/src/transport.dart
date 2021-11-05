@@ -6,6 +6,7 @@
 import 'dart:math';
 import 'dart:collection';
 import 'dart:typed_data';
+import 'dart:async';
 
 import 'package:convert/convert.dart';
 import 'package:meta/meta.dart';
@@ -41,6 +42,15 @@ class Forward {
   int? port, targetPort;
   String? targetHost;
 }
+
+
+class KeepaliveConfig {
+  KeepaliveConfig({required this.keepaliveCountMax, required this.keepaliveInterval});
+
+  final Duration keepaliveInterval;
+  final int keepaliveCountMax;
+}
+
 
 /// All terminal sessions, forwarded connections, etc., are [SSHChannel]s.
 /// Multiple [SSHChannel]s are multiplexed into a single connection and
@@ -158,6 +168,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   var nextChannelId = 1;
   var maxPacketSize = 32768;
   var initialWindowSize = 1048576;
+  var pingCount = 0;
 
   num serverVersion = 0;
 
@@ -181,23 +192,24 @@ abstract class SSHTransport with SSHDiffieHellman {
   SSHChannel? sessionChannel;
   HashMap<int, SSHChannel> channels = HashMap<int, SSHChannel>();
   HashMap<int?, Forward>? forwardingRemote;
+  KeepaliveConfig? keepaliveConfig;
 
-  SSHTransport(
-    this.server, {
-    this.identity,
-    this.hostport,
-    this.compress = false,
-    this.forwardLocal,
-    this.forwardRemote,
-    this.disconnected,
-    this.response,
-    this.print,
-    this.debugPrint,
-    this.tracePrint,
-    this.socket,
-    Random? random,
-    this.secureRandom,
-  }) : random = random ?? Random.secure();
+  SSHTransport(this.server,
+      {this.identity,
+      this.hostport,
+      this.compress = false,
+      this.forwardLocal,
+      this.forwardRemote,
+      this.disconnected,
+      this.response,
+      this.print,
+      this.debugPrint,
+      this.tracePrint,
+      this.socket,
+      Random? random,
+      this.secureRandom,
+      this.keepaliveConfig})
+      : random = random ?? Random.secure();
 
   // Interface
   @visibleForOverriding
@@ -265,6 +277,51 @@ abstract class SSHTransport with SSHDiffieHellman {
     socket!.send(verC + '\r\n');
     tracePrint?.call('-> $hostport $verC');
     if (client) sendKeyExchangeInit(false);
+
+    if (keepaliveConfig != null) {
+      handleKeepalive(keepaliveConfig!);
+    }
+  }
+
+  @internal
+  void handleKeepalive(KeepaliveConfig config) {
+    if (config.keepaliveInterval.inMilliseconds <= 0) {
+      return;
+    }
+
+    if (socket == null) {
+      return;
+    }
+    if (!socket!.connected) {
+      return;
+    }
+
+    pingCount = 0;
+    Timer.periodic(config.keepaliveInterval, (timer) {
+      if (++pingCount > config.keepaliveCountMax) {
+        timer.cancel();
+        return;
+      }
+
+      if (socket!.connected) {
+        ping();
+      } else {
+        timer.cancel();
+      }
+    });
+
+  }
+
+  @internal
+  void ping() {
+    sendRawIfConnected(PING_PACKET);
+  }
+
+  @internal
+  void sendRawIfConnected(Uint8List chunk) {
+    if (socket != null && socket!.connected) {
+      socket!.sendRaw(chunk);
+    }
   }
 
   /// Key exchange begins by each side sending SSH_MSG_KEXINIT.
@@ -310,7 +367,9 @@ abstract class SSHTransport with SSHDiffieHellman {
   @internal
   void handleRead(Uint8List dataChunk) {
     readBuffer.add(dataChunk);
-
+    if (pingCount > 0) {
+      pingCount = 0;
+    }
     /// Initialze with an ASCII version exchange.
     if (state == SSHTransportState.INIT) {
       handleInitialState();
@@ -642,6 +701,7 @@ abstract class SSHTransport with SSHDiffieHellman {
   @internal
   void handleMSG_GLOBAL_REQUEST(MSG_GLOBAL_REQUEST msg) {
     tracePrint?.call('<- $hostport: $msg');
+
     // writeClearOrEncrypted(MSG_REQUEST_FAILURE())
   }
 

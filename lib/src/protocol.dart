@@ -65,6 +65,16 @@ class BinaryPacket {
         padding = input.getUint8();
 }
 
+final PING_PACKET = Uint8List.fromList([
+  MSG_GLOBAL_REQUEST.ID,
+  // "keepalive@openssh.com"
+  0, 0, 0, 21,
+  107, 101, 101, 112, 97, 108, 105, 118, 101, 64, 111, 112, 101, 110, 115,
+  115, 104, 46, 99, 111, 109,
+  // Request a reply
+  1
+]);
+
 /// Binary Packet Protocol. https://tools.ietf.org/html/rfc4253#section-6
 abstract class SSHMessage extends Serializable {
   int id;
