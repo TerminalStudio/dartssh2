@@ -75,7 +75,7 @@ TODO
 
 SSH client: [example/dartssh.dart](example/dartssh.dart)
 
-SSH server: [example/dartsshs.dart](example/dartsshs.dart)
+SSH server: [example/dartsshd.dart](example/dartsshd.dart)
 
 ## Roadmap
 
