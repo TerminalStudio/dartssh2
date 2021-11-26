@@ -3,7 +3,7 @@ export 'src/client.dart'
     show SSHClient, SSHTunneledSocketImpl, SSHUserauthRequest;
 
 export 'package:dartssh2/src/http_io.dart'
-    if (dart.library.html) 'package:dartssh2/http_html.dart'
+    if (dart.library.html) 'package:dartssh2/src/http_html.dart'
     show HttpClientImpl;
 
 export 'src/identity.dart'
@@ -21,7 +21,7 @@ export 'src/identity.dart'
 export 'src/server.dart' show SSHServer;
 
 export 'package:dartssh2/src/socket_io.dart'
-    if (dart.library.html) 'package:dartssh2/socket_html.dart' show SocketImpl;
+    if (dart.library.html) 'package:dartssh2/src/socket_html.dart' show SocketImpl;
 
 export 'src/ssh.dart' show SSH;
 
@@ -29,5 +29,5 @@ export 'src/transport.dart'
     show SSHChannel, Forward, SSHTransportState, KeepaliveConfig;
 
 export 'package:dartssh2/src/websocket_io.dart'
-    if (dart.library.html) 'package:dartssh2/websocket_html.dart'
+    if (dart.library.html) 'package:dartssh2/src/websocket_html.dart'
     show WebSocketImpl, SSHTunneledWebSocketImpl;
