@@ -1,3 +1,10 @@
+## 2.0.0
+- Implements local port forwarding
+- Implements remote port forwarding
+- Implements SFTP client
+- More supported algorithms
+- Added `dartsftp` command
+
 ## 1.2.0-pre
 
 - Rework login logic.
