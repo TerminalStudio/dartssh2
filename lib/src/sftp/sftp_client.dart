@@ -158,12 +158,6 @@ class SftpClient {
     _done.completeError(error, stackTrace);
   }
 
-  void _mustBeReady() {
-    if (!_ready.isCompleted) {
-      throw SftpError('Connection not ready');
-    }
-  }
-
   void _startHandshake() {
     _sendPacket(SftpInitPacket(_kVersion));
   }
@@ -205,12 +199,14 @@ class SftpClient {
     SftpFileOpenMode mode,
     SftpFileAttrs attrs,
   ) async {
+    await _ready.future;
     final request = SftpOpenPacket(_requestId.next, path, mode.flag, attrs);
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
 
   Future<SftpResponsePacket> _sendClose(Uint8List handle) async {
+    await _ready.future;
     final request = SftpClosePacket(_requestId.next, handle);
     _sendPacket(request);
     return await _waitReply(request.requestId);
@@ -221,6 +217,7 @@ class SftpClient {
     int offset,
     int length,
   ) async {
+    await _ready.future;
     final request = SftpReadPacket(
       requestId: _requestId.next,
       handle: handle,
@@ -236,6 +233,7 @@ class SftpClient {
     int offset,
     Uint8List data,
   ) async {
+    await _ready.future;
     final request = SftpWritePacket(
       requestId: _requestId.next,
       handle: handle,
@@ -247,12 +245,14 @@ class SftpClient {
   }
 
   Future<SftpResponsePacket> _sendLStat(String path) async {
+    await _ready.future;
     final request = SftpLStatPacket(_requestId.next, path);
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
 
   Future<SftpResponsePacket> _sendFStat(Uint8List handle) async {
+    await _ready.future;
     final request = SftpFStatPacket(_requestId.next, handle);
     _sendPacket(request);
     return await _waitReply(request.requestId);
@@ -262,6 +262,7 @@ class SftpClient {
     String path,
     SftpFileAttrs attrs,
   ) async {
+    await _ready.future;
     final request = SftpSetStatPacket(_requestId.next, path, attrs);
     _sendPacket(request);
     return await _waitReply(request.requestId);
@@ -271,24 +272,28 @@ class SftpClient {
     Uint8List handle,
     SftpFileAttrs attrs,
   ) async {
+    await _ready.future;
     final request = SftpFSetStatPacket(_requestId.next, handle, attrs);
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
 
   Future<SftpResponsePacket> _sendOpenDir(String path) async {
+    await _ready.future;
     final request = SftpOpenDirPacket(_requestId.next, path);
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
 
   Future<SftpResponsePacket> _sendReadDir(Uint8List handle) async {
+    await _ready.future;
     final request = SftpReadDirPacket(_requestId.next, handle);
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
 
   Future<SftpResponsePacket> _sendRemove(String filename) async {
+    await _ready.future;
     final request = SftpRemovePacket(_requestId.next, filename);
     _sendPacket(request);
     return await _waitReply(request.requestId);
@@ -298,24 +303,28 @@ class SftpClient {
     String path,
     SftpFileAttrs attrs,
   ) async {
+    await _ready.future;
     final request = SftpMkdirPacket(_requestId.next, path, attrs);
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
 
   Future<SftpResponsePacket> _sendRemoveDir(String path) async {
+    await _ready.future;
     final request = SftpRmdirPacket(_requestId.next, path);
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
 
   Future<SftpResponsePacket> _sendRealPath(String path) async {
+    await _ready.future;
     final request = SftpRealpathPacket(_requestId.next, path);
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
 
   Future<SftpResponsePacket> _sendStat(String path) async {
+    await _ready.future;
     final request = SftpStatPacket(_requestId.next, path);
     _sendPacket(request);
     return await _waitReply(request.requestId);
@@ -325,12 +334,14 @@ class SftpClient {
     String oldPath,
     String newPath,
   ) async {
+    await _ready.future;
     final request = SftpRenamePacket(_requestId.next, oldPath, newPath);
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
 
   Future<SftpResponsePacket> _sendReadLink(String path) async {
+    await _ready.future;
     final request = SftpReadlinkPacket(_requestId.next, path);
     _sendPacket(request);
     return await _waitReply(request.requestId);
@@ -340,6 +351,7 @@ class SftpClient {
     String linkPath,
     String targetPath,
   ) async {
+    await _ready.future;
     final request = SftpSymlinkPacket(_requestId.next, linkPath, targetPath);
     _sendPacket(request);
     return await _waitReply(request.requestId);
