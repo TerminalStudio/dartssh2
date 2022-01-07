@@ -1,6 +1,6 @@
 name: dartssh2
 version: 1.2.0-pre
-description: A pure dart SSH implementation based on dartssh with bug fixes, up-to-date dependencies and sound null safety.
+description: A SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as easy to use.
 # author is a deprecated pubspec field.
 # author: Green Appers, Inc. <greenappers@gmail.com>
 homepage: https://github.com/TerminalStudio/dartssh2
@@ -10,6 +10,7 @@ environment:
 
 executables:
   dartssh:
+  dartsftp:
 
 dependencies:
   asn1lib: ^1.0.0
@@ -20,7 +21,7 @@ dependencies:
   validators: ^3.0.0
   pinenacl: ^0.3.3
 
-  # for `dartssh` command
+  # for `dartssh` and `dartsftp` command
   args: ^2.0.0
   dart_console: ^1.0.0
 

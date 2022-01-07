@@ -1,24 +1,39 @@
-# DartSSH 2
+<!-- Title-->
+<p align="center">
+  <h1 align="center">DartSSH 2</h1>
+</p>
 
-[![pub package](https://img.shields.io/pub/v/dartssh2.svg)](https://pub.dartlang.org/packages/dartssh2) [![Build status](https://github.com/TerminalStudio/dartssh2/actions/workflows/dart.yml/badge.svg)](https://github.com/TerminalStudio/dartssh2/actions/workflows/dart.yml) [![Coverage Status](https://coveralls.io/repos/github/GreenAppers/dartssh/badge.svg?branch=master)](https://coveralls.io/github/GreenAppers/dartssh?branch=master) [![documentation](https://img.shields.io/badge/Documentation-dartssh2-blue.svg)](https://www.dartdocs.org/documentation/dartssh2/latest/)
+<!-- Badges-->
+<p align="center">
+  <a href="https://pub.dartlang.org/packages/dartssh2">
+    <img src="https://img.shields.io/pub/v/dartssh2.svg">
+  </a>
+  <a href="https://github.com/TerminalStudio/dartssh2/actions/workflows/dart.yml">
+    <img src="https://github.com/TerminalStudio/dartssh2/actions/workflows/dart.yml/badge.svg">
+  </a>
+  <a href="https://www.dartdocs.org/documentation/dartssh2/latest/">
+    <img src="https://img.shields.io/badge/Docs-dartssh2-blue.svg">
+  </a>
+  <a href="https://ko-fi.com/F1F61K6BL">
+    <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-F16061?style=flat&logo=buy-me-a-coffee&logoColor=white&labelColor=555555">
+  </a>
+</p>
 
-`dartssh2`  is a pure dart SSH implementation based on [dartssh], with bug fixes, up-to-date dependencies and sound null safety.
+<p align="center">
+A SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as easy to use.
+</p>
 
-`dartssh2` providing first-class tunnelling primitives.
+> **dartssh2** is now a complete rewrite of [dartssh].
 
-## Feature support
+## ✨ Features
 
-|                            |                                 |
-|----------------------------|---------------------------------|
-| **Keys**                   | Ed25519, ECDSA, RSA             |
-| **KEX**                    | X25519DH, ECDH, DHGEX, DH       |
-| **Cipher**                 | AES-CTR, AES-CBC                |
-| **MAC**                    | MD5, SHA                        |
-| **Compression**            | not yet supported               |
-| **Forwarding**             | TCP/IP, Agent                   |
-| **Tunneling drop-ins** for | Socket, WebSocket, package:http |
+-  **Pure Dart**: Working with both Dart VM and Flutter.
+-  **SSH Session**: Executing commands, spawning shells, setting environment variables, pseudo terminals, etc.
+-  **Authentication**: Supports password, private key and interactive authentication method.
+-  **Forwarding**: Supports local forwarding and remote forwarding.
+-  **SFTP**: Supports all operations defined in [SFTPv3 protocol](https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02) including upload, download, list, link, remove, rename, etc.
 
-## Try
+## 🧪 Try
 
 ```sh
 # Install the `dartssh` command.
@@ -26,72 +41,99 @@ dart pub global activate dartssh2
 
 # Then use `dartssh` as regular `ssh` command.
 dartssh user@example.com
+
+# Example: execute a command on remote host.
+dartssh user@example.com ls -al
+
+# Example: connect to a non-standard port.
+dartssh user@example.com:<port>
+
+# Transfer files via SFTP.
+dartsftp user@example.com
 ```
 
-> If the `dartssh` command can not be found after installation, you might need to [set up your path](https://dart.dev/tools/pub/cmd/pub-global#running-a-script-from-your-path).
+> If the `dartssh` command can't be found after installation, you might need to [set up your path](https://dart.dev/tools/pub/cmd/pub-global#running-a-script-from-your-path).
 
-## Quick start - SSH client
+## 🚀 Quick start 
 
-<!-- CLIENT EXAMPLE BEGIN -->
-<details >
-<summary>
-<sub><b>Click to see more:</b></sub>
+### Execute a command on remote host
+
 
 ```dart
+import 'dart:convert';
 import 'package:dartssh2/dartssh2.dart';
+
+void main(List<String> args) async {
+  final socket = await SSHSocket.connect('localhost', 22);
+
+  final client = SSHClient(
+    socket,
+    username: '<username>',
+    onPasswordRequest: () => '<password>',
+  );
+
+  final uptime = await client.run('uptime');
+  print(utf8.decode(uptime));
+
+  client.close();
+  await client.done;
+}
 ```
-</summary>
-<!-- <hr> -->
-<h6>TODO</h6>
-
- ```html
-TODO
-```
-</details>
-<!-- CLIENT EXAMPLE END -->
-
-## Quick start - SSH server
-
-<!-- SERVER EXAMPLE BEGIN -->
-<details >
-<summary>
-<sub><b>Click to see more:</b></sub>
-
-```dart
-import 'package:dartssh2/dartssh2.dart';
-```
-</summary>
-<!-- <hr> -->
-<h6>TODO</h6>
-
- ```html
-TODO
-```
-</details>
-<!-- SERVER EXAMPLE END -->
 
 
-## Example
+## 🪜 Example
 
 SSH client: [example/dartssh.dart](example/dartssh.dart)
 
-SSH server: [example/dartsshs.dart](example/dartsshs.dart)
+## 🔐 Supported algorithms
 
-## Roadmap
+**Host key**: 
+- `ssh-rsa`
+- `rsa-sha2-[256|512]`
+- `ecdsa-sha2-nistp[256|384|521]`
+- `ssh-ed25519`
+
+**Key exchange**: 
+- `curve25519-sha256`
+- `ecdh-sha2-nistp[256|384|521] `
+- `diffie-hellman-group-exchange-sha[1|256]`
+- `diffie-hellman-group14-sha[1|256]`
+- `diffie-hellman-group1-sha1 `
+  
+**Cipher**: 
+- `aes[128|192|256]-ctr`
+- `aes[128|192|256]-cbc`
+
+**Integrity**: 
+- `hmac-md5`
+- `hmac-sha1`
+- `hmac-sha2-[256|512]`
+  
+## ⏳ Roadmap
 
 - [x] Fix broken tests
 - [x] Sound null safety
-- [ ] Redesign API to allow starting multiple sessions. **In progress...**
-- [ ] SFTP
+- [x] Redesign API to allow starting multiple sessions.
+- [x] Full SFTP
+- [ ] Server
 
 ## References
 
+- [`RFC 4250`](https://datatracker.ietf.org/doc/html/rfc4250) The Secure Shell (SSH) Protocol Assigned Numbers
 - [`RFC 4251`](https://datatracker.ietf.org/doc/html/rfc4251) The Secure Shell (SSH) Protocol Architecture
 - [`RFC 4252`](https://datatracker.ietf.org/doc/html/rfc4252) The Secure Shell (SSH) Authentication Protocol
 - [`RFC 4253`](https://datatracker.ietf.org/doc/html/rfc4253) The Secure Shell (SSH) Transport Layer Protocol
 - [`RFC 4254`](https://datatracker.ietf.org/doc/html/rfc4254) The Secure Shell (SSH) Connection Protocol
 - [`RFC 4255`](https://datatracker.ietf.org/doc/html/rfc4255) Using DNS to Securely Publish Secure Shell (SSH) Key Fingerprints
 - [`RFC 4256`](https://datatracker.ietf.org/doc/html/rfc4256) Generic Message Exchange Authentication for the Secure Shell Protocol (SSH)
+- [`RFC 4419`](https://datatracker.ietf.org/doc/html/rfc4419) Diffie-Hellman Group Exchange for the Secure Shell (SSH) Transport Layer Protocol
+- [`RFC 4716`](https://datatracker.ietf.org/doc/html/rfc4716) The Secure Shell (SSH) Public Key File Format
+- [`RFC 5656`](https://datatracker.ietf.org/doc/html/rfc5656) Elliptic Curve Algorithm Integration in the Secure Shell Transport Layer
+- [`RFC 8332`](https://datatracker.ietf.org/doc/html/rfc8332) Use of RSA Keys with SHA-256 and SHA-512 in the Secure Shell (SSH) Protocol
+- [`RFC 8731`](https://datatracker.ietf.org/doc/html/rfc8731) Secure Shell (SSH) Key Exchange Method Using Curve25519 and Curve448
+- [`draft-miller-ssh-agent-03`](https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent-03) SSH Agent Protocol
+- [`draft-ietf-secsh-filexfer-02`](https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02) SSH File Transfer Protocol
+- [`draft-dbider-sha2-mac-for-ssh-06`](https://datatracker.ietf.org/doc/html/draft-dbider-sha2-mac-for-ssh-06) SHA-2 Data Integrity Verification for the Secure Shell (SSH) Transport Layer Protocol
 
 ## Credits
 
