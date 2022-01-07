@@ -5,119 +5,99 @@ import 'dart:typed_data';
 import 'package:dart_console/dart_console.dart';
 import 'package:dartssh2/dartssh2.dart';
 
-import 'src/ssh_args.dart';
+import 'src/ssh_opts.dart';
+import 'src/ssh_shared.dart';
 import 'src/utils.dart';
 
-void main(List<String> arguments) {
-  SSHCommand.start(arguments);
-}
+final console = Console();
 
-class SSHCommand {
-  final console = Console();
+void main(List<String> arguments) async {
+  final opts = DartSSH.parseArgs(arguments);
+  final client = await startClientWithOpts(opts);
 
-  final SSHCommandArgs args;
-
-  SSHCommand.start(List<String> arguments) : args = mustParseArgs(arguments) {
-    // TODO: This is temp fix!!!!!
-    _client = startSSH(Uri.base);
-    _remoteStdout.stream.listen(stdout.add);
-    stdin.cast<Uint8List>().listen(_client.sendChannelData);
-
-    if (!Platform.isWindows) {
-      _winchSignalSubscription = ProcessSignal.sigwinch.watch().listen((_) {
-        onLocalTerminalSizeChange();
-      });
-    }
+  if (opts.forwardLocal != null) {
+    forwardLocal(client, opts.forwardLocal!);
   }
 
-  final _remoteStdout = StreamController<List<int>>();
-
-  late SSHClient _client;
-
-  StreamSubscription<ProcessSignal>? _winchSignalSubscription;
-
-  SSHClient startSSH(Uri url, {String? password, bool verbose = false}) {
-    return SSHClient(
-      hostname: url,
-      username: url.userInfo,
-      // password: password,
-      print: verbose ? print : null,
-      debugPrint: verbose ? print : null,
-      tracePrint: verbose ? print : null,
-      response: onResponse,
-      termvar: Platform.environment['TERM'] ?? 'xterm',
-      success: onSuccess,
-      loadIdentity: loadIdentity,
-      onPasswordRequest: onPasswordRequest,
-      onUserauthRequest: onUserauthRequest,
-      disconnected: onDisconnect,
-    );
+  if (opts.forwardRemote != null) {
+    forwardRemote(client, opts.forwardRemote!);
   }
 
-  SSHIdentity? loadIdentity() {
-    final home = Platform.environment['HOME'];
-    final keyFile = File('$home/.ssh/id_rsa');
-
-    if (keyFile.existsSync()) {
-      return SSHIdentity.fromPem(keyFile.readAsStringSync());
-    }
+  if (opts.doNotExecute) {
+    return;
   }
 
-  String onPasswordRequest() {
-    final url = '${args.user}@${args.host}';
-    final password = readline("$url's password: ", echo: false);
-    if (password == null) {
-      quit('No password provided.', exitCode: 1);
-    }
-    return password;
-  }
-
-  List<String> onUserauthRequest(SSHUserauthRequest request) {
-    if (request.name != null && request.name!.isNotEmpty) {
-      print(request.name);
-    }
-    if (request.instruction != null && request.instruction!.isNotEmpty) {
-      print(request.instruction);
-    }
-    final responses = <String>[];
-    for (var prompt in request.prompts) {
-      final password = readline(prompt.prompt, echo: prompt.echo);
-      if (password == null) {
-        quit('No ${prompt.prompt} provided.', exitCode: 1);
-      }
-      responses.add(password);
-    }
-    return responses;
-  }
-
-  void onSuccess() {
-    // console.clearScreen();
-    // console.resetCursorPosition();
-    console.rawMode = true;
-    _client.setTerminalWindowSize(console.windowWidth, console.windowHeight);
-  }
-
-  void onResponse(Uint8List data) {
-    stdout.add(data);
-  }
-
-  Future<void> onDisconnect() async {
-    _winchSignalSubscription?.cancel();
-    await _remoteStdout.close();
-    console.rawMode = false;
-    print('Disconnected.');
-    exit(0);
-  }
-
-  void onLocalTerminalSizeChange() {
-    _client.setTerminalWindowSize(
-      console.windowWidth,
-      console.windowHeight,
-    );
+  if (opts.command == null) {
+    await startShell(client);
+  } else {
+    await startCommand(client, opts.command!);
   }
 }
 
-Never printUsageAndExit([int exitCode = 0]) {
-  print(getUsage());
-  exit(exitCode);
+Future<void> forwardLocal(SSHClient client, SSHForwardConfig config) async {
+  final socket = await ServerSocket.bind(
+    config.sourceHost ?? 'localhost',
+    config.sourcePort,
+  );
+
+  final source = '${socket.address.address}:${socket.port}';
+  final destination = '${config.destinationHost}:${config.destinationPort}';
+  print('Forwarding (local)$source to (remote)$destination');
+
+  await for (final connection in socket) {
+    final forward = await client.forwardLocal(
+      connection.address.address,
+      connection.port,
+      config.destinationHost,
+      config.destinationPort,
+    );
+    connection.pipe(forward.sink);
+    forward.stream.cast<List<int>>().pipe(connection);
+    connection.done.then((_) => forward.close());
+  }
+}
+
+Future<void> forwardRemote(SSHClient client, SSHForwardConfig config) async {
+  print('forwardRemote: $config');
+  client.forwardRemote(config.sourcePort, config.sourceHost);
+}
+
+Future<void> startShell(SSHClient client) async {
+  final session = await client.shell();
+  final stdoutDone = stdout.addStream(session.stdout);
+  final stderrDone = stderr.addStream(session.stderr);
+
+  console.rawMode = true;
+  stdin.cast<Uint8List>().listen(session.write);
+
+  void sendTerminalSize() {
+    session.resizeTerminal(console.windowWidth, console.windowHeight);
+  }
+
+  sendTerminalSize();
+  final resizeNotifier = TerminalResizeNotifier();
+  resizeNotifier.addListener(sendTerminalSize);
+
+  await session.done;
+  await stdoutDone;
+  await stderrDone;
+
+  console.rawMode = false;
+  resizeNotifier.dispose();
+  client.close();
+  exit(session.exitCode ?? 0);
+}
+
+Future<void> startCommand(SSHClient client, List<String> command) async {
+  final session = await client.execute(command.join(' '));
+  final stdoutDone = stdout.addStream(session.stdout);
+  final stderrDone = stderr.addStream(session.stderr);
+  stdin.cast<Uint8List>().listen(session.write);
+
+  await session.done;
+  await stdoutDone;
+  await stderrDone;
+
+  client.close();
+  exit(session.exitCode ?? 0);
 }
