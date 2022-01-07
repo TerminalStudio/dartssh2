@@ -168,6 +168,77 @@ void main(List<String> args) async {
 }
 ```
 
+### Authenticate with public keys
+
+```dart
+final client = SSHClient(
+  socket,
+  username: '<username>',
+  identities: [
+    // A single private key file may contain multiple keys.
+    ...SSHKeyPair.fromPem(await File('path/to/id_rsa').readAsString())
+  ],
+);
+```
+
+## SFTP
+
+### List remote directory
+
+```dart
+import 'package:dartssh2/dartssh2.dart';
+
+void main(List<String> args) async {
+  final socket = await SSHSocket.connect('localhost', 22);
+
+  final client = SSHClient(
+    socket,
+    username: 'root',
+    username: '<username>',
+    onPasswordRequest: () => '<password>',
+  );
+
+  final sftp = await client.sftp();
+  final items = await sftp.listdir('/');
+  for (final item in items) {
+    print(item.longname);
+  }
+
+  client.close();
+  await client.done;
+}
+```
+
+### Read remote file
+
+```dart
+final sftp = await client.sftp();
+final file = await sftp.open('/etc/passwd');
+final content = await file.readBytes();
+print(latin1.decode(content));
+```
+
+### Directory operations
+```dart
+final sftp = await client.sftp();
+await sftp.mkdir('/path/to/dir');
+await sftp.rmdir('/path/to/dir');
+```
+### Get/Set attributes from/to remote file/directory
+```dart
+await sftp.stat('/path/to/file');
+await sftp.setStat(
+  '/path/to/file',
+  SftpFileAttrs(mode: SftpFileMode(userRead: true)),
+);
+```
+
+### Create a link
+```dart
+final sftp = await client.sftp();
+sftp.link('/from', '/to');
+```
+
 ## 🪜 Example
 
 ### SSH client:
@@ -175,7 +246,14 @@ void main(List<String> args) async {
 - [example/example.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/example.dart)
 - [example/forward_local.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/forward_local.dart)
 - [example/forward_remote.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/forward_remote.dart)
+- [example/pubkey.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/pubkey.dart)
 - [example/shell.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/shell.dart)
+
+### SFTP:
+- [example/sftp_read.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/sftp_read.dart)
+- [example/sftp_list.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/sftp_list.dart)
+- [example/sftp_stat.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/sftp_stat.dart)
+
 
 
 ## 🔐 Supported algorithms

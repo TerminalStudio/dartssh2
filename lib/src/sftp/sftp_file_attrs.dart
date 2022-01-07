@@ -15,7 +15,31 @@ extension _IntFlag on int {
 }
 
 class SftpFileMode {
-  const SftpFileMode(this.value);
+  factory SftpFileMode({
+    bool userRead = true,
+    bool userWrite = true,
+    bool userExecute = true,
+    bool groupRead = true,
+    bool groupWrite = true,
+    bool groupExecute = true,
+    bool otherRead = true,
+    bool otherWrite = true,
+    bool otherExecute = true,
+  }) {
+    var flags = 0;
+    if (userRead) flags |= 0x4 << 6;
+    if (userWrite) flags |= 0x2 << 6;
+    if (userExecute) flags |= 0x1 << 6;
+    if (groupRead) flags |= 0x4 << 3;
+    if (groupWrite) flags |= 0x2 << 3;
+    if (groupExecute) flags |= 0x1 << 3;
+    if (otherRead) flags |= 0x4;
+    if (otherWrite) flags |= 0x2;
+    if (otherExecute) flags |= 0x1;
+    return SftpFileMode.value(flags);
+  }
+
+  const SftpFileMode.value(this.value);
 
   final int value;
 
@@ -101,7 +125,7 @@ class SftpFileAttrs {
       size: size,
       userID: uid,
       groupID: gid,
-      mode: perms != null ? SftpFileMode(perms) : null,
+      mode: perms != null ? SftpFileMode.value(perms) : null,
       accessTime: atime,
       modifyTime: mtime,
       extended: extended,
