@@ -56,6 +56,34 @@ dartsftp user@example.com
 
 ## 🚀 Quick start 
 
+### Spawn a shell on remote host
+
+```dart
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:dartssh2/dartssh2.dart';
+
+void main(List<String> args) async {
+  final socket = await SSHSocket.connect('localhost', 22);
+
+  final client = SSHClient(
+    socket,
+    username: '<username>',
+    onPasswordRequest: () => '<password>',
+  );
+
+  final shell = await client.shell();
+  stdout.addStream(shell.stdout);
+  stderr.addStream(shell.stderr);
+  stdin.cast<Uint8List>().listen(shell.write);
+
+  await shell.done;
+  client.close();
+}
+
+```
+
 ### Execute a command on remote host
 
 
@@ -76,14 +104,79 @@ void main(List<String> args) async {
   print(utf8.decode(uptime));
 
   client.close();
-  await client.done;
 }
 ```
 
+### Forward connections on local port 8080 to the server
+
+```dart
+import 'dart:io';
+
+import 'package:dartssh2/dartssh2.dart';
+
+void main(List<String> args) async {
+  final socket = await SSHSocket.connect('localhost', 22);
+
+  final client = SSHClient(
+    socket,
+    username: '<username>',
+    onPasswordRequest: () => '<password>',
+  );
+
+  final serverSocket = await ServerSocket.bind('localhost', 8080);
+
+  await for (final socket in serverSocket) {
+    final forward = await client.forwardLocal('httpbin.org', 80);
+    forward.stream.cast<List<int>>().pipe(socket);
+    socket.pipe(forward.sink);
+  }
+
+  client.close();
+}
+```
+
+### Forward connections to port 2222 on the server to local port 22
+
+```dart
+import 'dart:io';
+
+import 'package:dartssh2/dartssh2.dart';
+
+void main(List<String> args) async {
+  final socket = await SSHSocket.connect('localhost', 22);
+
+  final client = SSHClient(
+    socket,
+    username: '<username>',
+    onPasswordRequest: () => '<password>',
+  );
+
+  final forward = await client.forwardRemote(port: 2222);
+
+  if (forward == null) {
+    print('Failed to forward remote port');
+    exit(1);
+  }
+
+  await for (final connection in forward.connections) {
+    final socket = await Socket.connect('localhost', 22);
+    connection.stream.cast<List<int>>().pipe(socket);
+    socket.pipe(connection.sink);
+  }
+
+  client.close();
+}
+```
 
 ## 🪜 Example
 
-SSH client: [example/dartssh.dart](example/dartssh.dart)
+### SSH client:
+
+- [example/example.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/example.dart)
+- [example/forward_local.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/forward_local.dart)
+- [example/forward_remote.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/forward_remote.dart)
+- [example/shell.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/shell.dart)
+
 
 ## 🔐 Supported algorithms
 

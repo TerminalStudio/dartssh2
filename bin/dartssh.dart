@@ -46,10 +46,10 @@ Future<void> forwardLocal(SSHClient client, SSHForwardConfig config) async {
 
   await for (final connection in socket) {
     final forward = await client.forwardLocal(
-      connection.address.address,
-      connection.port,
       config.destinationHost,
       config.destinationPort,
+      localHost: connection.address.address,
+      localPort: connection.port,
     );
     connection.pipe(forward.sink);
     forward.stream.cast<List<int>>().pipe(connection);

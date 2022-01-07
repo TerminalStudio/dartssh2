@@ -191,6 +191,10 @@ class SSHClient {
 
   SSHAuthMethod? _currentAuthMethod;
 
+  /// A [Future] that completes when the client has authenticated, or
+  /// completes with an error if the client could not authenticate.
+  Future<void> get authenticated => _authenticated.future;
+
   /// Request connections to a port on the other side be forwarded to the local
   /// side.
   /// Set [host] to null to listen on all interfaces, `"0.0.0.0"` to
@@ -251,16 +255,19 @@ class SSHClient {
     return true;
   }
 
+  /// Forward connections to a [localHost]:[localPort] to [remoteHost]:[remotePort]
+  /// [localHost] and [localPort] are only required by the protocol and do not
+  /// need to be specified in most cases.
   Future<SSHForwardChannel> forwardLocal(
-    String bindAddress,
-    int bindPort,
     String remoteHost,
-    int remotePort,
-  ) async {
+    int remotePort, {
+    String localHost = 'localhost',
+    int localPort = 0,
+  }) async {
     await _authenticated.future;
     final channelController = await _openForwardLocalChannel(
-      bindAddress,
-      bindPort,
+      localHost,
+      localPort,
       remoteHost,
       remotePort,
     );
