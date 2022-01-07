@@ -58,8 +58,29 @@ Future<void> forwardLocal(SSHClient client, SSHForwardConfig config) async {
 }
 
 Future<void> forwardRemote(SSHClient client, SSHForwardConfig config) async {
-  print('forwardRemote: $config');
-  client.forwardRemote(config.sourcePort, config.sourceHost);
+  final forward = await client.forwardRemote(
+    host: config.sourceHost,
+    port: config.sourcePort,
+  );
+
+  if (forward == null) {
+    print('Failed to forward remote port ${config.sourcePort}');
+    return;
+  }
+
+  final source = '${forward.host}:${forward.port}';
+  final destination = '${config.destinationHost}:${config.destinationPort}';
+  print('Forwarding (remote)$source to (local)$destination');
+
+  await for (final connection in forward.connections) {
+    final socket = await Socket.connect(
+      config.destinationHost,
+      config.destinationPort,
+    );
+    connection.stream.cast<List<int>>().pipe(socket);
+    socket.pipe(connection.sink);
+    socket.done.then((_) => connection.close());
+  }
 }
 
 Future<void> startShell(SSHClient client) async {

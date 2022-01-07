@@ -35,6 +35,8 @@ typedef SSHUserauthBannerHandler = void Function(String banner);
 
 typedef SSHAuthenticatedHandler = void Function();
 
+typedef SSHRemoteConnectionFilter = bool Function(String host, int port);
+
 // /// Function called when the host has sent additional host keys after the initial
 // /// key exchange.
 // typedef SSHHostKeysHandler = void Function(List<Uint8List>);
@@ -185,51 +187,67 @@ class SSHClient {
 
   final _keyPairsLeft = Queue<SSHKeyPair>();
 
+  final _remoteForwards = <SSHRemoteForward>{};
+
   SSHAuthMethod? _currentAuthMethod;
 
   /// Request connections to a port on the other side be forwarded to the local
-  /// side. Returns a [Future] that completes with the port number allocated on
-  /// the remote side.
-  /// The returned port number is the same as [port] if [port] is
-  /// not 0, otherwise, it is a random port number allocated on the remote side.
-  /// If the request failed [null] is returned.
-  /// Pass `""` as [address] to listen on all interfaces, `"0.0.0.0"` to
+  /// side.
+  /// Set [host] to null to listen on all interfaces, `"0.0.0.0"` to
   /// listen on all IPv4 interfaces, `"::"` to listen on all IPv6 interfaces,
   /// and `"localhost"` to listen on the loopback interface on all protocols.
-  /// To cancel the request, call [cancelForwardRemote].
-  Future<int?> forwardRemote([int port = 0, String? address]) async {
+  /// Set [port] to null to listen on a random port.
+  Future<SSHRemoteForward?> forwardRemote({
+    String? host,
+    int? port,
+    SSHRemoteConnectionFilter? filter,
+  }) async {
     await _authenticated.future;
-    _sendMessage(
-      SSH_Message_Global_Request.tcpipForward(address ?? "", port),
-    );
+
+    // Lisning on all interfaces if not specified.
+    host ??= '';
+
+    // Lisning on a random port if not specified.
+    port ??= 0;
+
+    _sendMessage(SSH_Message_Global_Request.tcpipForward(host, port));
     final reply = await _globalRequestReplyQueue.next;
-    if (reply is SSH_Message_Request_Failure) {
-      return null;
+
+    if (reply is SSH_Message_Request_Failure) return null;
+
+    if (reply is! SSH_Message_Request_Success) {
+      throw SSHStateError('Unexpected reply to tcpip-forward request: $reply');
     }
-    if (port != 0) {
-      return port;
-    }
-    if (reply is SSH_Message_Request_Success) {
-      final reader = SSHMessageReader(reply.requestData);
-      return reader.readUint32();
-    }
+
+    final reader = SSHMessageReader(reply.requestData);
+    final assignedPort = port != 0 ? port : reader.readUint32();
+
+    final remoteForward = SSHRemoteForward(this, host, assignedPort, filter);
+    _remoteForwards.add(remoteForward);
+
+    return remoteForward;
   }
 
   /// Cancel a previous request to forward connections to a port on the other
   /// side. Returns [true] if successful, [false] otherwise.
   /// See also: [forwardRemote].
-  Future<bool> cancelForwardRemote([int port = 0, String? address]) async {
+  Future<bool> cancelForwardRemote(SSHRemoteForward forward) async {
     await _authenticated.future;
+
+    if (!_remoteForwards.remove(forward)) return false;
+
     _sendMessage(
       SSH_Message_Global_Request.cancelTcpipForward(
-        bindAddress: address ?? "",
-        bindPort: port,
+        bindAddress: forward.host,
+        bindPort: forward.port,
       ),
     );
+
     final reply = await _globalRequestReplyQueue.next;
     if (reply is SSH_Message_Request_Failure) {
       return false;
     }
+
     return true;
   }
 
@@ -593,6 +611,32 @@ class SSHClient {
   void _handleForwardedTcpipChannelOpen(SSH_Message_Channel_Open message) {
     printDebug?.call('SSHClient._handleTcpipForwardChannelOpen');
 
+    final remoteForward = _findRemoteForward(message.host!, message.port!);
+
+    if (remoteForward == null) {
+      printDebug?.call('unknown remote forward: $message');
+      final reply = SSH_Message_Channel_Open_Failure(
+        recipientChannel: message.senderChannel,
+        reasonCode: SSH_Message_Channel_Open_Failure.codeUnknownChannelType,
+        description: 'unknown remote forward: $message',
+      );
+      _sendMessage(reply);
+      return;
+    }
+
+    if (remoteForward.filter != null) {
+      if (!remoteForward.filter!(message.host!, message.port!)) {
+        printDebug?.call('remote forward rejected by filter: $message');
+        final reply = SSH_Message_Channel_Open_Failure(
+          recipientChannel: message.senderChannel,
+          reasonCode: 1, // SSH_OPEN_ADMINISTRATIVELY_PROHIBITED
+          description: 'rejected by filter',
+        );
+        _sendMessage(reply);
+        return;
+      }
+    }
+
     final localChannelId = _channelIdAllocator.allocate();
 
     final confirmation = SSH_Message_Channel_Confirmation(
@@ -605,19 +649,24 @@ class SSHClient {
 
     _sendMessage(confirmation);
 
-    print(message.host);
-    print(message.port);
-    print(message.originatorIP);
-    print(message.originatorPort);
-
-    final channel = _acceptChannel(
+    final channelController = _acceptChannel(
       localChannelId: localChannelId,
       remoteChannelId: message.senderChannel,
       remoteInitialWindowSize: message.initialWindowSize,
       remoteMaximumPacketSize: message.maximumPacketSize,
     );
 
-    // throw UnimplementedError();
+    remoteForward._connections.add(
+      SSHForwardChannel(channelController.channel),
+    );
+  }
+
+  /// Finds a remote forward that matches the given host and port.
+  SSHRemoteForward? _findRemoteForward(String host, int port) {
+    final result = _remoteForwards.where(
+      (forward) => forward.host == host && forward.port == port,
+    );
+    return result.isEmpty ? null : result.first;
   }
 
   void _handleChannelConfirmation(Uint8List payload) {
@@ -885,4 +934,28 @@ class SSHClient {
     final replyCompleter = _channelOpenReplyWaiters.remove(id)!;
     replyCompleter.complete(message);
   }
+}
+
+class SSHRemoteForward {
+  final String host;
+
+  final int port;
+
+  final SSHRemoteConnectionFilter? filter;
+
+  SSHRemoteForward(this._client, this.host, this.port, this.filter);
+
+  final SSHClient _client;
+
+  final _connections = StreamController<SSHForwardChannel>();
+
+  Stream<SSHForwardChannel> get connections => _connections.stream;
+
+  void close() {
+    _connections.close();
+    _client.cancelForwardRemote(this);
+  }
+
+  @override
+  String toString() => '$runtimeType($host:$port)';
 }
