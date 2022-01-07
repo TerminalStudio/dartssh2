@@ -11,17 +11,7 @@ import 'package:dartssh2/src/ssh_message.dart';
 import 'package:dartssh2/src/ssh_pem.dart';
 import 'package:dartssh2/src/utils/list.dart';
 import 'package:pinenacl/ed25519.dart' as ed25519;
-import 'package:pointycastle/digests/sha1.dart';
-import 'package:pointycastle/digests/sha256.dart';
-import 'package:pointycastle/digests/sha384.dart';
-import 'package:pointycastle/digests/sha512.dart';
-import 'package:pointycastle/ecc/curves/secp256r1.dart';
-import 'package:pointycastle/ecc/curves/secp384r1.dart';
-import 'package:pointycastle/ecc/curves/secp521r1.dart';
 import 'package:pointycastle/export.dart';
-import 'package:pointycastle/random/fortuna_random.dart';
-import 'package:pointycastle/signers/ecdsa_signer.dart';
-import 'package:pointycastle/signers/rsa_signer.dart';
 
 abstract class SSHKeyPair {
   static List<SSHKeyPair> fromPem(String pemText, [Uint8List? passphrase]) {

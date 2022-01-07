@@ -809,6 +809,13 @@ class SSHTransport {
     _sharedSecret = sharedSecret;
 
     final fingerprint = MD5Digest().process(hostkey);
+
+    if (_hostkeyVerified) {
+      _sendNewKeys();
+      _applyLocalKeys();
+      return;
+    }
+
     final userVerified = onVerifyHostKey != null
         ? onVerifyHostKey!(_hostkeyType!.name, fingerprint)
         : true;
