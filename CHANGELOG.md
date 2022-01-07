@@ -1,4 +1,4 @@
-## 2.0.0
+## 2.0.0-pre
 - Implements local port forwarding
 - Implements remote port forwarding
 - Implements SFTP client
