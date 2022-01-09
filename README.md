@@ -59,112 +59,56 @@ dartsftp user@example.com
 ### Spawn a shell on remote host
 
 ```dart
-import 'dart:io';
-import 'dart:typed_data';
+final socket = await SSHSocket.connect('localhost', 22);
 
-import 'package:dartssh2/dartssh2.dart';
+final client = SSHClient(
+  socket,
+  username: '<username>',
+  onPasswordRequest: () => '<password>',
+);
 
-void main(List<String> args) async {
-  final socket = await SSHSocket.connect('localhost', 22);
+final shell = await client.shell();
+stdout.addStream(shell.stdout);
+stderr.addStream(shell.stderr);
+stdin.cast<Uint8List>().listen(shell.write);
 
-  final client = SSHClient(
-    socket,
-    username: '<username>',
-    onPasswordRequest: () => '<password>',
-  );
-
-  final shell = await client.shell();
-  stdout.addStream(shell.stdout);
-  stderr.addStream(shell.stderr);
-  stdin.cast<Uint8List>().listen(shell.write);
-
-  await shell.done;
-  client.close();
-}
-
+await shell.done;
+client.close();
 ```
 
 ### Execute a command on remote host
 
 
 ```dart
-import 'dart:convert';
-import 'package:dartssh2/dartssh2.dart';
-
-void main(List<String> args) async {
-  final socket = await SSHSocket.connect('localhost', 22);
-
-  final client = SSHClient(
-    socket,
-    username: '<username>',
-    onPasswordRequest: () => '<password>',
-  );
-
-  final uptime = await client.run('uptime');
-  print(utf8.decode(uptime));
-
-  client.close();
-}
+final uptime = await client.run('uptime');
+print(utf8.decode(uptime));
 ```
 
 ### Forward connections on local port 8080 to the server
 
 ```dart
-import 'dart:io';
-
-import 'package:dartssh2/dartssh2.dart';
-
-void main(List<String> args) async {
-  final socket = await SSHSocket.connect('localhost', 22);
-
-  final client = SSHClient(
-    socket,
-    username: '<username>',
-    onPasswordRequest: () => '<password>',
-  );
-
-  final serverSocket = await ServerSocket.bind('localhost', 8080);
-
-  await for (final socket in serverSocket) {
-    final forward = await client.forwardLocal('httpbin.org', 80);
-    forward.stream.cast<List<int>>().pipe(socket);
-    socket.pipe(forward.sink);
-  }
-
-  client.close();
+final serverSocket = await ServerSocket.bind('localhost', 8080);
+await for (final socket in serverSocket) {
+  final forward = await client.forwardLocal('httpbin.org', 80);
+  forward.stream.cast<List<int>>().pipe(socket);
+  socket.pipe(forward.sink);
 }
 ```
 
 ### Forward connections to port 2222 on the server to local port 22
 
 ```dart
-import 'dart:io';
+final forward = await client.forwardRemote(port: 2222);
 
-import 'package:dartssh2/dartssh2.dart';
+if (forward == null) {
+  print('Failed to forward remote port');
+  return;
+}
 
-void main(List<String> args) async {
-  final socket = await SSHSocket.connect('localhost', 22);
-
-  final client = SSHClient(
-    socket,
-    username: '<username>',
-    onPasswordRequest: () => '<password>',
-  );
-
-  final forward = await client.forwardRemote(port: 2222);
-
-  if (forward == null) {
-    print('Failed to forward remote port');
-    exit(1);
-  }
-
-  await for (final connection in forward.connections) {
-    final socket = await Socket.connect('localhost', 22);
-    connection.stream.cast<List<int>>().pipe(socket);
-    socket.pipe(connection.sink);
-  }
-
-  client.close();
+await for (final connection in forward.connections) {
+  final socket = await Socket.connect('localhost', 22);
+  connection.stream.cast<List<int>>().pipe(socket);
+  socket.pipe(connection.sink);
 }
 ```
 
@@ -179,6 +123,17 @@ final client = SSHClient(
     ...SSHKeyPair.fromPem(await File('path/to/id_rsa').readAsString())
   ],
 );
+```
+
+### Use encrypted PEM files
+```dart
+// Test whether the private key is encrypted.
+final encrypted = SSHKeyPair.isEncrypted(await File('path/to/id_rsa').readAsString());
+print(encrypted);
+
+// If the private key is encrypted, you need to provide the passphrase.
+final keys = SSHKeyPair.fromPem('<pem text>', '<passphrase>');
+print(keys);
 ```
 
 ## SFTP

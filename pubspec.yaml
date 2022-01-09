@@ -6,7 +6,7 @@ description: A SSH and SFTP client written in pure Dart, aiming to be feature-ri
 homepage: https://github.com/TerminalStudio/dartssh2
 
 environment:
-  sdk: ">=2.13.0 <3.0.0"
+  sdk: ">=2.14.0 <3.0.0"
 
 executables:
   dartssh:

@@ -4,6 +4,15 @@ import 'package:dartssh2/src/ssh_algorithm.dart';
 import 'package:pointycastle/export.dart';
 
 class SSHCipherType with SSHAlgorithm {
+  static const values = [
+    aes128cbc,
+    aes192cbc,
+    aes256cbc,
+    aes128ctr,
+    aes192ctr,
+    aes256ctr,
+  ];
+
   static const aes128ctr = SSHCipherType._(
     name: 'aes128-ctr',
     keySize: 16,
