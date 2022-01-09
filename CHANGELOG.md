@@ -1,3 +1,7 @@
+## 2.1.0-pre
+- Update README.md
+- Support loading OpenSSH encrypted pem files.
+
 ## 2.0.0-pre
 - Implements local port forwarding
 - Implements remote port forwarding
