@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:asn1lib/asn1lib.dart';
@@ -46,15 +47,19 @@ abstract class SSHKeyPair {
   SSHHostKey toPublicKey();
 
   SSHSignature sign(Uint8List data);
+
+  String toPem();
 }
 
 class OpenSSHKeyPairs {
   static const magic = 'openssh-key-v1';
 
-  /// Name of the algorithm used to encrypt the private key.
+  /// Name of the algorithm used to encrypt the private key. 'none' means no
+  /// encryption.
   final String cipherName;
 
-  /// Key derivation function used to derive the encryption key.
+  /// Key derivation function used to derive the encryption key. 'none' means
+  /// no key derivation thus no encryption.
   final String kdfName;
 
   /// Options for the key derivation function.
@@ -76,6 +81,13 @@ class OpenSSHKeyPairs {
     required this.publicKeys,
     required this.privateKeyBlob,
   });
+
+  OpenSSHKeyPairs.unencrypted({
+    required this.publicKeys,
+    required this.privateKeyBlob,
+  })  : cipherName = 'none',
+        kdfName = 'none',
+        kdfOptions = null;
 
   factory OpenSSHKeyPairs.decode(Uint8List keyBlob) {
     final reader = SSHMessageReader(keyBlob);
@@ -142,27 +154,45 @@ class OpenSSHKeyPairs {
       }
     }
 
-    final keys = <SSHKeyPair>[];
+    final keypairs = <SSHKeyPair>[];
     for (var i = 0; i < publicKeys.length; i++) {
       final type = reader.readUtf8();
       switch (type) {
         case 'ssh-rsa':
-          keys.add(OpenSSHRsaKeyPair.readFrom(reader));
+          keypairs.add(OpenSSHRsaKeyPair.readFrom(reader));
           break;
         case 'ssh-ed25519':
-          keys.add(OpenSSHEd25519KeyPair.readFrom(reader));
+          keypairs.add(OpenSSHEd25519KeyPair.readFrom(reader));
           break;
         case 'ecdsa-sha2-nistp256':
         case 'ecdsa-sha2-nistp384':
         case 'ecdsa-sha2-nistp521':
-          keys.add(OpenSSHEcdsaKeyPair.readFrom(reader));
+          keypairs.add(OpenSSHEcdsaKeyPair.readFrom(reader));
           break;
         default:
           throw UnsupportedError('Unsupported key type: $type');
       }
     }
 
-    return keys;
+    return keypairs;
+  }
+
+  String toPem() {
+    final writer = SSHMessageWriter();
+    writer.writeBytes(Uint8List.fromList(magic.codeUnits));
+    writer.writeUint8(0); // terminator of magic
+
+    writer.writeUtf8(cipherName);
+    writer.writeUtf8(kdfName);
+    writer.writeString(kdfOptions?.encode() ?? Uint8List(0));
+
+    writer.writeUint32(publicKeys.length);
+    for (var i = 0; i < publicKeys.length; i++) {
+      writer.writeString(publicKeys[i]);
+    }
+
+    writer.writeString(privateKeyBlob);
+    return SSHPem('OPENSSH PRIVATE KEY', writer.takeBytes()).encode(70);
   }
 
   Uint8List _decryptPrivateKeyBlob(Uint8List blob, Uint8List passphrase) {
@@ -210,7 +240,9 @@ class OpenSSHKeyPairs {
   }
 }
 
-abstract class OpenSSHKdfOptions {}
+abstract class OpenSSHKdfOptions {
+  Uint8List encode();
+}
 
 class OpenSSHBcryptKdfOptions implements OpenSSHKdfOptions {
   final Uint8List salt;
@@ -226,12 +258,45 @@ class OpenSSHBcryptKdfOptions implements OpenSSHKdfOptions {
   }
 
   @override
+  Uint8List encode() {
+    final writer = SSHMessageWriter();
+    writer.writeString(salt);
+    writer.writeUint32(rounds);
+    return writer.takeBytes();
+  }
+
+  @override
   String toString() {
     return '$runtimeType{salt: ${latin1.decode(salt)}, rounds: $rounds}';
   }
 }
 
-class OpenSSHRsaKeyPair implements SSHKeyPair {
+abstract class OpenSSHKeyPair implements SSHKeyPair {
+  void writeTo(SSHMessageWriter writer);
+
+  @override
+  String toPem() {
+    final writer = SSHMessageWriter();
+    final checkInt = Random().nextInt(0xFFFFFFFF);
+
+    writer.writeUint32(checkInt);
+    writer.writeUint32(checkInt);
+    writer.writeUtf8(type);
+    writeTo(writer);
+
+    // pad with bytes 1, 2, 3, ...
+    for (var i = 0; writer.length % 8 != 0; i++) {
+      writer.writeUint8(i);
+    }
+
+    return OpenSSHKeyPairs.unencrypted(
+      publicKeys: [toPublicKey().encode()],
+      privateKeyBlob: writer.takeBytes(),
+    ).toPem();
+  }
+}
+
+class OpenSSHRsaKeyPair with OpenSSHKeyPair {
   @override
   final type = 'ssh-rsa';
 
@@ -289,12 +354,23 @@ class OpenSSHRsaKeyPair implements SSHKeyPair {
   }
 
   @override
+  void writeTo(SSHMessageWriter writer) {
+    writer.writeMpint(n);
+    writer.writeMpint(e);
+    writer.writeMpint(d);
+    writer.writeMpint(iqmp);
+    writer.writeMpint(p);
+    writer.writeMpint(q);
+    writer.writeUtf8(comment);
+  }
+
+  @override
   String toString() {
     return '$runtimeType(comment: "$comment")';
   }
 }
 
-class OpenSSHEd25519KeyPair implements SSHKeyPair {
+class OpenSSHEd25519KeyPair with OpenSSHKeyPair {
   @override
   final type = 'ssh-ed25519';
 
@@ -325,12 +401,19 @@ class OpenSSHEd25519KeyPair implements SSHKeyPair {
   }
 
   @override
+  void writeTo(SSHMessageWriter writer) {
+    writer.writeString(publicKey);
+    writer.writeString(privateKey);
+    writer.writeUtf8(comment);
+  }
+
+  @override
   String toString() {
     return '$runtimeType(comment: "$comment")';
   }
 }
 
-class OpenSSHEcdsaKeyPair implements SSHKeyPair {
+class OpenSSHEcdsaKeyPair with OpenSSHKeyPair {
   @override
   String get type => 'ecdsa-sha2-$curveId';
 
@@ -391,6 +474,14 @@ class OpenSSHEcdsaKeyPair implements SSHKeyPair {
 
     final signature = signer.generateSignature(data) as ECSignature;
     return SSHEcdsaSignature('ecdsa-sha2-$curveId', signature.r, signature.s);
+  }
+
+  @override
+  void writeTo(SSHMessageWriter writer) {
+    writer.writeUtf8(curveId);
+    writer.writeString(q);
+    writer.writeMpint(d);
+    writer.writeUtf8(comment);
   }
 
   @override
@@ -472,6 +563,21 @@ class RsaKeyPair implements SSHKeyPair {
       SSHRsaSignatureType.sha1,
       signer.generateSignature(data).bytes,
     );
+  }
+
+  @override
+  String toPem() {
+    final sequence = ASN1Sequence();
+    sequence.add(ASN1Integer(version));
+    sequence.add(ASN1Integer(n));
+    sequence.add(ASN1Integer(e));
+    sequence.add(ASN1Integer(d));
+    sequence.add(ASN1Integer(p));
+    sequence.add(ASN1Integer(q));
+    sequence.add(ASN1Integer(exponent1));
+    sequence.add(ASN1Integer(exponent2));
+    sequence.add(ASN1Integer(coefficient));
+    return SSHPem('RSA PRIVATE KEY', sequence.encodedBytes).encode(64);
   }
 
   @override

@@ -136,6 +136,16 @@ final keys = SSHKeyPair.fromPem('<pem text>', '<passphrase>');
 print(keys);
 ```
 
+Decrypt PEM file with [`compute`](https://api.flutter.dev/flutter/foundation/compute-constant.html) in Flutter
+
+```dart
+List<SSHKeyPair> decryptKeyPairs(List<String> args) {
+  return SSHKeyPair.fromPem(args[0], args[1]);
+}
+
+final keypairs = await compute(decryptKeyPairs, ['<pem text>', '<passphrase>']);
+```
+
 ## SFTP
 
 ### List remote directory

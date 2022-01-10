@@ -107,6 +107,8 @@ class SSHMessageWriter {
 
   final BytesBuilder _builder;
 
+  int get length => _builder.length;
+
   void writeBool(bool value) {
     _builder.addByte(value ? 1 : 0);
   }

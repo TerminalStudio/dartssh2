@@ -51,13 +51,13 @@ class SSHPem {
     return SSHPem(type, content);
   }
 
-  String encode() {
-    const chunkSize = 48;
+  String encode([int lineLength = 64]) {
+    final encoded = base64.encode(content);
     final builder = StringBuffer();
     builder.writeln('-----BEGIN $type-----');
-    for (var i = 0; i < content.length; i += chunkSize) {
-      final chunk = content.sublist(i, min(i + chunkSize, content.length));
-      builder.writeln(base64.encode(chunk));
+    for (var i = 0; i < encoded.length; i += lineLength) {
+      final chunk = encoded.substring(i, min(i + lineLength, encoded.length));
+      builder.writeln(chunk);
     }
     builder.writeln('-----END $type-----');
     return builder.toString();
