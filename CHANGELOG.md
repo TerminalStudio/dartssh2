@@ -1,3 +1,6 @@
+## 2.2.0
+- Update README.md
+- Support export keypair to PEM
 ## 2.1.0-pre
 - Update README.md
 - Support loading OpenSSH encrypted pem files.
