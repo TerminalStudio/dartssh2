@@ -268,9 +268,13 @@ class SSHTransport {
     final bufferString = latin1.decode(_buffer.data);
 
     // SSH version exchange is terminated by \r\n.
-    final index = bufferString.indexOf('\r\n');
+    var index = bufferString.indexOf('\r\n');
     if (index == -1) {
-      return;
+      // In the (rare) case SSH-2 version string is terminated by \n only (observed on Synology DS120j 2021)
+      index = bufferString.indexOf('\n');
+      _buffer.consume(index + 1);
+    } else {
+      _buffer.consume(index + 2);
     }
 
     final versionString = bufferString.substring(0, index);
@@ -282,7 +286,6 @@ class SSHTransport {
     printTrace?.call('<- $socket: $versionString');
     printDebug?.call('SSHTransport._remoteVersion = "$versionString"');
     _remoteVersion = versionString;
-    _buffer.consume(index + 2);
 
     if (isServer) {
       _sendKexInit();
