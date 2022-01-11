@@ -1,3 +1,6 @@
+## 2.3.1-pre
+- Add remoteVersion field to SSHClient
+
 ## 2.3.0-pre
 - Add description field in SSHChannelOpenError
 

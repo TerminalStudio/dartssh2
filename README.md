@@ -146,6 +146,13 @@ List<SSHKeyPair> decryptKeyPairs(List<String> args) {
 final keypairs = await compute(decryptKeyPairs, ['<pem text>', '<passphrase>']);
 ```
 
+### Get the version of SSH server
+
+```dart
+await client.authenticated;
+print(client.remoteVersion); // SSH-2.0-OpenSSH_7.4p1
+```
+
 ## SFTP
 
 ### List remote directory
