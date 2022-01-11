@@ -68,11 +68,13 @@ class SSHKeyDecryptError with SSHMessageError implements SSHError {
 class SSHChannelOpenError implements SSHError {
   final int code;
 
-  SSHChannelOpenError(this.code);
+  final String description;
+
+  SSHChannelOpenError(this.code, this.description);
 
   @override
   String toString() {
-    return '$runtimeType(code: $code)';
+    return '$runtimeType($code: $description)';
   }
 }
 

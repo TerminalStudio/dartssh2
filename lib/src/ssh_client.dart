@@ -886,7 +886,7 @@ class SSHClient {
   ) async {
     final message = await _waitChannelOpenReply(localChannelId);
     if (message is SSH_Message_Channel_Open_Failure) {
-      throw SSHChannelOpenError(message.reasonCode);
+      throw SSHChannelOpenError(message.reasonCode, message.description);
     }
 
     final reply = message as SSH_Message_Channel_Confirmation;
