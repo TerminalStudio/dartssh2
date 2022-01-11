@@ -195,6 +195,11 @@ class SSHClient {
   /// completes with an error if the client could not authenticate.
   Future<void> get authenticated => _authenticated.future;
 
+  /// Identification string sent by the other side. For example,
+  /// "SSH-2.0-OpenSSH_7.4p1". May be null if the handshake has not yet
+  /// completed.
+  String? get remoteVersion => _transport.remoteVersion;
+
   /// Request connections to a port on the other side be forwarded to the local
   /// side.
   /// Set [host] to null to listen on all interfaces, `"0.0.0.0"` to
