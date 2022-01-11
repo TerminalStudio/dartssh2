@@ -1,3 +1,6 @@
+## 2.3.1
+- Support ssh v2 when version string does not contain CR [#14], thanks [@Migarl]
+
 ## 2.3.1-pre
 - Add remoteVersion field to SSHClient
 
@@ -66,6 +69,8 @@
 
 - Initial release.
 
+[#14]: https://github.com/TerminalStudio/dartssh2/pull/14
 [#1]: https://github.com/TerminalStudio/dartssh/pull/1/files
 
 [@linhanyu]: https://github.com/linhanyu
+[@Migarl]: https://github.com/Migarl
