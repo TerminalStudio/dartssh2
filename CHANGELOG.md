@@ -1,6 +1,10 @@
+## 2.3.0-pre
+- Add description field in SSHChannelOpenError
+
 ## 2.2.0
 - Update README.md
 - Support export keypair to PEM
+
 ## 2.1.0-pre
 - Update README.md
 - Support loading OpenSSH encrypted pem files.
