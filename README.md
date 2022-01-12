@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-A SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as easy to use.
+SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as easy to use.
 </p>
 
 > **dartssh2** is now a complete rewrite of [dartssh].
@@ -56,23 +56,26 @@ dartsftp user@example.com
 
 ## 🚀 Quick start 
 
-### Spawn a shell on remote host
-
+### Connect to a remote host
 ```dart
-final socket = await SSHSocket.connect('localhost', 22);
-
 final client = SSHClient(
-  socket,
+  await SSHSocket.connect('localhost', 22),
   username: '<username>',
   onPasswordRequest: () => '<password>',
 );
+```
 
+> `SSHSocket` is an interface and it's possible to implement your own `SSHSocket` if you want to use a different underlying transport rather than standard TCP socket. For example WebSocket or Unix domain socket.
+
+### Spawn a shell on remote host
+
+```dart
 final shell = await client.shell();
-stdout.addStream(shell.stdout);
-stderr.addStream(shell.stderr);
-stdin.cast<Uint8List>().listen(shell.write);
+stdout.addStream(shell.stdout); // listening for stdout
+stderr.addStream(shell.stderr); // listening for stderr
+stdin.cast<Uint8List>().listen(shell.write); // writing to stdin
 
-await shell.done;
+await shell.done; // wait for shell to exit
 client.close();
 ```
 
@@ -83,6 +86,20 @@ client.close();
 final uptime = await client.run('uptime');
 print(utf8.decode(uptime));
 ```
+
+> `client.run()` is a convenience method that wraps `client.execute()` for running non-interactive commands.
+
+### Start a process on remote host
+```dart
+final session = await client.execute('cat > file.txt');
+await session.stdin.addStream(File('local_file.txt').openRead().cast());
+await session.stdin.close(); // Close the stream to send EOF to the remote process.
+
+await session.done;
+print(session.exitCode);
+```
+
+> `session.write()` is a shorthand for `session.stdin.add()`. It's recommended to use `session.stdin.addStream()` instead of `session.write()` when you want to stream large amount of data to the remote process.
 
 ### Forward connections on local port 8080 to the server
 
@@ -158,26 +175,10 @@ print(client.remoteVersion); // SSH-2.0-OpenSSH_7.4p1
 ### List remote directory
 
 ```dart
-import 'package:dartssh2/dartssh2.dart';
-
-void main(List<String> args) async {
-  final socket = await SSHSocket.connect('localhost', 22);
-
-  final client = SSHClient(
-    socket,
-    username: 'root',
-    username: '<username>',
-    onPasswordRequest: () => '<password>',
-  );
-
-  final sftp = await client.sftp();
-  final items = await sftp.listdir('/');
-  for (final item in items) {
-    print(item.longname);
-  }
-
-  client.close();
-  await client.done;
+final sftp = await client.sftp();
+final items = await sftp.listdir('/');
+for (final item in items) {
+  print(item.longname);
 }
 ```
 

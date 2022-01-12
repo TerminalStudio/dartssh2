@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:dartssh2/src/sftp/sftp_client.dart';
+import 'package:dartssh2/src/utils/stream.dart';
 
 const chunkSize = 16 * 1024;
 const maxBytesOnTheWire = chunkSize * 64;
@@ -16,7 +17,9 @@ class SftpFileWriter {
   final Function(int)? onProgress;
 
   SftpFileWriter(this.file, this.stream, this.offset, this.onProgress) {
-    _subscription = stream.listen(_onStreamData);
+    _subscription =
+        stream.transform(MaxChunkSize(chunkSize)).listen(_onStreamData);
+
     _subscription.onDone(_onStreamDone);
   }
 

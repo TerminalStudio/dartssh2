@@ -4,9 +4,13 @@ import 'dart:typed_data';
 import 'package:dartssh2/src/ssh_channel.dart';
 import 'package:dartssh2/src/ssh_signal.dart';
 import 'package:dartssh2/src/message/msg_channel.dart';
+import 'package:dartssh2/src/utils/stream.dart';
 
 /// A [SSHSession] represents a remote execution of a program.
 class SSHSession {
+  /// Stdin of the remote process. Close this to send EOF to the remote process.
+  StreamSink<Uint8List> get stdin => _stdinController.sink;
+
   /// Stdout of the remote process.
   Stream<Uint8List> get stdout => _stdoutController.stream;
 
@@ -31,10 +35,16 @@ class SSHSession {
 
   SSHSession(this._channel) {
     _channel.setRequestHandler(_handleRequest);
+
     _channelDataSubscription = _channel.stream.listen(
       _handleChannelData,
       onDone: _handleChannelDataDone,
     );
+
+    _stdinController.stream
+        .transform(MaxChunkSize(_channel.maximumPacketSize))
+        .map((data) => SSHChannelData(data))
+        .pipe(_channel.sink);
   }
 
   final SSHChannel _channel;
@@ -44,6 +54,8 @@ class SSHSession {
   SSHSessionExitSignal? _exitSignal;
 
   late final StreamSubscription _channelDataSubscription;
+
+  late final _stdinController = StreamController<Uint8List>();
 
   late final _stdoutController = StreamController<Uint8List>(
     onPause: _pauseChannelData,
@@ -55,9 +67,10 @@ class SSHSession {
     onResume: _resumeChannelData,
   );
 
-  /// Writes data to the stdin of the remote process.
+  /// Writes data to the stdin of the remote process. This is a convenience
+  /// method that calls [stdin.add].
   void write(Uint8List data) {
-    _channel.addData(data);
+    stdin.add(data);
   }
 
   /// Inform remote process of the current window size.

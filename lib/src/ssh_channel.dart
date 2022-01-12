@@ -342,6 +342,8 @@ class SSHChannel {
   /// A [Stream] of data received from the remote side.
   Stream<SSHChannelData> get stream => _controller._remoteStream.stream;
 
+  /// A [StreamSink] that sends data to the remote side. Chucks must be
+  /// equal to or less than [maximumPacketSize].
   StreamSink<SSHChannelData> get sink => _controller._localStream.sink;
 
   Future<void> get done => _controller._done.future;
