@@ -93,7 +93,7 @@ print(utf8.decode(uptime));
 ```dart
 final session = await client.execute('cat > file.txt');
 await session.stdin.addStream(File('local_file.txt').openRead().cast());
-await session.stdin.close(); // Close the stream to send EOF to the remote process.
+await session.stdin.close(); // Close the sink to send EOF to the remote process.
 
 await session.done;
 print(session.exitCode);
