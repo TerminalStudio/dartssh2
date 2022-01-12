@@ -1,3 +1,6 @@
+## 2.4.0
+Support session stdin streaming and EOF
+
 ## 2.3.1
 - Support ssh v2 when version string does not contain CR [#14], thanks [@Migarl]
 
