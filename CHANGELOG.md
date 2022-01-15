@@ -1,5 +1,9 @@
+## 2.4.1
+- More examples in README.md
+- Limit the maximum size of channel packets
+
 ## 2.4.0
-Support session stdin streaming and EOF
+- Support session stdin streaming and EOF
 
 ## 2.3.1
 - Support ssh v2 when version string does not contain CR [#14], thanks [@Migarl]
