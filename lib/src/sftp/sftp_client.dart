@@ -505,6 +505,12 @@ class SftpFile {
       length = fileSize - offset;
     }
 
+    if (length == 0) return;
+
+    if (length < 0) {
+      throw SftpError('Length must be positive: $length');
+    }
+
     final streamController = StreamController<Uint8List>();
 
     var bytessRecieved = 0;
