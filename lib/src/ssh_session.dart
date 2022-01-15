@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:dartssh2/src/ssh_channel.dart';
 import 'package:dartssh2/src/ssh_signal.dart';
 import 'package:dartssh2/src/message/msg_channel.dart';
-import 'package:dartssh2/src/utils/stream.dart';
 
 /// A [SSHSession] represents a remote execution of a program.
 class SSHSession {
@@ -42,7 +41,6 @@ class SSHSession {
     );
 
     _stdinController.stream
-        .transform(MaxChunkSize(_channel.maximumPacketSize))
         .map((data) => SSHChannelData(data))
         .pipe(_channel.sink);
   }

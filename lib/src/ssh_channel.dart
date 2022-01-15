@@ -62,8 +62,9 @@ class SSHChannelController {
   final _localStream = StreamController<SSHChannelData>();
 
   /// Subscription to [_localStream].
-  late final _localStreamSubscription =
-      _localStream.stream.listen(_handleLocalData);
+  late final _localStreamSubscription = _localStream.stream
+      .transform(SSHChannelDataSplitter(remoteMaximumPacketSize))
+      .listen(_handleLocalData);
 
   /// Handler of channel requests from the remote side.
   late var _requestHandler = _defaultRequestHandler;
@@ -408,4 +409,37 @@ class SSHChannelData {
 
 class SSHChannelExtendedDataType {
   static const stderr = 1;
+}
+
+class SSHChannelDataSplitter
+    extends StreamTransformerBase<SSHChannelData, SSHChannelData> {
+  SSHChannelDataSplitter(this.maxSize);
+
+  final int maxSize;
+
+  @override
+  Stream<SSHChannelData> bind(Stream<SSHChannelData> stream) async* {
+    await for (var chunk in stream) {
+      if (chunk.bytes.length < maxSize) {
+        yield chunk;
+        continue;
+      }
+
+      final blocks = chunk.bytes.length ~/ maxSize;
+
+      for (var i = 0; i < blocks; i++) {
+        yield SSHChannelData(
+          Uint8List.sublistView(chunk.bytes, i * maxSize, (i + 1) * maxSize),
+          type: chunk.type,
+        );
+      }
+
+      if (blocks * maxSize < chunk.bytes.length) {
+        yield SSHChannelData(
+          Uint8List.sublistView(chunk.bytes, blocks * maxSize),
+          type: chunk.type,
+        );
+      }
+    }
+  }
 }
