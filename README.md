@@ -95,8 +95,8 @@ final session = await client.execute('cat > file.txt');
 await session.stdin.addStream(File('local_file.txt').openRead().cast());
 await session.stdin.close(); // Close the sink to send EOF to the remote process.
 
-await session.done;
-print(session.exitCode);
+await session.done; // Wait for session to exit to ensure all data is flushed to the remote process.
+print(session.exitCode); // You can get the exit code after the session is done
 ```
 
 > `session.write()` is a shorthand for `session.stdin.add()`. It's recommended to use `session.stdin.addStream()` instead of `session.write()` when you want to stream large amount of data to the remote process.
@@ -173,7 +173,6 @@ print(client.remoteVersion); // SSH-2.0-OpenSSH_7.4p1
 ## SFTP
 
 ### List remote directory
-
 ```dart
 final sftp = await client.sftp();
 final items = await sftp.listdir('/');
@@ -183,12 +182,39 @@ for (final item in items) {
 ```
 
 ### Read remote file
-
 ```dart
 final sftp = await client.sftp();
 final file = await sftp.open('/etc/passwd');
 final content = await file.readBytes();
 print(latin1.decode(content));
+```
+
+### Write remote file
+```dart
+final sftp = await client.sftp();
+final file = await sftp.open('file.txt', mode: SftpFileOpenMode.write);
+await file.writeBytes(utf8.encode('hello there!') as Uint8List);
+```
+
+**Write at specific offset**
+```dart
+final data = utf8.encode('world') as Uint8List
+await file.writeBytes(data, offset: 6);
+```
+
+### File upload
+```dart
+final sftp = await client.sftp();
+final file = await sftp.open('file.txt', mode: SftpFileOpenMode.create | SftpFileOpenMode.write);
+await file.write(File('local_file.txt').openRead().cast());
+```
+
+**Clear the remote file before opening it**
+
+```dart
+final file = await sftp.open('file.txt',
+  mode: SftpFileOpenMode.create | SftpFileOpenMode.truncate | SftpFileOpenMode.write
+);
 ```
 
 ### Directory operations
@@ -197,6 +223,7 @@ final sftp = await client.sftp();
 await sftp.mkdir('/path/to/dir');
 await sftp.rmdir('/path/to/dir');
 ```
+
 ### Get/Set attributes from/to remote file/directory
 ```dart
 await sftp.stat('/path/to/file');
@@ -217,6 +244,7 @@ sftp.link('/from', '/to');
 ### SSH client:
 
 - [example/example.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/example.dart)
+- [example/execute.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/execute.dart)
 - [example/forward_local.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/forward_local.dart)
 - [example/forward_remote.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/forward_remote.dart)
 - [example/pubkey.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/pubkey.dart)
@@ -226,6 +254,7 @@ sftp.link('/from', '/to');
 - [example/sftp_read.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/sftp_read.dart)
 - [example/sftp_list.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/sftp_list.dart)
 - [example/sftp_stat.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/sftp_stat.dart)
+- [example/sftp_upload.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/sftp_upload.dart)
 
 
 
