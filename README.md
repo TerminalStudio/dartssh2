@@ -101,6 +101,17 @@ print(session.exitCode); // You can get the exit code after the session is done
 
 > `session.write()` is a shorthand for `session.stdin.add()`. It's recommended to use `session.stdin.addStream()` instead of `session.write()` when you want to stream large amount of data to the remote process.
 
+**Killing a remote process by sending signal**
+
+```dart
+session.kill(SSHSignal.KILL);
+await session.done;
+print('exitCode: ${session.exitCode}'); // -> exitCode: null
+print('signal: ${session.exitSignal?.signalName}'); // -> signal: KILL
+```
+
+Processes killed by signals do not have an exit code, instead they have an exit signal property.
+
 ### Forward connections on local port 8080 to the server
 
 ```dart
