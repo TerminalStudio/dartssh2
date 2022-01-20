@@ -1,3 +1,6 @@
+## 2.4.2
+- Fix null check error in `kill()` [#17]
+- More examples in README.md
 ## 2.4.1
 - More examples in README.md
 - Limit the maximum size of channel packets
@@ -76,6 +79,7 @@
 
 - Initial release.
 
+[#17]: https://github.com/TerminalStudio/dartssh2/issues/17
 [#14]: https://github.com/TerminalStudio/dartssh2/pull/14
 [#1]: https://github.com/TerminalStudio/dartssh/pull/1/files
 
