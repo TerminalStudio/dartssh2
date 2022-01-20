@@ -116,7 +116,7 @@ class SSHSession {
         return true;
       case SSHChannelRequestType.exitSignal:
         _exitSignal = SSHSessionExitSignal(
-          signalName: request.signalName!,
+          signalName: request.exitSignalName!,
           coreDumped: request.coreDumped!,
           errorMessage: request.errorMessage!,
           languageTag: request.languageTag!,
@@ -167,4 +167,9 @@ class SSHSessionExitSignal {
     required this.errorMessage,
     required this.languageTag,
   });
+
+  @override
+  String toString() {
+    return 'SSHSessionExitSignal(signalName: $signalName, coreDumped: $coreDumped, errorMessage: $errorMessage, languageTag: $languageTag)';
+  }
 }
