@@ -16,9 +16,7 @@ dependencies:
   asn1lib: ^1.0.0
   convert: ^3.0.0
   meta: ^1.1.6
-  http: ^0.13.3
   pointycastle: ^3.0.0
-  validators: ^3.0.0
   pinenacl: ^0.3.3
 
   # for `dartssh` and `dartsftp` command
