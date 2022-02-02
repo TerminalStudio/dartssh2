@@ -1,3 +1,7 @@
+## 2.4.3
+- Remove unused dependencies
+- Fix lint errors
+
 ## 2.4.2
 - Fix null check error in `kill()` [#17]
 - More examples in README.md
