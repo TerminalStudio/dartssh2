@@ -24,6 +24,7 @@ extension SSHAlgorithmList<T extends SSHAlgorithm> on List<T> {
         return algorithm;
       }
     }
+    return null;
   }
 }
 

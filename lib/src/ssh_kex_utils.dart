@@ -27,6 +27,7 @@ abstract class SSHKexUtils {
         }
       }
     }
+    return null;
   }
 
   static Uint8List computeExchangeHash({

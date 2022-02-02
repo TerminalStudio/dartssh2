@@ -87,10 +87,10 @@ class SSHCipherType with SSHAlgorithm {
 }
 
 BlockCipher _aesCtrFactory() {
-  final aes = AESFastEngine();
+  final aes = AESEngine();
   return CTRBlockCipher(aes.blockSize, CTRStreamCipher(aes));
 }
 
 BlockCipher _aesCbcFactory() {
-  return CBCBlockCipher(AESFastEngine());
+  return CBCBlockCipher(AESEngine());
 }

@@ -232,6 +232,7 @@ class OpenSSHKeyPairs {
         return cipher;
       }
     }
+    return null;
   }
 
   @override
