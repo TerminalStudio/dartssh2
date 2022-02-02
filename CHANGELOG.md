@@ -1,3 +1,6 @@
+## 2.4.4
+- Fix lint errors
+
 ## 2.4.3
 - Remove unused dependencies
 - Fix lint errors

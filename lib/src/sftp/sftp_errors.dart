@@ -36,7 +36,7 @@ class SftpStatusError implements SftpError {
       : code = status.code,
         message = status.message;
 
-  static check(SftpStatusPacket status) {
+  static void check(SftpStatusPacket status) {
     if (status.code != SftpStatusCode.ok && status.code != SftpStatusCode.eof) {
       throw SftpStatusError.fromStatus(status);
     }

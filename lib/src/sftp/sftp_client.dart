@@ -176,7 +176,8 @@ class SftpClient {
     final reply = await _sendReadDir(handle);
     if (reply is SftpNamePacket) return reply.names;
     if (reply is! SftpStatusPacket) throw SftpError('Unexpected reply');
-    throw SftpStatusError.fromStatus(reply);
+    SftpStatusError.check(reply);
+    return null;
   }
 
   Future<void> _close(Uint8List handle) async {
@@ -599,7 +600,7 @@ class SftpFile {
     _mustNotBeClosed();
     final reply = await _client._sendWrite(_handle, offset, data);
     if (reply is! SftpStatusPacket) throw SftpError('Unexpected reply');
-    throw SftpStatusError.fromStatus(reply);
+    SftpStatusError.check(reply);
   }
 
   Future<Uint8List?> _readChunk(int length, [int offset = 0]) async {
@@ -607,7 +608,8 @@ class SftpFile {
     final reply = await _client._sendRead(_handle, offset, length);
     if (reply is SftpDataPacket) return reply.data;
     if (reply is! SftpStatusPacket) throw SftpError('Unexpected reply');
-    throw SftpStatusError.fromStatus(reply);
+    SftpStatusError.check(reply);
+    return null;
   }
 
   void _mustNotBeClosed() {
