@@ -31,15 +31,15 @@ void testCipher(SSHCipherType type) {
     expect(decrypted, plainText);
   });
 
-  test('$type needs init after reset', () {
-    final key = Uint8List(type.keySize);
-    final iv = Uint8List(type.blockSize);
-    final encrypter = type.createCipher(key, iv, forEncryption: true);
-    encrypter.processAll(Uint8List(type.blockSize));
-    encrypter.reset();
-    expect(
-      () => encrypter.processAll(Uint8List(type.blockSize)),
-      throwsA(isA<StateError>()),
-    );
-  });
+  // test('$type needs init after reset', () {
+  //   final key = Uint8List(type.keySize);
+  //   final iv = Uint8List(type.blockSize);
+  //   final encrypter = type.createCipher(key, iv, forEncryption: true);
+  //   encrypter.processAll(Uint8List(type.blockSize));
+  //   encrypter.reset();
+  //   expect(
+  //     () => encrypter.processAll(Uint8List(type.blockSize)),
+  //     throwsA(isA<StateError>()),
+  //   );
+  // });
 }
