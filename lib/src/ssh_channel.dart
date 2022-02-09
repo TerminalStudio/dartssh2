@@ -218,6 +218,11 @@ class SSHChannelController {
   void _handleDataMessage(Uint8List data, {int? type}) {
     printDebug?.call('SSHChannel._handleDataMessage: len=${data.length}');
 
+    if (_remoteStream.isClosed) {
+      printDebug?.call('SSHChannel._handleDataMessage: remote already closed');
+      return;
+    }
+
     _remoteStream.add(SSHChannelData(data, type: type));
 
     _localWindow -= data.length;
