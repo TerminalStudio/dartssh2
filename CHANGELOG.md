@@ -1,3 +1,7 @@
+## 2.5.0
+- Fix js import path [#18].
+- Ignore remote data after channel closed.
+
 ## 2.4.4
 - Fix lint errors
 
@@ -86,6 +90,7 @@
 
 - Initial release.
 
+[#18]: https://github.com/TerminalStudio/dartssh2/issues/18
 [#17]: https://github.com/TerminalStudio/dartssh2/issues/17
 [#14]: https://github.com/TerminalStudio/dartssh2/pull/14
 [#1]: https://github.com/TerminalStudio/dartssh/pull/1/files
