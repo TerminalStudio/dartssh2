@@ -81,7 +81,7 @@ class SftpClient {
   Future<List<SftpName>> listdir(String path, [bool hidden = false]) async {
     final result = <SftpName>[];
     await for (final names in readdir(path)) {
-      result.addAll(names.where((element) => (hidden || !element.filename.startsWith('.'))));
+      result.addAll(names.where((name) => (hidden == true || !name.filename.startsWith('.'))));
     }
     return result;
   }
