@@ -78,10 +78,10 @@ class SftpClient {
 
   /// List the items of a directory. This is a convenience method wrapping
   /// [readdir].
-  Future<List<SftpName>> listdir(String path) async {
+  Future<List<SftpName>> listdir(String path, [bool hidden = false]) async {
     final result = <SftpName>[];
     await for (final names in readdir(path)) {
-      result.addAll(names);
+      result.addAll(names.where((name) => (hidden == true || !name.filename.startsWith('.'))));
     }
     return result;
   }

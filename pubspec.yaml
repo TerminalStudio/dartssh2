@@ -1,5 +1,5 @@
 name: dartssh2
-version: 2.5.0
+version: 2.5.0+1
 description: SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as easy to use.
 # author is a deprecated pubspec field.
 # author: Green Appers, Inc. <greenappers@gmail.com>
