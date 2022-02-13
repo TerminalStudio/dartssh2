@@ -19,7 +19,7 @@ class SftpName {
   });
 
   SftpFileType get fileType {
-    if (!longname.isEmpty) {
+    if (longname.isNotEmpty) {
       switch (longname.substring(0, 1)) {
         case '-':
           return SftpFileType.File;
@@ -39,30 +39,26 @@ class SftpName {
     }
     throw FileSystemException("Unable to determine file type", filename);
   }
+
+  factory SftpName.readFrom(SSHMessageReader reader) {
+    final filename = reader.readUtf8();
+    final longname = reader.readUtf8();
+    final attr = SftpFileAttrs.readFrom(reader);
+    return SftpName(
+      filename: filename,
+      longname: longname,
+      attr: attr,
+    );
+  }
+
+  void writeTo(SSHMessageWriter writer) {
+    writer.writeUtf8(filename);
+    writer.writeUtf8(longname);
+    attr.writeTo(writer);
+  }
+
+  @override
+  String toString() {
+    return 'SftpName(filename: $filename, longname: $longname, attr: $attr)';
+  }
 }
-
-factory
-SftpName.readFrom(
-
-SSHMessageReader reader
-) {
-final filename = reader.readUtf8();
-final longname = reader.readUtf8();
-final attr = SftpFileAttrs.readFrom(reader);
-return SftpName(
-filename: filename,
-longname: longname,
-attr: attr,
-);
-}
-
-void writeTo(SSHMessageWriter writer) {
-  writer.writeUtf8(filename);
-  writer.writeUtf8(longname);
-  attr.writeTo(writer);
-}
-
-@override
-String toString() {
-  return 'SftpName(filename: $filename, longname: $longname, attr: $attr)';
-}}
