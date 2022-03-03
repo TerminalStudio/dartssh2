@@ -378,10 +378,14 @@ class SSHClient {
 
   /// Execute [command] on the remote side non-interactively. Returns a
   /// [Future<String?>] that completes with the output of the command.
-  /// This is a convenience method over [execute].
+  /// This is a convenience method over [execute]. If [stdout] is false,
+  /// the standard output of the command will be ignored. If [stderr] is
+  /// false, the standard error of the command will be ignored.
   Future<Uint8List> run(
     String command, {
     bool runInPty = false,
+    bool stdout = true,
+    bool stderr = true,
     Map<String, String>? environment,
   }) async {
     final session = await execute(
@@ -394,11 +398,21 @@ class SSHClient {
     final stdoutDone = Completer<void>();
     final stderrDone = Completer<void>();
 
-    session.stdout.listen(result.add, onDone: stdoutDone.complete);
-    session.stderr.listen(result.add, onDone: stderrDone.complete);
+    session.stdout.listen(
+      stdout ? result.add : (_) {},
+      onDone: stdoutDone.complete,
+      onError: stderrDone.completeError,
+    );
+
+    session.stderr.listen(
+      stderr ? result.add : (_) {},
+      onDone: stderrDone.complete,
+      onError: stderrDone.completeError,
+    );
 
     await stdoutDone.future;
     await stderrDone.future;
+
     return result.takeBytes();
   }
 
