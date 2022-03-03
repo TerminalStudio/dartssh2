@@ -438,6 +438,11 @@ class SSHClient {
 
   void _onTransportClosed() {
     printDebug?.call('SSHClient._onTransportClosed');
+    if (!_authenticated.isCompleted) {
+      _authenticated.completeError(
+        SSHAuthError('Connection closed before authentication'),
+      );
+    }
     _closeChannels();
   }
 
