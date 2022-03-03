@@ -87,6 +87,12 @@ final uptime = await client.run('uptime');
 print(utf8.decode(uptime));
 ```
 
+Ignoring stderr:
+```dart
+final uptime = await client.run('uptime', stderr: false);
+print(utf8.decode(uptime));
+```
+
 > `client.run()` is a convenience method that wraps `client.execute()` for running non-interactive commands.
 
 ### Start a process on remote host
