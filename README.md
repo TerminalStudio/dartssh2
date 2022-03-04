@@ -250,6 +250,17 @@ await sftp.setStat(
 );
 ```
 
+### Get the type of a remote file
+```dart
+final stat = await sftp.stat('/path/to/file');
+print(stat.type);
+// or
+print(stat.isDirectory);
+print(stat.isSocket);
+print(stat.isSymbolicLink);
+// ...
+```
+
 ### Create a link
 ```dart
 final sftp = await client.sftp();
@@ -272,6 +283,7 @@ sftp.link('/from', '/to');
 - [example/sftp_list.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/sftp_list.dart)
 - [example/sftp_stat.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/sftp_stat.dart)
 - [example/sftp_upload.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/sftp_upload.dart)
+- [example/sftp_filetype.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/sftp_filetype.dart)
 
 
 
