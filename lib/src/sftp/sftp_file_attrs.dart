@@ -1,6 +1,5 @@
 import 'package:dartssh2/src/utils/int.dart';
 import 'package:dartssh2/src/ssh_message.dart';
-import 'package:dartssh2/src/utils/string.dart';
 
 abstract class _Flags {
   static const size = 0x00000001;
@@ -10,8 +9,78 @@ abstract class _Flags {
   static const extended = 0x80000000;
 }
 
+abstract class _PermissionFlags {
+  /// 0400
+  static const userRead = 1 << 8;
+
+  /// 0200
+  static const userWrite = 1 << 7;
+
+  /// 0100
+  static const userExecute = 1 << 6;
+
+  /// 0040
+  static const groupRead = 1 << 5;
+
+  /// 0020
+  static const groupWrite = 1 << 4;
+
+  /// 0010
+  static const groupExecute = 1 << 3;
+
+  /// 0004
+  static const otherRead = 1 << 2;
+
+  /// 0002
+  static const otherWrite = 1 << 1;
+
+  /// 0001
+  static const otherExecute = 1 << 0;
+}
+
+abstract class _ModeFlags {
+  /// 0010000
+  static const isPipe = 1 << 12;
+
+  /// 0020000
+  static const isCharacterDevice = 1 << 13;
+
+  /// 0040000
+  static const isDirectory = 1 << 14;
+
+  /// 0060000
+  static const isBlockDevice = (1 << 14) + (1 << 13);
+
+  /// 0100000
+  static const isRegularFile = 1 << 15;
+
+  /// 0120000
+  static const isSymbolicLink = (1 << 15) + (1 << 13);
+
+  /// 0140000
+  static const isSocket = (1 << 15) + (1 << 14);
+
+  /// 0160000
+  static const isWhiteout = (1 << 15) + (1 << 14) + (1 << 13);
+
+  /// 0170000
+  static const mask = (1 << 15) + (1 << 14) + (1 << 13) + (1 << 12);
+}
+
 extension _IntFlag on int {
   bool has(int flag) => (this & flag) == flag;
+}
+
+enum SftpFileType {
+  unknown,
+  regularFile,
+  directory,
+  symbolicLink,
+  blockDevice,
+  characterDevice,
+  pipe,
+  socket,
+  whiteout,
 }
 
 class SftpFileMode {
@@ -27,15 +96,15 @@ class SftpFileMode {
     bool otherExecute = true,
   }) {
     var flags = 0;
-    if (userRead) flags |= 0x4 << 6;
-    if (userWrite) flags |= 0x2 << 6;
-    if (userExecute) flags |= 0x1 << 6;
-    if (groupRead) flags |= 0x4 << 3;
-    if (groupWrite) flags |= 0x2 << 3;
-    if (groupExecute) flags |= 0x1 << 3;
-    if (otherRead) flags |= 0x4;
-    if (otherWrite) flags |= 0x2;
-    if (otherExecute) flags |= 0x1;
+    if (userRead) flags |= _PermissionFlags.userRead;
+    if (userWrite) flags |= _PermissionFlags.userWrite;
+    if (userExecute) flags |= _PermissionFlags.userExecute;
+    if (groupRead) flags |= _PermissionFlags.groupRead;
+    if (groupWrite) flags |= _PermissionFlags.groupWrite;
+    if (groupExecute) flags |= _PermissionFlags.groupExecute;
+    if (otherRead) flags |= _PermissionFlags.otherRead;
+    if (otherWrite) flags |= _PermissionFlags.otherWrite;
+    if (otherExecute) flags |= _PermissionFlags.otherExecute;
     return SftpFileMode.value(flags);
   }
 
@@ -43,26 +112,41 @@ class SftpFileMode {
 
   final int value;
 
-  bool get userRead => value & '0400'.octal == '0400'.octal;
-  bool get userWrite => value & '0200'.octal == '0200'.octal;
-  bool get userExecute => value & '0100'.octal == '0100'.octal;
+  bool get userRead => value.has(_PermissionFlags.userRead);
+  bool get userWrite => value.has(_PermissionFlags.userWrite);
+  bool get userExecute => value.has(_PermissionFlags.userExecute);
 
-  bool get groupRead => value & '0040'.octal == '0040'.octal;
-  bool get groupWrite => value & '0020'.octal == '0020'.octal;
-  bool get groupExecute => value & '0010'.octal == '0010'.octal;
+  bool get groupRead => value.has(_PermissionFlags.groupRead);
+  bool get groupWrite => value.has(_PermissionFlags.groupWrite);
+  bool get groupExecute => value.has(_PermissionFlags.groupExecute);
 
-  bool get otherRead => value & '0004'.octal == '0004'.octal;
-  bool get otherWrite => value & '0002'.octal == '0002'.octal;
-  bool get otherExecute => value & '0001'.octal == '0001'.octal;
+  bool get otherRead => value.has(_PermissionFlags.otherRead);
+  bool get otherWrite => value.has(_PermissionFlags.otherWrite);
+  bool get otherExecute => value.has(_PermissionFlags.otherExecute);
 
-  bool get isNamedPipe => value & '0100000'.octal == '0100000'.octal;
-  bool get isCharacterDevice => value & '020000'.octal == '020000'.octal;
-  bool get isDirectory => value & '040000'.octal == '040000'.octal;
-  bool get isBlockDevice => value & '060000'.octal == '060000'.octal;
-  bool get isRegularFile => value & '0100000'.octal == '0100000'.octal;
-  bool get isSymbolicLink => value & '0120000'.octal == '0120000'.octal;
-  bool get isSocket => value & '0140000'.octal == '0140000'.octal;
-  bool get isWhiteout => value & '0160000'.octal == '0160000'.octal;
+  SftpFileType get type {
+    var type = value & _ModeFlags.mask;
+    switch (type) {
+      case _ModeFlags.isPipe:
+        return SftpFileType.pipe;
+      case _ModeFlags.isCharacterDevice:
+        return SftpFileType.characterDevice;
+      case _ModeFlags.isDirectory:
+        return SftpFileType.directory;
+      case _ModeFlags.isBlockDevice:
+        return SftpFileType.blockDevice;
+      case _ModeFlags.isRegularFile:
+        return SftpFileType.regularFile;
+      case _ModeFlags.isSymbolicLink:
+        return SftpFileType.symbolicLink;
+      case _ModeFlags.isSocket:
+        return SftpFileType.socket;
+      case _ModeFlags.isWhiteout:
+        return SftpFileType.whiteout;
+      default:
+        return SftpFileType.unknown;
+    }
+  }
 
   @override
   String toString() {
@@ -131,6 +215,33 @@ class SftpFileAttrs {
       extended: extended,
     );
   }
+
+  /// Whether the file is a regular file. See [type].
+  bool get isDirectory => mode?.type == SftpFileType.directory;
+
+  /// Whether the file is a symbolic link. See [type].
+  bool get isFile => mode?.type == SftpFileType.regularFile;
+
+  /// Whether the file is a symbolic link. See [type].
+  bool get isSymbolicLink => mode?.type == SftpFileType.symbolicLink;
+
+  /// Whether the file is a block device. See [type].
+  bool get isBlockDevice => mode?.type == SftpFileType.blockDevice;
+
+  /// Whether the file is a character device. See [type].
+  bool get isCharacterDevice => mode?.type == SftpFileType.characterDevice;
+
+  /// Whether the file is a pipe. See [type].
+  bool get isPipe => mode?.type == SftpFileType.pipe;
+
+  /// Whether the file is a socket. See [type].
+  bool get isSocket => mode?.type == SftpFileType.socket;
+
+  /// Whether the file is a whiteout. See [type].
+  bool get isWhiteout => mode?.type == SftpFileType.whiteout;
+
+  /// Shortcut for [mode]?.type
+  SftpFileType? get type => mode?.type;
 
   void writeTo(SSHMessageWriter writer) {
     var flags = 0;

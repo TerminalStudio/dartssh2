@@ -184,7 +184,7 @@ class SFTPCommandCd implements SFTPCommand {
       try {
         final absolutePath = await ctx.sftp.absolute(path);
         final stat = await ctx.sftp.stat(absolutePath);
-        if (stat.mode?.isDirectory != true) {
+        if (stat.isDirectory != true) {
           print('$path is not a directory');
           return;
         }
