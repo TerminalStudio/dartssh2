@@ -440,7 +440,7 @@ class SSHClient {
     printDebug?.call('SSHClient._onTransportClosed');
     if (!_authenticated.isCompleted) {
       _authenticated.completeError(
-        SSHAuthError('Connection closed before authentication'),
+        SSHAuthAbortError('Connection closed before authentication'),
       );
     }
     _closeChannels();
@@ -801,7 +801,7 @@ class SSHClient {
 
     if (_authMethodsLeft.isEmpty) {
       return _authenticated.completeError(
-        SSHAuthError('All authentication methods failed'),
+        SSHAuthFailError('All authentication methods failed'),
         StackTrace.current,
       );
     }

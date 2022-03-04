@@ -33,11 +33,24 @@ class SSHHandshakeError with SSHMessageError implements SSHError {
 }
 
 /// Errors that happen when the library fails to authenticate.
-class SSHAuthError with SSHMessageError implements SSHError {
+abstract class SSHAuthError with SSHMessageError implements SSHError {}
+
+/// Errors that happen when the library tried all the authentication methods
+/// and failed to authenticate.
+class SSHAuthFailError with SSHMessageError implements SSHAuthError {
   @override
   final String message;
 
-  SSHAuthError(this.message);
+  SSHAuthFailError(this.message);
+}
+
+/// Errors that happen when the authentication failed due to other reasons.
+/// For example network errors.
+class SSHAuthAbortError with SSHMessageError implements SSHAuthError {
+  @override
+  final String message;
+
+  SSHAuthAbortError(this.message);
 }
 
 /// Errors that happen when the library receives an malformed packet.

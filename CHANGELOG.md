@@ -1,5 +1,6 @@
 ## 2.6.0-pre
 - Allow ignoring stdout or stderr in `SSHClient.run`.
+- Add `SSHAuthFailError` and `SSHAuthAbortError`
 
 ## 2.5.0
 - Fix js import path [#18].
