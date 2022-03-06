@@ -773,7 +773,7 @@ class SSHClient {
   void _startAuthentication() {
     printDebug?.call('SSHClient._startAuthentication');
 
-    if (identities != null) {
+    if (identities != null && identities!.isNotEmpty) {
       _authMethodsLeft.add(SSHAuthMethod.publicKey);
     }
 
