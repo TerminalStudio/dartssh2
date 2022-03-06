@@ -227,6 +227,8 @@ class SSHTransport {
       onError: _onSocketError,
       onDone: _onSocketDone,
     );
+
+    socket.done.catchError(_onSocketError);
   }
 
   void _onSocketData(Uint8List data) {

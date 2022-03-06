@@ -30,6 +30,9 @@ class _SSHNativeSocket implements SSHSocket {
   }
 
   @override
+  Future<void> get done => _socket.done;
+
+  @override
   void destroy() {
     _socket.destroy();
   }

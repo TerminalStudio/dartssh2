@@ -105,7 +105,7 @@ void main() {
 
     test('throws SSHAuthAbortError when the handshake is aborted', () async {
       var client = SSHClient(
-        await SSHSocket.connect('google.com', 443),
+        await SSHSocket.connect('bing.com', 443),
         username: 'root',
         onPasswordRequest: () => 'bad-password',
       );

@@ -17,6 +17,10 @@ abstract class SSHSocket {
 
   StreamSink<List<int>> get sink;
 
+  /// A future that will complete when the consumer closes, or when an error occurs.
+  Future<void> get done;
+
+  /// Closes the socket, returning the same future as [done].
   Future<void> close();
 
   void destroy();
