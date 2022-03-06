@@ -401,7 +401,7 @@ class SSHTransport {
       align: expectedPacketAlign,
     );
 
-    if (paddingLength != expectedPaddingLength) {
+    if (paddingLength < expectedPaddingLength) {
       throw SSHPacketError(
         'Invalid padding length: $paddingLength, expected: $expectedPaddingLength',
       );
