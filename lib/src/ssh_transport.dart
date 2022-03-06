@@ -396,14 +396,14 @@ class SSHTransport {
         ? SSHPacket.minAlign
         : max(SSHPacket.minAlign, _decryptCipher!.blockSize);
 
-    final expectedPaddingLength = SSHPacket.paddingLength(
+    final minPaddingLength = SSHPacket.paddingLength(
       payloadLength,
       align: expectedPacketAlign,
     );
 
-    if (paddingLength < expectedPaddingLength) {
+    if (paddingLength < minPaddingLength) {
       throw SSHPacketError(
-        'Invalid padding length: $paddingLength, expected: $expectedPaddingLength',
+        'Invalid padding length: $paddingLength, expected: $minPaddingLength',
       );
     }
   }
