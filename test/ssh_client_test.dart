@@ -103,6 +103,23 @@ void main() {
       client.close();
     });
 
+    test('throws SSHAuthAbortError when the handshake is aborted', () async {
+      var client = SSHClient(
+        await SSHSocket.connect('google', 443),
+        username: 'root',
+        onPasswordRequest: () => 'bad-password',
+      );
+
+      try {
+        await client.authenticated;
+        fail('should have thrown');
+      } catch (e) {
+        expect(e, isA<SSHAuthAbortError>());
+      }
+
+      client.close();
+    });
+
     test('can get remote ssh software version after handshaking', () async {
       var client = await getTestClient();
       await client.authenticated;
