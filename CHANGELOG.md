@@ -1,7 +1,10 @@
-## 2.6.0-pre
+## 2.6.0
 - Allow ignoring stdout or stderr in `SSHClient.run`.
 - Add `SSHAuthFailError` and `SSHAuthAbortError`.
 - Fix file type detection.
+- Fix empty identity handling [#21]
+- Add connection reset handing.
+- Add more tests
 
 ## 2.5.0
 - Fix js import path [#18].
@@ -95,6 +98,7 @@
 
 - Initial release.
 
+[#21]: https://github.com/TerminalStudio/dartssh2/issues/21
 [#18]: https://github.com/TerminalStudio/dartssh2/issues/18
 [#17]: https://github.com/TerminalStudio/dartssh2/issues/17
 [#14]: https://github.com/TerminalStudio/dartssh2/pull/14
