@@ -272,6 +272,9 @@ class SSHTransport {
     if (index == -1) {
       // In the (rare) case SSH-2 version string is terminated by \n only (observed on Synology DS120j 2021)
       index = bufferString.indexOf('\n');
+      if (index == -1) {
+        throw SSHHandshakeError('Version exchange not terminated');
+      }
       _buffer.consume(index + 1);
     } else {
       _buffer.consume(index + 2);
