@@ -8,11 +8,14 @@
   <a href="https://pub.dartlang.org/packages/dartssh2">
     <img src="https://img.shields.io/pub/v/dartssh2.svg">
   </a>
-  <a href="https://github.com/TerminalStudio/dartssh2/actions/workflows/dart.yml">
-    <img src="https://github.com/TerminalStudio/dartssh2/actions/workflows/dart.yml/badge.svg">
+  <a href="https://pub.dev/packages/dartssh2">
+    <img src="https://badges.bar/dartssh2/popularity">
   </a>
   <a href="https://www.dartdocs.org/documentation/dartssh2/latest/">
     <img src="https://img.shields.io/badge/Docs-dartssh2-blue.svg">
+  </a>
+  <a href="https://github.com/TerminalStudio/dartssh2/actions/workflows/dart.yml">
+    <img src="https://github.com/TerminalStudio/dartssh2/actions/workflows/dart.yml/badge.svg">
   </a>
   <a href="https://ko-fi.com/F1F61K6BL">
     <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-F16061?style=flat&logo=buy-me-a-coffee&logoColor=white&labelColor=555555">
