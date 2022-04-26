@@ -4,26 +4,31 @@ import 'package:args/args.dart';
 
 import 'utils.dart';
 
+final _destinationPattern =
+    RegExp(r'^(?:(?<user>.+)@)?(?<host>[^:]+)(?::(?<port>\d+))?$');
+
 class SSHDestination {
+  final String? user;
+
   final String host;
 
   final int port;
 
-  final String user;
-
   SSHDestination({
+    required this.user,
     required this.host,
     required this.port,
-    required this.user,
   });
 
-  static SSHDestination? tryParse(String url) {
-    final parsedUrl = Uri.tryParse('ssh://$url');
-    if (parsedUrl == null) return null;
+  static SSHDestination? tryParse(String dest) {
+    final match = _destinationPattern.firstMatch(dest);
+    if (match == null) return null;
     return SSHDestination(
-      host: parsedUrl.host,
-      port: parsedUrl.port != 0 ? parsedUrl.port : 22,
-      user: parsedUrl.userInfo.split(':')[0],
+      user: match.namedGroup('user'),
+      host: match.namedGroup('host')!,
+      port: match.namedGroup('port') != null
+          ? int.parse(match.namedGroup('port')!)
+          : 22,
     );
   }
 }

@@ -8,7 +8,7 @@ import 'utils.dart';
 Future<SSHClient> startClientWithOpts(SSHConnectOpts opts) async {
   return SSHClient(
     await SSHSocket.connect(opts.target.host, opts.target.port),
-    username: opts.target.user,
+    username: opts.target.user ?? currentUsername ?? 'root',
     printDebug: opts.verbose ? print : null,
     printTrace: opts.verbose ? print : null,
     identities: findIdentities(),
@@ -36,6 +36,10 @@ Future<SSHClient> startClientWithOpts(SSHConnectOpts opts) async {
       return responses;
     },
   );
+}
+
+String? get currentUsername {
+  return Platform.environment['USERNAME'];
 }
 
 List<SSHKeyPair> findIdentity(String filename) {
