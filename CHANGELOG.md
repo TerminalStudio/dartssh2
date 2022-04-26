@@ -1,3 +1,6 @@
+## 2.6.1
+- Allow username with `@` in `dartssh2` command [#24]
+
 ## 2.6.0
 - Allow ignoring stdout or stderr in `SSHClient.run`.
 - Add `SSHAuthFailError` and `SSHAuthAbortError`.
@@ -98,6 +101,7 @@
 
 - Initial release.
 
+[#24]: https://github.com/TerminalStudio/dartssh2/issues/24
 [#21]: https://github.com/TerminalStudio/dartssh2/issues/21
 [#18]: https://github.com/TerminalStudio/dartssh2/issues/18
 [#17]: https://github.com/TerminalStudio/dartssh2/issues/17
