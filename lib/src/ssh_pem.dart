@@ -5,9 +5,11 @@ import 'dart:typed_data';
 class SSHPem {
   final String type;
 
+  final Map<String, String> headers;
+
   final Uint8List content;
 
-  SSHPem(this.type, this.content);
+  SSHPem(this.type, this.headers, this.content);
 
   static const _pemHeaderBegin = '-----BEGIN ';
   static const _pemFooterBegin = '-----END ';
@@ -44,11 +46,33 @@ class SSHPem {
       throw FormatException('Type mismatch: $type != $footerType');
     }
 
-    final contentBase64 =
-        lines.sublist(1, lines.length - 1).map((line) => line.trim()).join('');
+    final pemHeader = <String, String>{};
 
-    final content = base64.decode(contentBase64);
-    return SSHPem(type, content);
+    final pemBodyLines = <String>[];
+
+    for (final line in lines.sublist(1, lines.length - 1)) {
+      if (line.trim().isEmpty) {
+        continue;
+      }
+
+      if (line.contains(':')) {
+        if (pemBodyLines.isNotEmpty) {
+          throw FormatException('Unexpected header line: $line');
+        } else {
+          final parts = line.split(':');
+          pemHeader[parts[0].trim()] = parts[1].trim();
+          continue;
+        }
+      }
+
+      pemBodyLines.add(line);
+    }
+
+    final pemBody = pemBodyLines.join('');
+
+    final content = base64.decode(pemBody);
+
+    return SSHPem(type, pemHeader, content);
   }
 
   String encode([int lineLength = 64]) {

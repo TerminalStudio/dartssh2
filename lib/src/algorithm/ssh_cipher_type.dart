@@ -49,6 +49,15 @@ class SSHCipherType with SSHAlgorithm {
     cipherFactory: _aesCbcFactory,
   );
 
+  static SSHCipherType? fromName(String name) {
+    for (final value in values) {
+      if (value.name == name) {
+        return value;
+      }
+    }
+    return null;
+  }
+
   const SSHCipherType._({
     required this.name,
     required this.keySize,

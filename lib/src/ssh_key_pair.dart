@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:asn1lib/asn1lib.dart';
+import 'package:convert/convert.dart';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:dartssh2/src/hostkey/hostkey_ecdsa.dart';
 import 'package:dartssh2/src/hostkey/hostkey_ed25519.dart';
@@ -23,7 +24,8 @@ abstract class SSHKeyPair {
         final pairs = OpenSSHKeyPairs.decode(pem.content);
         return pairs.getPrivateKeys(passphrase);
       case 'RSA PRIVATE KEY':
-        return [RsaKeyPair.decode(pem.content)];
+        final pair = RsaKeyPair.decode(pem);
+        return [pair.getPrivateKeys(passphrase)];
       default:
         throw UnsupportedError('Unsupported key type: ${pem.type}');
     }
@@ -36,7 +38,8 @@ abstract class SSHKeyPair {
         final pairs = OpenSSHKeyPairs.decode(pem.content);
         return pairs.isEncrypted;
       case 'RSA PRIVATE KEY':
-        return false;
+        final pair = RsaKeyPair.decode(pem);
+        return pair.isEncrypted;
       default:
         throw UnsupportedError('Unsupported key type: ${pem.type}');
     }
@@ -192,11 +195,11 @@ class OpenSSHKeyPairs {
     }
 
     writer.writeString(privateKeyBlob);
-    return SSHPem('OPENSSH PRIVATE KEY', writer.takeBytes()).encode(70);
+    return SSHPem('OPENSSH PRIVATE KEY', {}, writer.takeBytes()).encode(70);
   }
 
   Uint8List _decryptPrivateKeyBlob(Uint8List blob, Uint8List passphrase) {
-    final cipher = _findCipher(cipherName);
+    final cipher = SSHCipherType.fromName(cipherName);
 
     if (cipher == null) {
       throw UnsupportedError('Unsupported cipher: $cipherName');
@@ -224,15 +227,6 @@ class OpenSSHKeyPairs {
     final iv = Uint8List.view(kdfHash.buffer, cipher.keySize, cipher.ivSize);
     final decryptCipher = cipher.createCipher(key, iv, forEncryption: false);
     return decryptCipher.processAll(blob);
-  }
-
-  static SSHCipherType? _findCipher(String cipherName) {
-    for (var cipher in SSHCipherType.values) {
-      if (cipher.name == cipherName) {
-        return cipher;
-      }
-    }
-    return null;
   }
 
   @override
@@ -491,7 +485,128 @@ class OpenSSHEcdsaKeyPair with OpenSSHKeyPair {
   }
 }
 
-class RsaKeyPair implements SSHKeyPair {
+class RsaKeyPair {
+  final RsaKeyPairDEKInfo? dekInfo;
+
+  final Uint8List keyBlob;
+
+  const RsaKeyPair(this.dekInfo, this.keyBlob);
+
+  factory RsaKeyPair.decode(SSHPem pem) {
+    final dekInfoHeader = pem.headers['DEK-Info'];
+
+    final dekInfo =
+        dekInfoHeader != null ? RsaKeyPairDEKInfo.parse(dekInfoHeader) : null;
+
+    final keyBlob = pem.content;
+
+    return RsaKeyPair(dekInfo, keyBlob);
+  }
+
+  bool get isEncrypted => dekInfo != null;
+
+  RsaPrivateKey getPrivateKeys([String? passphrase]) {
+    var keyBlob = this.keyBlob;
+
+    if (isEncrypted) {
+      if (passphrase == null) {
+        throw ArgumentError('passphrase is required for encrypted key');
+      }
+      final passphraseBytes = Utf8Encoder().convert(passphrase);
+      keyBlob = _decryptPrivateKeyBlob(passphraseBytes);
+    }
+
+    try {
+      return RsaPrivateKey.decode(keyBlob);
+    } catch (e) {
+      throw SSHKeyDecodeError('Failed to decode private key', e);
+    }
+  }
+
+  Uint8List _decryptPrivateKeyBlob(Uint8List passphrase) {
+    final cipher = _getCipher(dekInfo!.algorithm);
+
+    if (cipher == null) {
+      throw UnsupportedError('Unsupported cipher: ${dekInfo!.algorithm}');
+    }
+
+    final kdfHash = _deriveKey(
+      Uint8List.sublistView(dekInfo!.iv, 0, 8),
+      passphrase,
+      cipher.keySize,
+    );
+
+    final key = Uint8List.sublistView(kdfHash, 0, cipher.keySize);
+
+    final decryptCipher =
+        cipher.createCipher(key, dekInfo!.iv, forEncryption: false);
+
+    return decryptCipher.processAll(keyBlob);
+  }
+
+  static SSHCipherType? _getCipher(String name) {
+    switch (name.toUpperCase()) {
+      case 'AES-128-CBC':
+        return SSHCipherType.aes128cbc;
+      case 'AES-192-CBC':
+        return SSHCipherType.aes192cbc;
+      case 'AES-256-CBC':
+        return SSHCipherType.aes256cbc;
+      case 'AES-128-CTR':
+        return SSHCipherType.aes128ctr;
+      case 'AES-192-CTR':
+        return SSHCipherType.aes192ctr;
+      case 'AES-256-CTR':
+        return SSHCipherType.aes256ctr;
+    }
+    return null;
+  }
+
+  static Uint8List _deriveKey(Uint8List salt, Uint8List data, int length) {
+    final result = BytesBuilder();
+    var lastHash = Uint8List(0);
+
+    while (result.length < length) {
+      final digest = MD5Digest();
+      final hash = Uint8List(digest.digestSize);
+      digest.reset();
+      digest.update(lastHash, 0, lastHash.length);
+      digest.update(data, 0, data.length);
+      digest.update(salt, 0, salt.length);
+      digest.doFinal(hash, 0);
+      result.add(hash);
+      lastHash = hash;
+    }
+
+    return result.takeBytes();
+  }
+}
+
+/// Corresponds to the `DEK-Info` header in PEM.
+class RsaKeyPairDEKInfo {
+  final String algorithm;
+  final Uint8List iv;
+
+  RsaKeyPairDEKInfo(this.algorithm, this.iv);
+
+  factory RsaKeyPairDEKInfo.parse(String header) {
+    final parts = header.split(',');
+    if (parts.length != 2) {
+      throw FormatException('Invalid DEK-Info header: $header');
+    }
+    return RsaKeyPairDEKInfo(
+      parts[0],
+      Uint8List.fromList(hex.decode(parts[1])),
+    );
+  }
+
+  @override
+  String toString() {
+    return '$runtimeType(algorithm: $algorithm, iv: ${hex.encode(iv)})';
+  }
+}
+
+class RsaPrivateKey implements SSHKeyPair {
   @override
   final type = 'ssh-rsa';
 
@@ -505,7 +620,7 @@ class RsaKeyPair implements SSHKeyPair {
   final BigInt exponent2;
   final BigInt coefficient;
 
-  RsaKeyPair(
+  RsaPrivateKey(
     this.version,
     this.n,
     this.e,
@@ -517,8 +632,8 @@ class RsaKeyPair implements SSHKeyPair {
     this.coefficient,
   );
 
-  factory RsaKeyPair.decode(Uint8List data) {
-    final parser = ASN1Parser(data);
+  factory RsaPrivateKey.decode(Uint8List keyBlob) {
+    final parser = ASN1Parser(keyBlob);
 
     final sequence = parser.nextObject() as ASN1Sequence;
     final version = (sequence.elements[0] as ASN1Integer).valueAsBigInteger;
@@ -531,7 +646,7 @@ class RsaKeyPair implements SSHKeyPair {
     final exponent2 = (sequence.elements[7] as ASN1Integer).valueAsBigInteger;
     final coefficient = (sequence.elements[8] as ASN1Integer).valueAsBigInteger;
 
-    return RsaKeyPair(
+    return RsaPrivateKey(
       version!,
       n!,
       e!,
@@ -578,7 +693,7 @@ class RsaKeyPair implements SSHKeyPair {
     sequence.add(ASN1Integer(exponent1));
     sequence.add(ASN1Integer(exponent2));
     sequence.add(ASN1Integer(coefficient));
-    return SSHPem('RSA PRIVATE KEY', sequence.encodedBytes).encode(64);
+    return SSHPem('RSA PRIVATE KEY', {}, sequence.encodedBytes).encode(64);
   }
 
   @override

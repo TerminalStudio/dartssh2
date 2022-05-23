@@ -69,12 +69,24 @@ class SSHStateError with SSHMessageError implements SSHError {
   SSHStateError(this.message);
 }
 
-/// Errors that happen when the library fails to decrypt the host key.
-class SSHKeyDecryptError with SSHMessageError implements SSHError {
+/// Errors that happen when the library fails to decode a key.
+class SSHKeyDecodeError with SSHMessageError implements SSHError {
   @override
   final String message;
 
-  SSHKeyDecryptError(this.message);
+  final Object? error;
+
+  SSHKeyDecodeError(this.message, [this.error]);
+
+  @override
+  String toString() {
+    return '$runtimeType($message, $error)';
+  }
+}
+
+/// Errors that happen when the library fails to decrypt the host key.
+class SSHKeyDecryptError extends SSHKeyDecodeError {
+  SSHKeyDecryptError(String message, [Object? error]) : super(message, error);
 }
 
 /// Errors that happen when the library fails to open a channel.
