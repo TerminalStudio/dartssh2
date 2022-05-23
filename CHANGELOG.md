@@ -1,3 +1,6 @@
+## 2.7.0
+- Support encrypted RSA format private key
+
 ## 2.6.1
 - Allow username with `@` in `dartssh2` command [#24]
 

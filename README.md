@@ -313,6 +313,16 @@ sftp.link('/from', '/to');
 - `hmac-md5`
 - `hmac-sha1`
 - `hmac-sha2-[256|512]`
+
+**Private key**:
+| **Type**            | **Decode** | **Decrypt** | **Encode** | **Encrypt** |
+| ------------------- | ---------- | ----------- | ---------- | ----------- |
+| **RSA**             | ✔️          | ✔️           | ✔️          | WIP         |
+| **OpenSSH RSA**     | ✔️          | ✔️           | ✔️          | WIP         |
+| **OpenSSH ECDSA**   | ✔️          | ✔️           | ✔️          | WIP         |
+| **OpenSSH Ed25519** | ✔️          | ✔️           | ✔️          | WIP         |
+
+
   
 ## ⏳ Roadmap
 
