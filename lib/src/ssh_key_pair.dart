@@ -45,6 +45,13 @@ abstract class SSHKeyPair {
     }
   }
 
+  /// [name] is the name of the algorithm used when saving the key. This only
+  /// affects how the key is serialized.
+  String get name;
+
+  /// [type] indicates not only the encoding of the key, but also the the
+  /// algorithm used when signing. Until now only RSA keys have [type]s that are
+  /// different from [name].
   String get type;
 
   SSHHostKey toPublicKey();
@@ -276,7 +283,7 @@ abstract class OpenSSHKeyPair implements SSHKeyPair {
 
     writer.writeUint32(checkInt);
     writer.writeUint32(checkInt);
-    writer.writeUtf8(type);
+    writer.writeUtf8(name);
     writeTo(writer);
 
     // pad with bytes 1, 2, 3, ...
@@ -293,7 +300,10 @@ abstract class OpenSSHKeyPair implements SSHKeyPair {
 
 class OpenSSHRsaKeyPair with OpenSSHKeyPair {
   @override
-  final type = 'ssh-rsa';
+  final name = 'ssh-rsa';
+
+  @override
+  final type = SSHRsaSignatureType.sha256;
 
   final BigInt n;
   final BigInt e;
@@ -333,7 +343,7 @@ class OpenSSHRsaKeyPair with OpenSSHKeyPair {
 
   @override
   SSHRsaSignature sign(Uint8List data) {
-    final signer = RSASigner(SHA1Digest(), '06052b0e03021a');
+    final signer = RSASigner(SHA256Digest(), '0609608648016503040201');
 
     signer.init(
       true,
@@ -342,10 +352,7 @@ class OpenSSHRsaKeyPair with OpenSSHKeyPair {
       ),
     );
 
-    return SSHRsaSignature(
-      SSHRsaSignatureType.sha1,
-      signer.generateSignature(data).bytes,
-    );
+    return SSHRsaSignature(type, signer.generateSignature(data).bytes);
   }
 
   @override
@@ -366,6 +373,9 @@ class OpenSSHRsaKeyPair with OpenSSHKeyPair {
 }
 
 class OpenSSHEd25519KeyPair with OpenSSHKeyPair {
+  @override
+  final name = 'ssh-ed25519';
+
   @override
   final type = 'ssh-ed25519';
 
@@ -410,6 +420,9 @@ class OpenSSHEd25519KeyPair with OpenSSHKeyPair {
 
 class OpenSSHEcdsaKeyPair with OpenSSHKeyPair {
   @override
+  String get name => 'ecdsa-sha2-$curveId';
+
+  @override
   String get type => 'ecdsa-sha2-$curveId';
 
   final String curveId;
@@ -432,7 +445,7 @@ class OpenSSHEcdsaKeyPair with OpenSSHKeyPair {
 
   @override
   SSHHostKey toPublicKey() {
-    return SSHEcdsaPublicKey(type: type, curveId: curveId, q: q);
+    return SSHEcdsaPublicKey(type: name, curveId: curveId, q: q);
   }
 
   @override
@@ -608,7 +621,10 @@ class RsaKeyPairDEKInfo {
 
 class RsaPrivateKey implements SSHKeyPair {
   @override
-  final type = 'ssh-rsa';
+  final name = 'ssh-rsa';
+
+  @override
+  final type = SSHRsaSignatureType.sha256;
 
   final BigInt version;
   final BigInt n;
@@ -666,7 +682,7 @@ class RsaPrivateKey implements SSHKeyPair {
 
   @override
   SSHRsaSignature sign(Uint8List data) {
-    final signer = RSASigner(SHA1Digest(), '06052b0e03021a');
+    final signer = RSASigner(SHA256Digest(), '0609608648016503040201');
 
     signer.init(
       true,
@@ -675,10 +691,7 @@ class RsaPrivateKey implements SSHKeyPair {
       ),
     );
 
-    return SSHRsaSignature(
-      SSHRsaSignatureType.sha1,
-      signer.generateSignature(data).bytes,
-    );
+    return SSHRsaSignature(type, signer.generateSignature(data).bytes);
   }
 
   @override
