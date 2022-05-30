@@ -1,3 +1,6 @@
+## 2.7.1
+- Upgrade rsa authentication algorithm to rsa-sha2-256.
+
 ## 2.7.0
 - Support encrypted RSA format private key
 
