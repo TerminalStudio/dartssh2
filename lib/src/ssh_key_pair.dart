@@ -288,7 +288,7 @@ abstract class OpenSSHKeyPair implements SSHKeyPair {
 
     // pad with bytes 1, 2, 3, ...
     for (var i = 0; writer.length % 8 != 0; i++) {
-      writer.writeUint8(i);
+      writer.writeUint8(i + 1);
     }
 
     return OpenSSHKeyPairs.unencrypted(
