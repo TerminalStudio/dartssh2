@@ -402,7 +402,7 @@ class OpenSSHEd25519KeyPair with OpenSSHKeyPair {
   @override
   SSHEd25519Signature sign(Uint8List data) {
     final signer = ed25519.SigningKey.fromValidBytes(privateKey);
-    return SSHEd25519Signature(signer.sign(data).buffer.asUint8List(0, 64));
+    return SSHEd25519Signature(signer.sign(data).asTypedList);
   }
 
   @override

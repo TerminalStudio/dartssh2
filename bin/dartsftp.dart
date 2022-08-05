@@ -513,7 +513,7 @@ class SFTPCommandExit implements SFTPCommand {
 void _reportProgress(int bytesRead, int? total) {
   if (total != null) {
     final percent = (bytesRead / total * 100).toStringAsFixed(2);
-    console.write('$percent%'.padLeft(7) + '  ');
+    console.write('${'$percent%'.padLeft(7)}  ');
   }
   console.writeLine('$bytesRead/${total ?? '??'} bytes');
 }
