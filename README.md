@@ -38,26 +38,13 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
 
 ## 🧬 Built with dartssh2
 
-<table>
-  <thead>
-    <tr>
-      <th align="center">
-        <a href="https://github.com/LollipopKit/flutter_server_box">Server Box</a>
-      <th>
-    </tr>
-  </thead>
-  
-  <tbody>
-    <tr>
-      <td>
-        <img src="https://raw.githubusercontent.com/TerminalStudio/dartssh2/master/media/showcase-1-serverbox.1.jpg" width="150px">
-        <img src="https://raw.githubusercontent.com/TerminalStudio/dartssh2/master/media/showcase-1-serverbox.2.png" width="150px">
-      </td>
-    </tr>
-  </tbody>
-</table>
+|                                                                                           **[ServerBox](https://github.com/LollipopKit/flutter_server_box)**                                                                                           |
+| :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| <img src="https://raw.githubusercontent.com/TerminalStudio/dartssh2/master/media/showcase-1-serverbox.1.jpg" width="150px"><img src="https://raw.githubusercontent.com/TerminalStudio/dartssh2/master/media/showcase-1-serverbox.2.png" width="150px"> |
 
 > Feel free to add your own app here by opening a pull request.
+
+
 
 ## 🧪 Try
 
