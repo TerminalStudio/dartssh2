@@ -53,7 +53,7 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
   </tr>
 </table>
 
-
+> Feel free to add your own app here by opening a pull request.
 
 ## 🧪 Try
 
