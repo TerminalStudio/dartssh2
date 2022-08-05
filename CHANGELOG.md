@@ -1,3 +1,6 @@
+## 2.7.2
+- Upgrade `pinenacl` to `0.5.0`.
+
 ## 2.7.1
 - Upgrade rsa authentication algorithm to rsa-sha2-256.
 
