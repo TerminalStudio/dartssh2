@@ -1,5 +1,6 @@
 ## 2.7.2
 - Upgrade `pinenacl` to `0.5.0`.
+- Fix bug in exporting openssh private key to pem, thanks [@PIDAMI]
 
 ## 2.7.1
 - Upgrade rsa authentication algorithm to rsa-sha2-256.
@@ -119,3 +120,4 @@
 
 [@linhanyu]: https://github.com/linhanyu
 [@Migarl]: https://github.com/Migarl
+[@PIDAMI]: https://github.com/PIDAMI
