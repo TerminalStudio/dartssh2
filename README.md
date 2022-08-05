@@ -36,7 +36,7 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
 -  **Forwarding**: Supports local forwarding and remote forwarding.
 -  **SFTP**: Supports all operations defined in [SFTPv3 protocol](https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02) including upload, download, list, link, remove, rename, etc.
 
-## Built with dartssh2
+## 🧬 Built with dartssh2
 
 <table>
   <tr>
