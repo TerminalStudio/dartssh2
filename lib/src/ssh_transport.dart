@@ -37,7 +37,9 @@ typedef SSHPrintHandler = void Function(String?);
 /// [type] is the type of the host key, For example 'ssh-rsa',
 /// [fingerprint] md5 fingerprint of the host key.
 typedef SSHHostkeyVerifyHandler = FutureOr<bool> Function(
-    String type, Uint8List fingerprint);
+  String type,
+  Uint8List fingerprint,
+);
 
 typedef SSHTransportReadyHandler = void Function();
 

@@ -14,8 +14,10 @@ void main(List<String> args) async {
   );
 
   final sftp = await client.sftp();
-  final file = await sftp.open('file.txt',
-      mode: SftpFileOpenMode.truncate | SftpFileOpenMode.write);
+  final file = await sftp.open(
+    'file.txt',
+    mode: SftpFileOpenMode.truncate | SftpFileOpenMode.write,
+  );
 
   await file.write(File('local_file.txt').openRead().cast());
   print('done');

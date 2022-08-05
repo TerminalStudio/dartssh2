@@ -71,22 +71,24 @@ void main() {
       client.close();
     });
 
-    test('throws SSHAuthFailError when both password and public key are wrong',
-        () async {
-      var client = SSHClient(
-        await SSHSocket.connect('honeypot.terminal.studio', 2023),
-        username: 'root',
-        onPasswordRequest: () => 'bad-password',
-        identities: await getTestKeyPairs(),
-      );
-      try {
-        await client.authenticated;
-        fail('should have thrown');
-      } catch (e) {
-        expect(e, isA<SSHAuthFailError>());
-      }
-      client.close();
-    });
+    test(
+      'throws SSHAuthFailError when both password and public key are wrong',
+      () async {
+        var client = SSHClient(
+          await SSHSocket.connect('honeypot.terminal.studio', 2023),
+          username: 'root',
+          onPasswordRequest: () => 'bad-password',
+          identities: await getTestKeyPairs(),
+        );
+        try {
+          await client.authenticated;
+          fail('should have thrown');
+        } catch (e) {
+          expect(e, isA<SSHAuthFailError>());
+        }
+        client.close();
+      },
+    );
 
     test('throws SSHAuthFailError when identity is empty', () async {
       var client = SSHClient(

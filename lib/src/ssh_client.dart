@@ -28,7 +28,8 @@ typedef SSHChangePasswordRequestHandler = FutureOr<SSHChangePasswordResponse?>
 
 /// https://datatracker.ietf.org/doc/html/rfc4256#section-3.3
 typedef SSHUserInfoRequestHandler = FutureOr<List<String>?> Function(
-    SSHUserInfoRequest request);
+  SSHUserInfoRequest request,
+);
 
 /// https://datatracker.ietf.org/doc/html/rfc4252#section-5.4
 typedef SSHUserauthBannerHandler = void Function(String banner);

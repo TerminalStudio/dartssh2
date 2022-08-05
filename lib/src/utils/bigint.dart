@@ -29,11 +29,9 @@ BigInt decodeBigIntWithSign(int sign, List<int> magnitude) {
   }
 
   if (result != BigInt.zero) {
-    if (sign < 0) {
-      result = result.toSigned(result.bitLength);
-    } else {
-      result = result.toUnsigned(result.bitLength);
-    }
+    result = sign < 0
+        ? result.toSigned(result.bitLength)
+        : result.toUnsigned(result.bitLength);
   }
   return result;
 }

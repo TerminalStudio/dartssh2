@@ -11,7 +11,7 @@ void main(List<String> args) async {
     username: 'root',
     identities: [
       // A single private key file may contain multiple keys.
-      ...SSHKeyPair.fromPem(await File('path/to/id_rsa').readAsString())
+      ...SSHKeyPair.fromPem(await File('path/to/id_rsa').readAsString()),
     ],
   );
 

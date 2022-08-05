@@ -227,7 +227,11 @@ class SftpReadPacket implements SftpRequestPacket {
     final offset = reader.readUint64();
     final length = reader.readUint32();
     return SftpReadPacket(
-        requestId: requestId, handle: handle, offset: offset, length: length);
+      requestId: requestId,
+      handle: handle,
+      offset: offset,
+      length: length,
+    );
   }
 
   @override

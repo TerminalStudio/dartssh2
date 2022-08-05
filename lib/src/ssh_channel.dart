@@ -11,7 +11,8 @@ import 'package:dartssh2/src/ssh_message.dart';
 /// Handler of channel requests. Return true if the request was handled, false
 /// if the request was not recognized or could not be handled.
 typedef SSHChannelRequestHandler = bool Function(
-    SSH_Message_Channel_Request request);
+  SSH_Message_Channel_Request request,
+);
 
 class SSHChannelController {
   final int localId;

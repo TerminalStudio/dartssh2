@@ -348,7 +348,7 @@ class Blowfish {
       0x53b02d5d,
       0xa99f8fa1,
       0x08ba4799,
-      0x6e85076a
+      0x6e85076a,
     ]),
     Uint32List.fromList([
       0x4b7a70e9,
@@ -606,7 +606,7 @@ class Blowfish {
       0x153e21e7,
       0x8fb03d4a,
       0xe6e39f2b,
-      0xdb83adf7
+      0xdb83adf7,
     ]),
     Uint32List.fromList([
       0xe93d5a68,
@@ -864,7 +864,7 @@ class Blowfish {
       0xd79a3234,
       0x92638212,
       0x670efa8e,
-      0x406000e0
+      0x406000e0,
     ]),
     Uint32List.fromList([
       0x3a39ce37,
@@ -1122,8 +1122,8 @@ class Blowfish {
       0xb74e6132,
       0xce77e25b,
       0x578fdfe3,
-      0x3ac372e6
-    ])
+      0x3ac372e6,
+    ]),
   ];
   Uint32List P = Uint32List.fromList([
     0x243f6a88,
@@ -1143,7 +1143,7 @@ class Blowfish {
     0x3f84d5b5,
     0xb5470917,
     0x9216d5d9,
-    0x8979fb1b
+    0x8979fb1b,
   ]);
 
   void encipher(Uint32List x, [Uint8List? x8]) {
