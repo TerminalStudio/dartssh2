@@ -34,10 +34,13 @@ jobs:
 
       # Consider passing '--fatal-infos' for slightly stricter analysis.
       - name: Analyze project source
-        run: dart analyze
+        run: dart analyze --fatal-infos
 
-      # Your project will need to have tests in test/ and a dependency on
-      # package:test for this step to succeed. Note that Flutter projects will
-      # want to change this to 'flutter test'.
+      - name: Activate coverage tool
+        run: dart pub global activate coverage
+
       - name: Run tests
-        run: dart test
+        run: dart pub global run coverage:test_with_coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
