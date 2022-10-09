@@ -1,3 +1,7 @@
+## 2.7.3
+- Update README.md
+- Move cli into separate package.
+
 ## 2.7.2+3
 - Update README.md
 
