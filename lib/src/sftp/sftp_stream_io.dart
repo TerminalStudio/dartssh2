@@ -32,9 +32,9 @@ class SftpFileWriter {
   /// after construction.
   SftpFileWriter(this.file, this.stream, this.offset, this.onProgress) {
     _subscription =
-        stream.transform(MaxChunkSize(chunkSize)).listen(_handleChunk);
+        stream.transform(MaxChunkSize(chunkSize)).listen(_handleLocalData);
 
-    _subscription.onDone(_handleStreamDone);
+    _subscription.onDone(_handleLocalDone);
   }
 
   /// The subscription for [stream]. We use this to pause and resume the data
@@ -82,7 +82,7 @@ class SftpFileWriter {
     _subscription.resume();
   }
 
-  Future<void> _handleChunk(Uint8List chunk) async {
+  Future<void> _handleLocalData(Uint8List chunk) async {
     final bytesOnTheWire = _bytesSent - _bytesAcked;
     if (bytesOnTheWire >= maxBytesOnTheWire) {
       _subscription.pause();
@@ -104,7 +104,7 @@ class SftpFileWriter {
     }
   }
 
-  void _handleStreamDone() {
+  void _handleLocalDone() {
     _streamDone = true;
   }
 }
