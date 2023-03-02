@@ -581,13 +581,15 @@ class SftpFile {
   }
 
   /// Writes [stream] to the file starting at [offset].
-  Future<void> write(
+  ///
+  /// Returns a [SftpFileWriter] that can be used to control the write
+  /// operation or wait for it to complete.
+  SftpFileWriter write(
     Stream<Uint8List> stream, {
     int offset = 0,
     void Function(int total)? onProgress,
-  }) async {
-    final writer = SftpFileWriter(this, stream, offset, onProgress);
-    await writer.done;
+  }) {
+    return SftpFileWriter(this, stream, offset, onProgress);
   }
 
   /// Writes [data] to the file starting at [offset].

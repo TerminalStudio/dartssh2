@@ -1,3 +1,7 @@
+## [upcoming]
+- `SftpFile.write` now returns a `SftpFileWriter` that can be used to control
+  the writing process.
+
 ## 2.7.3
 - Update README.md
 - Move cli into separate package.

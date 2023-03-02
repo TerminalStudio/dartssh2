@@ -23,10 +23,7 @@ void main(List<String> args) async {
     mode: SftpFileOpenMode.create | SftpFileOpenMode.write,
   );
 
-  await file.write(
-    Stream.value(Utf8Encoder().convert('hello there!')),
-  );
-
+  await file.write(Stream.value(Utf8Encoder().convert('hello there!'))).done;
   await file.close();
 
   client.close();
