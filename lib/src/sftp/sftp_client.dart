@@ -523,7 +523,18 @@ class SftpFile {
 
       bytessRequested += chunkLength;
 
-      final chunk = await _readChunk(chunkLength, chunkStart);
+      late final Uint8List? chunk;
+
+      try {
+        chunk = await _readChunk(chunkLength, chunkStart);
+      } catch (e, st) {
+        if (!streamController.isClosed) {
+          streamController.addError(e, st);
+          streamController.close();
+        }
+        return;
+      }
+
       if (chunk == null) {
         streamController.close();
         return;
