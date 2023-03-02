@@ -31,24 +31,26 @@ class SftpFileWriter {
 
   var _bytesAcked = 0;
 
+  int get _bytesOnTheWire => _bytesSent - _bytesAcked;
+
   var _streamDone = false;
 
   Future<void> get done => _doneCompleter.future;
 
   Future<void> _onStreamData(Uint8List chunk) async {
-    final bytesOnTheWire = _bytesSent - _bytesAcked;
-    if (bytesOnTheWire >= maxBytesOnTheWire) {
+    if (_bytesOnTheWire >= maxBytesOnTheWire) {
       _subscription.pause();
+    } else {
+      _subscription.resume();
     }
 
     final chunkWriteOffset = offset + _bytesSent;
     _bytesSent += chunk.length;
     await file.writeBytes(chunk, offset: chunkWriteOffset);
-
     _bytesAcked += chunk.length;
     onProgress?.call(_bytesAcked);
 
-    if (bytesOnTheWire < maxBytesOnTheWire) {
+    if (_bytesOnTheWire < maxBytesOnTheWire) {
       _subscription.resume();
     }
 
