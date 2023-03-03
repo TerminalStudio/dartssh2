@@ -42,7 +42,7 @@ class SSHChannelController {
     this.printDebug,
   }) {
     if (remoteInitialWindowSize > 0) {
-      _dataSendLoop.trigger();
+      _uploadLoop.activate();
     }
   }
 
@@ -207,7 +207,7 @@ class SSHChannelController {
     _remoteWindow += bytesToAdd;
 
     if (_remoteWindow > 0) {
-      _dataSendLoop.trigger();
+      _uploadLoop.activate();
     }
   }
 
@@ -300,10 +300,10 @@ class SSHChannelController {
     );
   }
 
-  late final _dataSendLoop = Trigger(() async {
+  late final _uploadLoop = OnceSimultaneously(() async {
     while (true) {
       if (_remoteWindow <= 0) {
-        break;
+        return;
       }
 
       final dataToRead = min(_remoteWindow, remoteMaximumPacketSize);
@@ -313,7 +313,11 @@ class SSHChannelController {
         return;
       }
 
-      printDebug?.call('SSHChannel._dataSendLoop: len=${data.bytes.length}');
+      if (_hasSentEOF) {
+        return;
+      }
+
+      printDebug?.call('SSHChannel._uploadLoop: len=${data.bytes.length}');
 
       final message = data.isExtendedData
           ? SSH_Message_Channel_Extended_Data(
@@ -456,7 +460,7 @@ class SSHChannelDataConsumer extends StreamConsumerBase<SSHChannelData> {
   }
 
   @override
-  SSHChannelData sublistView(SSHChannelData chunk, int start, int end) {
+  SSHChannelData getSublistView(SSHChannelData chunk, int start, int end) {
     return SSHChannelData(
       Uint8List.sublistView(chunk.bytes, start, end),
       type: chunk.type,
@@ -464,14 +468,16 @@ class SSHChannelDataConsumer extends StreamConsumerBase<SSHChannelData> {
   }
 }
 
-class Trigger {
-  Trigger(this._fn);
+/// A function that can be invoked at most once simultaneously.
+class OnceSimultaneously {
+  OnceSimultaneously(this._fn);
 
   final Future Function() _fn;
 
   var _isRunning = false;
 
-  void trigger() async {
+  /// Call the function. If the function is already running, this is a no-op.
+  void activate() async {
     if (_isRunning) return;
     _isRunning = true;
     try {

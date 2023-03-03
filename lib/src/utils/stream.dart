@@ -76,11 +76,13 @@ abstract class StreamConsumerBase<T> {
   /// The amount of bytes that have been read from [_currentChunk].
   var _currentOffset = 0;
 
+  /// Returns the length of type [T].
   @protected
   int getLength(T chunk);
 
+  /// Returns a sublist view of type [T] from [start] to [end].
   @protected
-  T sublistView(T chunk, int start, int end);
+  T getSublistView(T chunk, int start, int end);
 
   /// Reads up to [size] bytes from the stream.
   ///
@@ -111,7 +113,7 @@ abstract class StreamConsumerBase<T> {
       getLength(_currentChunk as T) - _currentOffset,
     );
 
-    final result = sublistView(
+    final result = getSublistView(
       _currentChunk as T,
       _currentOffset,
       _currentOffset + effectSize,
@@ -142,7 +144,7 @@ class StreamConsumer extends StreamConsumerBase<Uint8List> {
   }
 
   @override
-  Uint8List sublistView(Uint8List chunk, int start, int end) {
+  Uint8List getSublistView(Uint8List chunk, int start, int end) {
     return Uint8List.sublistView(chunk, start, end);
   }
 }
