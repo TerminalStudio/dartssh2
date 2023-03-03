@@ -19,7 +19,7 @@ void main(List<String> args) async {
     mode: SftpFileOpenMode.truncate | SftpFileOpenMode.write,
   );
 
-  await file.write(File('local_file.txt').openRead().cast());
+  await file.write(File('local_file.txt').openRead().cast()).done;
   print('done');
 
   client.close();
