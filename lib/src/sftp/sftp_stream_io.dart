@@ -43,12 +43,16 @@ class SftpFileWriter {
 
   final _doneCompleter = Completer<void>();
 
-  /// Bytes of data that have been sent to the remote host. The difference
-  /// between this and [_bytesAcked] is the amount of data on the wire.
+  /// Bytes of data that have been sent to the remote host.
   var _bytesSent = 0;
 
   /// Bytes of data that have been acknowledged by the remote host.
   var _bytesAcked = 0;
+
+  /// Number of bytes sent to the server but not yet acknowledged.
+  ///
+  /// This number is used to pause the stream when it gets too high.
+  int get _bytesOnTheWire => _bytesSent - _bytesAcked;
 
   /// Whether [stream] has emitted all of its data.
   var _streamDone = false;
@@ -83,9 +87,10 @@ class SftpFileWriter {
   }
 
   Future<void> _handleLocalData(Uint8List chunk) async {
-    final bytesOnTheWire = _bytesSent - _bytesAcked;
-    if (bytesOnTheWire >= maxBytesOnTheWire) {
+    if (_bytesOnTheWire >= maxBytesOnTheWire) {
       _subscription.pause();
+    } else {
+      _subscription.resume();
     }
 
     final chunkWriteOffset = offset + _bytesSent;
@@ -95,7 +100,7 @@ class SftpFileWriter {
     _bytesAcked += chunk.length;
     onProgress?.call(_bytesAcked);
 
-    if (bytesOnTheWire < maxBytesOnTheWire) {
+    if (_bytesOnTheWire < maxBytesOnTheWire) {
       _subscription.resume();
     }
 

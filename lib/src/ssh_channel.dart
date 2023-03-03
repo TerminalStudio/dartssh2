@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'dart:typed_data';
 
@@ -7,6 +8,7 @@ import 'package:dartssh2/src/ssh_transport.dart';
 import 'package:dartssh2/src/utils/async_queue.dart';
 import 'package:dartssh2/src/message/msg_channel.dart';
 import 'package:dartssh2/src/ssh_message.dart';
+import 'package:dartssh2/src/utils/stream.dart';
 
 /// Handler of channel requests. Return true if the request was handled, false
 /// if the request was not recognized or could not be handled.
@@ -39,12 +41,8 @@ class SSHChannelController {
     required this.sendMessage,
     this.printDebug,
   }) {
-    _localStream.done.then((_) => _handleLocalDone());
-
-    if (remoteInitialWindowSize <= 0) {
-      _localStreamSubscription.pause();
-    } else {
-      _localStreamSubscription.resume();
+    if (remoteInitialWindowSize > 0) {
+      _uploadLoop.activate();
     }
   }
 
@@ -62,10 +60,7 @@ class SSHChannelController {
   /// A [StreamController] that accepts data from local end of the channel.
   final _localStream = StreamController<SSHChannelData>();
 
-  /// Subscription to [_localStream].
-  late final _localStreamSubscription = _localStream.stream
-      .transform(SSHChannelDataSplitter(remoteMaximumPacketSize))
-      .listen(_handleLocalData);
+  late final _locaStreamConsumer = SSHChannelDataConsumer(_localStream.stream);
 
   /// Handler of channel requests from the remote side.
   late var _requestHandler = _defaultRequestHandler;
@@ -196,7 +191,7 @@ class SSHChannelController {
   void close() {
     if (_done.isCompleted) return;
     _remoteStream.close();
-    _localStreamSubscription.cancel();
+    _locaStreamConsumer.cancel();
     _sendEOFIfNeeded();
     _sendCloseIfNeeded();
     _done.complete();
@@ -211,8 +206,8 @@ class SSHChannelController {
 
     _remoteWindow += bytesToAdd;
 
-    if (_remoteWindow > remoteMaximumPacketSize) {
-      _localStreamSubscription.resume();
+    if (_remoteWindow > 0) {
+      _uploadLoop.activate();
     }
   }
 
@@ -305,32 +300,41 @@ class SSHChannelController {
     );
   }
 
-  void _handleLocalDone() {
-    printDebug?.call('SSHChannel._handleLocalDone');
-    _sendEOFIfNeeded();
-  }
+  late final _uploadLoop = OnceSimultaneously(() async {
+    while (true) {
+      if (_remoteWindow <= 0) {
+        return;
+      }
 
-  void _handleLocalData(SSHChannelData data) {
-    printDebug?.call('SSHChannel._handleLocalData: len=${data.bytes.length}');
+      final dataToRead = min(_remoteWindow, remoteMaximumPacketSize);
+      final data = await _locaStreamConsumer.read(dataToRead);
+      if (data == null) {
+        _sendEOFIfNeeded();
+        return;
+      }
 
-    final message = data.isExtendedData
-        ? SSH_Message_Channel_Extended_Data(
-            recipientChannel: remoteId,
-            dataTypeCode: data.type!,
-            data: data.bytes,
-          )
-        : SSH_Message_Channel_Data(
-            recipientChannel: remoteId,
-            data: data.bytes,
-          );
+      if (_hasSentEOF) {
+        return;
+      }
 
-    sendMessage(message);
+      printDebug?.call('SSHChannel._uploadLoop: len=${data.bytes.length}');
 
-    _remoteWindow -= data.bytes.length;
-    if (_remoteWindow < remoteMaximumPacketSize) {
-      _localStreamSubscription.pause();
+      final message = data.isExtendedData
+          ? SSH_Message_Channel_Extended_Data(
+              recipientChannel: remoteId,
+              dataTypeCode: data.type!,
+              data: data.bytes,
+            )
+          : SSH_Message_Channel_Data(
+              recipientChannel: remoteId,
+              data: data.bytes,
+            );
+
+      sendMessage(message);
+
+      _remoteWindow -= data.bytes.length;
     }
-  }
+  });
 }
 
 class SSHChannel {
@@ -339,9 +343,6 @@ class SSHChannel {
 
   /// The channel id on the remote side.
   SSHChannelId get remoteChannelId => _controller.localId;
-
-  /// A [Stream] that emits event when more data can be sent to the remote side.
-  Stream<void> get windowAvailable => Stream.empty();
 
   /// The maximum packet size that the remote side can receive.
   int get maximumPacketSize => _controller.remoteMaximumPacketSize;
@@ -446,6 +447,43 @@ class SSHChannelDataSplitter
           type: chunk.type,
         );
       }
+    }
+  }
+}
+
+class SSHChannelDataConsumer extends StreamConsumerBase<SSHChannelData> {
+  SSHChannelDataConsumer(Stream<SSHChannelData> stream) : super(stream);
+
+  @override
+  int getLength(SSHChannelData chunk) {
+    return chunk.bytes.length;
+  }
+
+  @override
+  SSHChannelData getSublistView(SSHChannelData chunk, int start, int end) {
+    return SSHChannelData(
+      Uint8List.sublistView(chunk.bytes, start, end),
+      type: chunk.type,
+    );
+  }
+}
+
+/// A function that can be invoked at most once simultaneously.
+class OnceSimultaneously {
+  OnceSimultaneously(this._fn);
+
+  final Future Function() _fn;
+
+  var _isRunning = false;
+
+  /// Call the function. If the function is already running, this is a no-op.
+  void activate() async {
+    if (_isRunning) return;
+    _isRunning = true;
+    try {
+      await _fn();
+    } finally {
+      _isRunning = false;
     }
   }
 }
