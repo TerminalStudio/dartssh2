@@ -9,7 +9,7 @@
     <img src="https://img.shields.io/pub/v/dartssh2.svg">
   </a>
   <a href="https://pub.dev/packages/dartssh2">
-    <img src="https://badges.bar/dartssh2/popularity">
+    <img src="https://img.shields.io/pub/popularity/dartssh2?logo=dart">
   </a>
   <a href="https://www.dartdocs.org/documentation/dartssh2/latest/">
     <img src="https://img.shields.io/badge/Docs-dartssh2-blue.svg">
