@@ -8,6 +8,7 @@ import 'package:dartssh2/src/ssh_channel.dart';
 import 'package:dartssh2/src/ssh_channel_id.dart';
 import 'package:dartssh2/src/ssh_errors.dart';
 import 'package:dartssh2/src/ssh_forward.dart';
+import 'package:dartssh2/src/ssh_keepalive.dart';
 import 'package:dartssh2/src/ssh_key_pair.dart';
 import 'package:dartssh2/src/ssh_session.dart';
 import 'package:dartssh2/src/ssh_transport.dart';
@@ -119,6 +120,10 @@ class SSHClient {
   /// Function called when authentication is complete.
   final SSHAuthenticatedHandler? onAuthenticated;
 
+  /// The interval at which to send a keep-alive message through the [ping]
+  /// method. Set this to null to disable automatic keep-alive messages.
+  final Duration? keepAliveInterval;
+
   /// Function called when additional host keys are received. This is an OpenSSH
   /// extension. May not be called if the server does not support the extension.
   // final SSHHostKeysHandler? onHostKeys;
@@ -144,6 +149,7 @@ class SSHClient {
     this.onUserInfoRequest,
     this.onUserauthBanner,
     this.onAuthenticated,
+    this.keepAliveInterval = const Duration(seconds: 10),
   }) {
     _transport = SSHTransport(
       socket,
@@ -152,13 +158,13 @@ class SSHClient {
       printTrace: printTrace,
       algorithms: algorithms,
       onVerifyHostKey: onVerifyHostKey,
-      onReady: _onTransportReady,
-      onPacket: _onPacket,
+      onReady: _handleTransportReady,
+      onPacket: _handlePacket,
     );
 
     _transport.done.then(
-      (_) => _onTransportClosed(),
-      onError: (_) => _onTransportClosed(),
+      (_) => _handleTransportClosed(),
+      onError: (_) => _handleTransportClosed(),
     );
 
     _authenticated.future.catchError(
@@ -189,6 +195,10 @@ class SSHClient {
   final _keyPairsLeft = Queue<SSHKeyPair>();
 
   final _remoteForwards = <SSHRemoteForward>{};
+
+  late final _keepAlive = keepAliveInterval != null
+      ? SSHKeepAlive(ping: ping, interval: keepAliveInterval!)
+      : null;
 
   SSHAuthMethod? _currentAuthMethod;
 
@@ -417,6 +427,15 @@ class SSHClient {
     return result.takeBytes();
   }
 
+  /// Send a empty message to the server to keep the connection alive.
+  Future<void> ping() async {
+    await _authenticated.future;
+    _sendMessage(SSH_Message_Global_Request.keepAlive());
+    await _globalRequestReplyQueue.next;
+  }
+
+  /// Shutdown the entire SSH connection. Sessions and channels will also be
+  /// closed immediately.
   void close() {
     _closeChannels();
     _transport.close();
@@ -432,22 +451,23 @@ class SSHClient {
     _channels.clear();
   }
 
-  void _onTransportReady() {
+  void _handleTransportReady() {
     printDebug?.call('SSHClient._onTransportReady');
     _requestAuthentication();
   }
 
-  void _onTransportClosed() {
+  void _handleTransportClosed() {
     printDebug?.call('SSHClient._onTransportClosed');
     if (!_authenticated.isCompleted) {
       _authenticated.completeError(
         SSHAuthAbortError('Connection closed before authentication'),
       );
     }
+    _keepAlive?.stop();
     _closeChannels();
   }
 
-  void _onPacket(Uint8List payload) {
+  void _handlePacket(Uint8List payload) {
     try {
       _dispatchMessage(payload);
     } catch (e) {
@@ -529,6 +549,7 @@ class SSHClient {
     printDebug?.call('SSHClient._handleUserauthSuccess');
     _authenticated.complete();
     onAuthenticated?.call();
+    _keepAlive?.start();
   }
 
   void _handleUserauthFailure(Uint8List payload) {

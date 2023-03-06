@@ -127,4 +127,11 @@ void main() {
       client.close();
     });
   });
+
+  group('SSHClient.ping', () {
+    test('works', () async {
+      final client = await getTestClient();
+      await client.ping();
+    });
+  });
 }
