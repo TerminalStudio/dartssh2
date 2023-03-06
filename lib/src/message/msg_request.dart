@@ -63,6 +63,13 @@ class SSH_Message_Global_Request extends SSHMessage {
   //   );
   // }
 
+  factory SSH_Message_Global_Request.keepAlive() {
+    return SSH_Message_Global_Request(
+      requestName: 'keepalive@openssh.com',
+      wantReply: true,
+    );
+  }
+
   factory SSH_Message_Global_Request.decode(Uint8List bytes) {
     final reader = SSHMessageReader(bytes);
     reader.skip(1);
