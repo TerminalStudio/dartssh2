@@ -258,7 +258,10 @@ await file.writeBytes(data, offset: 6);
 ```dart
 final sftp = await client.sftp();
 final file = await sftp.open('file.txt', mode: SftpFileOpenMode.create | SftpFileOpenMode.write);
-await file.write(File('local_file.txt').openRead().cast());
+await file.write(File('local_file.txt').openRead().cast()).done();
+print('done');
+client.close();
+await client.done;
 ```
 
 **Clear the remote file before opening it**
