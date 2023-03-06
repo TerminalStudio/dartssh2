@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:convert/convert.dart';
 import 'package:dartssh2/src/sftp/sftp_file_attrs.dart';
 import 'package:dartssh2/src/sftp/sftp_name.dart';
-import 'package:dartssh2/src/sftp/sftp_packet_ext.dart';
 import 'package:dartssh2/src/ssh_message.dart';
 
 //  SSH_FXP_INIT                1   init
