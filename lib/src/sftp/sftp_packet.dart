@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:convert/convert.dart';
 import 'package:dartssh2/src/sftp/sftp_file_attrs.dart';
 import 'package:dartssh2/src/sftp/sftp_name.dart';
+import 'package:dartssh2/src/sftp/sftp_packet_ext.dart';
 import 'package:dartssh2/src/ssh_message.dart';
 
 //  SSH_FXP_INIT                1   init
@@ -972,5 +973,71 @@ class SftpAttrsPacket implements SftpResponsePacket {
   @override
   String toString() {
     return 'SftpAttrsPacket(requestId: $requestId, attrs: $attrs)';
+  }
+}
+
+class SftpExtendedPacket implements SftpResponsePacket {
+  static const int packetType = 200;
+
+  @override
+  final int requestId;
+
+  final Uint8List payload;
+
+  SftpExtendedPacket(this.requestId, this.payload);
+
+  factory SftpExtendedPacket.decode(Uint8List data) {
+    final reader = SSHMessageReader(data);
+    reader.readUint8(); // packet type
+    final requestId = reader.readUint32();
+    final payload = reader.readToEnd();
+    return SftpExtendedPacket(requestId, payload);
+  }
+
+  @override
+  Uint8List encode() {
+    final writer = SSHMessageWriter();
+    writer.writeUint8(packetType);
+    writer.writeUint32(requestId);
+    writer.writeBytes(payload);
+    return writer.takeBytes();
+  }
+
+  @override
+  String toString() {
+    return 'SftpExtendedPacket(requestId: $requestId, payload: ${payload.length})';
+  }
+}
+
+class SftpExtendedReplyPacket implements SftpResponsePacket {
+  static const int packetType = 201;
+
+  @override
+  final int requestId;
+
+  final Uint8List payload;
+
+  SftpExtendedReplyPacket(this.requestId, this.payload);
+
+  factory SftpExtendedReplyPacket.decode(Uint8List data) {
+    final reader = SSHMessageReader(data);
+    reader.readUint8(); // packet type
+    final requestId = reader.readUint32();
+    final payload = reader.readToEnd();
+    return SftpExtendedReplyPacket(requestId, payload);
+  }
+
+  @override
+  Uint8List encode() {
+    final writer = SSHMessageWriter();
+    writer.writeUint8(packetType);
+    writer.writeUint32(requestId);
+    writer.writeString(payload);
+    return writer.takeBytes();
+  }
+
+  @override
+  String toString() {
+    return 'SftpExtendedReplyPacket(requestId: $requestId, payload: ${payload.length} bytes)';
   }
 }

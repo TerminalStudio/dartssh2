@@ -4,11 +4,13 @@ import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:test/test.dart';
 
+import '../../test_utils.dart';
+
 void main() {
   late SSHClient client;
 
   setUp(() async {
-    client = await getHoneypotClient();
+    client = await getTestClient();
   });
 
   tearDown(() async {
@@ -55,12 +57,4 @@ void main() {
       await writer.done;
     });
   });
-}
-
-Future<SSHClient> getHoneypotClient() async {
-  return SSHClient(
-    await SSHSocket.connect('honeypot.terminal.studio', 2222),
-    username: 'root',
-    onPasswordRequest: () => 'random',
-  );
 }

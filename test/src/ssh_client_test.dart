@@ -1,14 +1,12 @@
-import 'dart:io';
-
 import 'package:dartssh2/dartssh2.dart';
 import 'package:test/test.dart';
 
-/// honeypot.terminal.studio:2022 honeypot that accepts all passwords and public-keys
-/// honeypot.terminal.studio:2023 honeypot that denies all passwords and public-keys
+import '../test_utils.dart';
+
 void main() {
-  group('SSHSocket', () {
+  group('SSHClient', () {
     test('can connect to a ssh server', () async {
-      var client = await getTestClient();
+      var client = await getHoneypotClient();
       await client.authenticated;
       client.close();
     });
@@ -123,24 +121,10 @@ void main() {
     });
 
     test('can get remote ssh software version after handshaking', () async {
-      var client = await getTestClient();
+      var client = await getHoneypotClient();
       await client.authenticated;
       expect(client.remoteVersion, startsWith('SSH-2.0'));
       client.close();
     });
   });
-}
-
-Future<SSHClient> getTestClient() async {
-  return SSHClient(
-    await SSHSocket.connect('honeypot.terminal.studio', 2022),
-    username: 'root',
-    onPasswordRequest: () => 'random',
-  );
-}
-
-Future<List<SSHKeyPair>> getTestKeyPairs() async {
-  final ed25519Private = 'test/ssh-ed25519/id_ed25519';
-  final pem = await File(ed25519Private).readAsString();
-  return SSHKeyPair.fromPem(pem);
 }

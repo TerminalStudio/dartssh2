@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:html';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -8,7 +9,9 @@ import 'package:dartssh2/src/sftp/sftp_file_attrs.dart';
 import 'package:dartssh2/src/sftp/sftp_file_open_mode.dart';
 import 'package:dartssh2/src/sftp/sftp_name.dart';
 import 'package:dartssh2/src/sftp/sftp_packet.dart';
+import 'package:dartssh2/src/sftp/sftp_packet_ext.dart';
 import 'package:dartssh2/src/sftp/sftp_request_id.dart';
+import 'package:dartssh2/src/sftp/sftp_statvfs.dart';
 import 'package:dartssh2/src/sftp/sftp_stream_io.dart';
 import 'package:dartssh2/src/ssh_channel.dart';
 import 'package:dartssh2/src/ssh_transport.dart';
@@ -19,7 +22,9 @@ const _kVersion = 3;
 
 class SftpClient {
   final SSHChannel _channel;
+
   final SSHPrintHandler? printDebug;
+
   final SSHPrintHandler? printTrace;
 
   SftpClient(this._channel, {this.printDebug, this.printTrace}) {
@@ -29,13 +34,16 @@ class SftpClient {
 
   final _buffer = ChunkBuffer();
 
-  final _ready = Completer<void>();
+  final _handshake = Completer<SftpHandsake>();
 
   final _done = Completer<void>();
 
   final _requestId = SftpRequestId();
 
   final _replyWaiters = <int, Completer<SftpResponsePacket>>{};
+
+  /// The handshake information received from the server.
+  Future<SftpHandsake> get handshake => _handshake.future;
 
   /// Gets the attributes of the file at [path].
   Future<SftpFileAttrs> stat(String path, {bool followLink = true}) async {
@@ -140,6 +148,27 @@ class SftpClient {
     SftpStatusError.check(reply);
   }
 
+  /// Gets the information about a mounted filesystem. [path] is the pathname of
+  /// any file within the mounted filesystem.
+  ///
+  /// **Note**: This is an extension to the SFTP protocol, supported by most
+  /// openssh servers. A [SftpExtensionError] is thrown if the server does not
+  /// support this extension.
+  ///
+  /// See also:
+  ///
+  /// - [SftpFile.statvfs] which requires an open [SftpFile] instance instead of
+  ///   a path.
+  Future<SftpStatVfs> statvfs(String path) async {
+    await _checkExtension('statvfs@openssh.com', '2');
+    final payload = SftpStatVfsRequest(path: path);
+    final reply = await _sendExtended(payload);
+    if (reply is SftpStatusPacket) throw SftpStatusError.fromStatus(reply);
+    if (reply is! SftpExtendedReplyPacket) throw SftpError('Unexpected reply');
+    final stat = SftpStatVfsReply.decode(reply.payload);
+    return SftpStatVfs.fromReply(stat);
+  }
+
   /// Close the sftp session.
   void close() {
     for (var waiter in _replyWaiters.values) {
@@ -200,14 +229,14 @@ class SftpClient {
     SftpFileOpenMode mode,
     SftpFileAttrs attrs,
   ) async {
-    await _ready.future;
+    await handshake;
     final request = SftpOpenPacket(_requestId.next, path, mode.flag, attrs);
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
 
   Future<SftpResponsePacket> _sendClose(Uint8List handle) async {
-    await _ready.future;
+    await handshake;
     final request = SftpClosePacket(_requestId.next, handle);
     _sendPacket(request);
     return await _waitReply(request.requestId);
@@ -218,7 +247,7 @@ class SftpClient {
     int offset,
     int length,
   ) async {
-    await _ready.future;
+    await handshake;
     final request = SftpReadPacket(
       requestId: _requestId.next,
       handle: handle,
@@ -234,7 +263,7 @@ class SftpClient {
     int offset,
     Uint8List data,
   ) async {
-    await _ready.future;
+    await handshake;
     final request = SftpWritePacket(
       requestId: _requestId.next,
       handle: handle,
@@ -246,14 +275,14 @@ class SftpClient {
   }
 
   Future<SftpResponsePacket> _sendLStat(String path) async {
-    await _ready.future;
+    await handshake;
     final request = SftpLStatPacket(_requestId.next, path);
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
 
   Future<SftpResponsePacket> _sendFStat(Uint8List handle) async {
-    await _ready.future;
+    await handshake;
     final request = SftpFStatPacket(_requestId.next, handle);
     _sendPacket(request);
     return await _waitReply(request.requestId);
@@ -263,7 +292,7 @@ class SftpClient {
     String path,
     SftpFileAttrs attrs,
   ) async {
-    await _ready.future;
+    await handshake;
     final request = SftpSetStatPacket(_requestId.next, path, attrs);
     _sendPacket(request);
     return await _waitReply(request.requestId);
@@ -273,28 +302,28 @@ class SftpClient {
     Uint8List handle,
     SftpFileAttrs attrs,
   ) async {
-    await _ready.future;
+    await handshake;
     final request = SftpFSetStatPacket(_requestId.next, handle, attrs);
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
 
   Future<SftpResponsePacket> _sendOpenDir(String path) async {
-    await _ready.future;
+    await handshake;
     final request = SftpOpenDirPacket(_requestId.next, path);
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
 
   Future<SftpResponsePacket> _sendReadDir(Uint8List handle) async {
-    await _ready.future;
+    await handshake;
     final request = SftpReadDirPacket(_requestId.next, handle);
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
 
   Future<SftpResponsePacket> _sendRemove(String filename) async {
-    await _ready.future;
+    await handshake;
     final request = SftpRemovePacket(_requestId.next, filename);
     _sendPacket(request);
     return await _waitReply(request.requestId);
@@ -304,28 +333,28 @@ class SftpClient {
     String path,
     SftpFileAttrs attrs,
   ) async {
-    await _ready.future;
+    await handshake;
     final request = SftpMkdirPacket(_requestId.next, path, attrs);
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
 
   Future<SftpResponsePacket> _sendRemoveDir(String path) async {
-    await _ready.future;
+    await handshake;
     final request = SftpRmdirPacket(_requestId.next, path);
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
 
   Future<SftpResponsePacket> _sendRealPath(String path) async {
-    await _ready.future;
+    await handshake;
     final request = SftpRealpathPacket(_requestId.next, path);
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
 
   Future<SftpResponsePacket> _sendStat(String path) async {
-    await _ready.future;
+    await handshake;
     final request = SftpStatPacket(_requestId.next, path);
     _sendPacket(request);
     return await _waitReply(request.requestId);
@@ -335,14 +364,14 @@ class SftpClient {
     String oldPath,
     String newPath,
   ) async {
-    await _ready.future;
+    await handshake;
     final request = SftpRenamePacket(_requestId.next, oldPath, newPath);
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
 
   Future<SftpResponsePacket> _sendReadLink(String path) async {
-    await _ready.future;
+    await handshake;
     final request = SftpReadlinkPacket(_requestId.next, path);
     _sendPacket(request);
     return await _waitReply(request.requestId);
@@ -352,8 +381,15 @@ class SftpClient {
     String linkPath,
     String targetPath,
   ) async {
-    await _ready.future;
+    await handshake;
     final request = SftpSymlinkPacket(_requestId.next, linkPath, targetPath);
+    _sendPacket(request);
+    return await _waitReply(request.requestId);
+  }
+
+  Future<SftpResponsePacket> _sendExtended(SftpExtendedRequest payload) async {
+    await handshake;
+    final request = SftpExtendedPacket(_requestId.next, payload.encode());
     _sendPacket(request);
     return await _waitReply(request.requestId);
   }
@@ -367,6 +403,17 @@ class SftpClient {
     final completer = Completer<SftpResponsePacket>();
     _replyWaiters[requestId] = completer;
     return completer.future;
+  }
+
+  Future<void> _checkExtension(String name, String version) async {
+    final handshake = await this.handshake;
+    final extensionVersion = handshake.extensions[name];
+    if (extensionVersion == null) {
+      throw SftpExtensionUnsupportedError(name);
+    }
+    if (extensionVersion != version) {
+      throw SftpExtensionVersionMismatchError(name, extensionVersion);
+    }
   }
 
   void _handleData(SSHChannelData data) {
@@ -400,7 +447,8 @@ class SftpClient {
         return _handleNamePacket(payload);
       case SftpAttrsPacket.packetType:
         return _handleAttrsPacket(payload);
-
+      case SftpExtendedReplyPacket.packetType:
+        return _handleExtendedReplyPacket(payload);
       default:
         printDebug?.call('SftpClient._handlePacket: unknown packet: $type');
     }
@@ -411,11 +459,12 @@ class SftpClient {
     printTrace?.call('<- $_channel: $packet');
 
     if (packet.version == _kVersion) {
-      return _ready.complete();
+      final handshake = SftpHandsake(packet.version, packet.extensions);
+      return _handshake.complete(handshake);
     }
 
     final error = SftpError('Version mismatch: ${packet.version}');
-    _ready.completeError(error, StackTrace.current);
+    _handshake.completeError(error, StackTrace.current);
     _closeError(error);
   }
 
@@ -445,6 +494,12 @@ class SftpClient {
 
   void _handleAttrsPacket(Uint8List payload) {
     final packet = SftpAttrsPacket.decode(payload);
+    printTrace?.call('<- $_channel: $packet');
+    _dispatchReply(packet);
+  }
+
+  void _handleExtendedReplyPacket(Uint8List payload) {
+    final packet = SftpExtendedReplyPacket.decode(payload);
     printTrace?.call('<- $_channel: $packet');
     _dispatchReply(packet);
   }
@@ -608,6 +663,27 @@ class SftpFile {
     await Future.wait(futures);
   }
 
+  /// Gets filesystem statistics that this file is on.
+  ///
+  /// **Note**: This is an extension to the SFTP protocol, supported by most
+  /// openssh servers. A [SftpExtensionError] is thrown if the server does not
+  /// support this extension.
+  ///
+  /// See also:
+  ///
+  /// * [SftpClient.statvfs] which takes a path instead of a file handle as
+  ///   argument.
+  Future<SftpStatVfs> statvfs() async {
+    _mustNotBeClosed();
+    await _client._checkExtension('fstatvfs@openssh.com', '2');
+    final payload = SftpFstatVfsRequest(handle: _handle);
+    final reply = await _client._sendExtended(payload);
+    if (reply is SftpStatusPacket) throw SftpStatusError.fromStatus(reply);
+    if (reply is! SftpExtendedReplyPacket) throw SftpError('Unexpected reply');
+    final stat = SftpStatVfsReply.decode(reply.payload);
+    return SftpStatVfs.fromReply(stat);
+  }
+
   Future<void> _writeChunk(Uint8List data, {int offset = 0}) async {
     // print('_writeChunk: offset=$offset');
     _mustNotBeClosed();
@@ -631,4 +707,16 @@ class SftpFile {
 
   @override
   String toString() => 'SftpFile(0x${hex.encode(_handle)})';
+}
+
+/// Handsake information received from the server.
+class SftpHandsake {
+  final int version;
+
+  final Map<String, String> extensions;
+
+  SftpHandsake(this.version, this.extensions);
+
+  @override
+  String toString() => 'SftpHandsake($version, $extensions)';
 }
