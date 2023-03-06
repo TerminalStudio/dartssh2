@@ -302,6 +302,14 @@ final sftp = await client.sftp();
 sftp.link('/from', '/to');
 ```
 
+### Get (estimated) total and free space on the remote filesystem
+```dart
+final sftp = await client.sftp();
+final statvfs = await sftp.statvfs('/root');
+print('total: ${statvfs.blockSize * statvfs.totalBlocks}');
+print('free: ${statvfs.blockSize * statvfs.freeBlocks}');
+```
+
 ## 🪜 Example
 
 ### SSH client:
