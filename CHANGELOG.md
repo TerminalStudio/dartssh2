@@ -1,4 +1,4 @@
-## [upcoming]
+## [2.8.0] - 2023-03-06
 - `SftpFile.write` now returns a `SftpFileWriter` that can be used to control
   the writing process.
 - Support `SftpClient.statvfs` and `SftpFile.statvfs`.
