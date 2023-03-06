@@ -1,6 +1,7 @@
 ## [upcoming]
 - `SftpFile.write` now returns a `SftpFileWriter` that can be used to control
   the writing process.
+- Support `SftpClient.statvfs` and `SftpFile.statvfs`.
 
 ## 2.7.3
 - Update README.md
