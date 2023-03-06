@@ -975,7 +975,7 @@ class SftpAttrsPacket implements SftpResponsePacket {
   }
 }
 
-class SftpExtendedPacket implements SftpResponsePacket {
+class SftpExtendedPacket implements SftpRequestPacket {
   static const int packetType = 200;
 
   @override
