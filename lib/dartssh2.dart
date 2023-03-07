@@ -24,3 +24,4 @@ export 'src/sftp/sftp_file_open_mode.dart';
 export 'src/sftp/sftp_file_attrs.dart';
 export 'src/sftp/sftp_name.dart';
 export 'src/sftp/sftp_status_code.dart';
+export 'src/sftp/sftp_stream_io.dart';
