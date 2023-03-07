@@ -15,7 +15,7 @@ const chunkSize = 16 * 1024;
 const maxBytesOnTheWire = chunkSize * 64;
 
 /// Holds the state of a streaming write operation from [stream] to [file].
-class SftpFileWriter {
+class SftpFileWriter with DoneFuture {
   /// The remote file to write to.
   final SftpFile file;
 
@@ -61,7 +61,11 @@ class SftpFileWriter {
   ///
   /// - All data from [stream] has been written to [file]
   /// - Or the write operation has been aborted by calling [abort].
+  @override
   Future<void> get done => _doneCompleter.future;
+
+  /// The number of bytes that have been successfully written to [file].
+  int get progress => _bytesAcked;
 
   /// Stops [stream] from emitting more data. Returns a [Future] that completes
   /// when the underlying data source of [stream] has been successfully closed.
@@ -112,4 +116,36 @@ class SftpFileWriter {
   void _handleLocalDone() {
     _streamDone = true;
   }
+}
+
+/// Implements [Future] interface for [SftpFileWriter].
+///
+/// This is for compatibility with earlier versions of dartssh2.
+mixin DoneFuture implements Future {
+  Future<void> get done;
+
+  @override
+  Stream<void> asStream() => done.asStream();
+
+  @override
+  Future<void> catchError(
+    Function onError, {
+    bool Function(Object error)? test,
+  }) =>
+      done.catchError(onError, test: test);
+
+  @override
+  Future<S> then<S>(FutureOr<S> Function(void) onValue, {Function? onError}) =>
+      done.then(onValue, onError: onError);
+
+  @override
+  Future<void> whenComplete(FutureOr Function() action) =>
+      done.whenComplete(action);
+
+  @override
+  Future<void> timeout(
+    Duration timeLimit, {
+    FutureOr<void> Function()? onTimeout,
+  }) =>
+      done.timeout(timeLimit, onTimeout: onTimeout);
 }

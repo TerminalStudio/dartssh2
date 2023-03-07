@@ -258,7 +258,7 @@ await file.writeBytes(data, offset: 6);
 ```dart
 final sftp = await client.sftp();
 final file = await sftp.open('file.txt', mode: SftpFileOpenMode.create | SftpFileOpenMode.write);
-await file.write(File('local_file.txt').openRead().cast()).done;
+await file.write(File('local_file.txt').openRead().cast());
 ```
 
 #### Pause and resume file upload

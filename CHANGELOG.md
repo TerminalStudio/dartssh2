@@ -1,5 +1,9 @@
+## [2.8.2] - 2023-03-07
+- Make `SftpFileWriter` implement `Future<void>` for backward compatibility.
+
 ## [2.8.1] - 2023-03-07
 - Export `SftpFileWriter`
+
 ## [2.8.0] - 2023-03-06
 - `SftpFile.write` now returns a `SftpFileWriter` that can be used to control
   the writing process.

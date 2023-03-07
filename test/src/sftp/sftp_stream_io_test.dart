@@ -56,5 +56,17 @@ void main() {
       await dataController.close();
       await writer.done;
     });
+
+    test('can be awaited', () async {
+      final sftp = await client.sftp();
+      final file = await sftp.open(
+        'a.out',
+        mode: SftpFileOpenMode.create | SftpFileOpenMode.write,
+      );
+
+      final uploader = file.write(Stream.value(Uint8List(100)));
+      await uploader;
+      expect(uploader.progress, 100);
+    });
   });
 }
