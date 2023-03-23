@@ -14,7 +14,6 @@ dependencies:
   meta: ^1.1.6
   pointycastle: ^3.0.0
   pinenacl: ^0.5.0
-  socket_io_client: ^2.0.1
 
 dev_dependencies:
   build_runner: ^2.1.1

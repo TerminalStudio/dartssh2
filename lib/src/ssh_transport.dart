@@ -637,8 +637,6 @@ class SSHTransport {
     switch (messageId) {
       case SSH_Message_KexInit.messageId:
         return _handleMessageKexInit(message);
-      case SSH_Message_KexDH_Init.messageId:
-        return _handleMessageKexDHInit(message);
       case SSH_Message_KexDH_Reply.messageId:
       case SSH_Message_KexDH_GexReply.messageId:
         return _handleMessageKexReply(message);
@@ -653,103 +651,6 @@ class SSHTransport {
     printDebug?.call('SSHTransport._handleMessageKexInit');
 
     final message = SSH_Message_KexInit.decode(payload);
-    printTrace?.call('<- $socket: $message');
-    _remoteKexInit = payload;
-
-    _kexType = SSHKexUtils.selectAlgorithm(
-      localAlgorithms: algorithms.kex,
-      remoteAlgorithms: message.kexAlgorithms,
-      isServer: isServer,
-    );
-    _hostkeyType = SSHKexUtils.selectAlgorithm(
-      localAlgorithms: algorithms.hostkey,
-      remoteAlgorithms: message.serverHostKeyAlgorithms,
-      isServer: isServer,
-    );
-    _clientCipherType = SSHKexUtils.selectAlgorithm(
-      localAlgorithms: algorithms.cipher,
-      remoteAlgorithms: message.encryptionClientToServer,
-      isServer: isServer,
-    );
-    _serverCipherType = SSHKexUtils.selectAlgorithm(
-      localAlgorithms: algorithms.cipher,
-      remoteAlgorithms: message.encryptionServerToClient,
-      isServer: isServer,
-    );
-    _clientMacType = SSHKexUtils.selectAlgorithm(
-      localAlgorithms: algorithms.mac,
-      remoteAlgorithms: message.macClientToServer,
-      isServer: isServer,
-    );
-    _serverMacType = SSHKexUtils.selectAlgorithm(
-      localAlgorithms: algorithms.mac,
-      remoteAlgorithms: message.macServerToClient,
-      isServer: isServer,
-    );
-
-    if (_kexType == null) {
-      throw StateError('No matching key exchange algorithm');
-    }
-    if (_hostkeyType == null) {
-      throw StateError('No matching host key algorithm');
-    }
-    if (_clientCipherType == null) {
-      throw StateError('No matching client cipher algorithm');
-    }
-    if (_serverCipherType == null) {
-      throw StateError('No matching server cipher algorithm');
-    }
-    if (_clientMacType == null) {
-      throw StateError('No matching client MAC algorithm');
-    }
-    if (_serverMacType == null) {
-      throw StateError('No matching server MAC algorithm');
-    }
-
-    printDebug?.call('SSHTransport._kexType: $_kexType');
-    printDebug?.call('SSHTransport._hostkeyType: $_hostkeyType');
-    printDebug?.call('SSHTransport._clientCipherType: $_clientCipherType');
-    printDebug?.call('SSHTransport._serverCipherType: $_serverCipherType');
-    printDebug?.call('SSHTransport._clientMacType: $_clientMacType');
-    printDebug?.call('SSHTransport._serverMacType: $_serverMacType');
-
-    switch (_kexType) {
-      case SSHKexType.x25519:
-        _kex = SSHKexX25519();
-        break;
-      case SSHKexType.nistp256:
-        _kex = SSHKexNist.p256();
-        break;
-      case SSHKexType.nistp384:
-        _kex = SSHKexNist.p384();
-        break;
-      case SSHKexType.nistp521:
-        _kex = SSHKexNist.p521();
-        break;
-      case SSHKexType.dh14Sha1:
-      case SSHKexType.dh14Sha256:
-        _kex = SSHKexDH.group14();
-        break;
-      case SSHKexType.dh1Sha1:
-        _kex = SSHKexDH.group1();
-        break;
-      case SSHKexType.dhGexSha1:
-      case SSHKexType.dhGexSha256:
-        if (isClient) _sendKexDHGexRequest();
-        return;
-      default:
-        throw UnimplementedError('$_kexType');
-    }
-
-    if (isClient) {
-      _sendKexDHInit();
-    }
-  }
-
-  void _handleMessageKexDHInit(Uint8List payload) {
-    printDebug?.call('SSHTransport._handleMessageKexDHInit');
-
-    final message = SSH_Message_KexDH_GexInit.decode(payload);
     printTrace?.call('<- $socket: $message');
     _remoteKexInit = payload;
 
