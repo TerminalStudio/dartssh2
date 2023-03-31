@@ -222,6 +222,26 @@ await client.authenticated;
 print(client.remoteVersion); // SSH-2.0-OpenSSH_7.4p1
 ```
 
+### Connect through a jump server
+
+```dart
+final jumpServer = SSHClient(
+  await SSHSocket.connect('<jump server>', 22),
+  username: '...',
+  onPasswordRequest: () => '...',
+);
+
+final client = SSHClient(
+  await jumpServer.forwardLocal('<target server>', 22),
+  username: '...',
+  onPasswordRequest: () => '...',
+);
+
+print(utf8.decode(await client.run('hostname'))); // -> hostname of  <target server>
+```
+}
+
+
 ## SFTP
 
 ### List remote directory
@@ -330,6 +350,7 @@ print('free: ${statvfs.blockSize * statvfs.freeBlocks}');
 - [example/forward_remote.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/forward_remote.dart)
 - [example/pubkey.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/pubkey.dart)
 - [example/shell.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/shell.dart)
+- [example/ssh_jump.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/ssh_jump.dart)
 
 ### SFTP:
 - [example/sftp_read.dart](https://github.com/TerminalStudio/dartssh2/blob/master/example/sftp_read.dart)
