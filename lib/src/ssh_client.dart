@@ -444,7 +444,7 @@ class SSHClient {
   /// Close all channels that are currently open.
   void _closeChannels() {
     for (final channel in _channels.values) {
-      channel.close();
+      channel.destroy();
       _channelIdAllocator.release(channel.localId);
     }
 

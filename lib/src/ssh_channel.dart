@@ -177,6 +177,8 @@ class SSHChannelController {
       _handleWindowAdjustMessage(message.bytesToAdd);
     } else if (message is SSH_Message_Channel_EOF) {
       _handleEOFMessage();
+    } else if (message is SSH_Message_Channel_Close) {
+      _handleCloseMessage();
     } else if (message is SSH_Message_Channel_Request) {
       _handleRequestMessage(message);
     } else if (message is SSH_Message_Channel_Success) {
@@ -188,7 +190,27 @@ class SSHChannelController {
     }
   }
 
-  void close() {
+  /// Closes our side of the channel. Returns a [Future] that completes when
+  /// the remote side has closed the channel.
+  Future<void> close() async {
+    if (_done.isCompleted) return;
+
+    _locaStreamConsumer.cancel();
+    _sendEOFIfNeeded();
+
+    if (_remoteStream.isClosed) {
+      _sendCloseIfNeeded();
+      _done.complete();
+      return;
+    }
+
+    return _done.future;
+  }
+
+  /// Closes the channel immediately in both directions. This may send a close
+  /// message to the remote side. After this no more data can be sent or
+  /// received.
+  void destroy() {
     if (_done.isCompleted) return;
     _remoteStream.close();
     _locaStreamConsumer.cancel();
@@ -252,6 +274,12 @@ class SSHChannelController {
     _remoteStream.close();
   }
 
+  void _handleCloseMessage() {
+    printDebug?.call('SSHChannel._handleCLoseMessage');
+    _remoteStream.close();
+    close();
+  }
+
   bool _defaultRequestHandler(SSH_Message_Channel_Request request) {
     return false;
   }
@@ -308,8 +336,13 @@ class SSHChannelController {
 
       final dataToRead = min(_remoteWindow, remoteMaximumPacketSize);
       final data = await _locaStreamConsumer.read(dataToRead);
+
       if (data == null) {
         _sendEOFIfNeeded();
+
+        if (_remoteStream.isClosed) {
+          close();
+        }
         return;
       }
 
@@ -395,9 +428,13 @@ class SSHChannel {
     _controller.sendSignal(signal);
   }
 
-  /// Close the channel. Calling this after the channel has been closed is a
-  /// no-op.
-  void close() => _controller.close();
+  /// Closes our side of the channel. Returns a [Future] that completes when
+  /// both sides of the channel are closed.
+  Future<void> close() => _controller.close();
+
+  /// Destroys the channel in both directions. After calling this method,
+  /// no more data can be sent or received.
+  void destroy() => _controller.destroy();
 
   @override
   String toString() => 'SSHChannel($channelId:$remoteChannelId)';
