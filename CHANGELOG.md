@@ -1,3 +1,7 @@
+## [2.9.0-pre] - 2023-03-31
+- Better handling of channel close.
+- Make `SSHForwardChannel` implement `SSHSocket` for better interoperability.
+
 ## [2.8.2] - 2023-03-07
 - Make `SftpFileWriter` implement `Future<void>` for backward compatibility.
 
