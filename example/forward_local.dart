@@ -24,7 +24,7 @@ void main(List<String> args) async {
   await for (final socket in serverSocket) {
     final forward = await client.forwardLocal('httpbin.org', 80);
     forward.stream.cast<List<int>>().pipe(socket);
-    socket.pipe(forward.sink);
+    socket.cast<List<int>>().pipe(forward.sink);
   }
 
   client.close();

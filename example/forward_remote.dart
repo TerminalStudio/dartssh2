@@ -29,7 +29,7 @@ void main(List<String> args) async {
   await for (final connection in forward.connections) {
     final socket = await Socket.connect('localhost', 22);
     connection.stream.cast<List<int>>().pipe(socket);
-    socket.pipe(connection.sink);
+    socket.cast<List<int>>().pipe(connection.sink);
   }
 
   client.close();
