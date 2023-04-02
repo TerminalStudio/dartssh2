@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:typed_data';
 
+import 'package:dartssh2/src/http/http_client.dart';
 import 'package:dartssh2/src/sftp/sftp_client.dart';
 import 'package:dartssh2/src/ssh_algorithm.dart';
 import 'package:dartssh2/src/ssh_channel.dart';
@@ -330,7 +331,8 @@ class SSHClient {
     return SSHSession(channelController.channel);
   }
 
-  ///
+  /// Start a shell on the remote side. Returns a [SSHSession] that can be
+  /// used to read, write and control the pty on the remote side.
   Future<SSHSession> shell({
     SSHPtyConfig? pty = const SSHPtyConfig(),
     Map<String, String>? environment,
@@ -374,6 +376,8 @@ class SSHClient {
     channelController.sendSubsystem(subsystem);
   }
 
+  /// Open a new SFTP session. Returns a [SftpClient] that can be used to
+  /// interact with the remote side.
   Future<SftpClient> sftp() async {
     await _authenticated.future;
 
@@ -385,6 +389,13 @@ class SSHClient {
       printDebug: printDebug,
       printTrace: printTrace,
     );
+  }
+
+  /// Create a new [SSHHttpClient] that can be used to make HTTP requests
+  /// that are tunneled over the SSH connection. The returned [SSHHttpClient]
+  /// is a very basic implementation, only intended for making simple requests.
+  SSHHttpClient httpClient() {
+    return SSHHttpClient(this);
   }
 
   /// Execute [command] on the remote side non-interactively. Returns a

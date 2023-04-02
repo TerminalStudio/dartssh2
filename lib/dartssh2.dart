@@ -1,6 +1,3 @@
-// export 'src/ssh_client.dart';
-// export 'src/transport/ssh_transport.dart';
-
 export 'src/ssh_algorithm.dart' show SSHAlgorithms;
 export 'src/ssh_client.dart';
 export 'src/ssh_errors.dart';
@@ -25,3 +22,8 @@ export 'src/sftp/sftp_file_attrs.dart';
 export 'src/sftp/sftp_name.dart';
 export 'src/sftp/sftp_status_code.dart';
 export 'src/sftp/sftp_stream_io.dart';
+
+export 'src/http/http_client.dart';
+export 'src/http/http_exception.dart';
+export 'src/http/http_content_type.dart';
+export 'src/http/http_headers.dart';

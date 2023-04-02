@@ -1,6 +1,7 @@
 ## [2.9.1-pre] - 2023-04-02
 - Make the type of `SSHForwardChannel.sink` to `StreamSink<List<int>>` to match
   its super class.
+- Added `SSHHttpClient` for easy http request forwarding.
 
 ## [2.9.0-pre] - 2023-03-31
 - Better handling of channel close.
