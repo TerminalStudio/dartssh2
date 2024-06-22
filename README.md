@@ -48,6 +48,10 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
     <td align="center">
       <b><a href="https://github.com/atsign-foundation/sshnoports">Ssh! No Ports</a></b>
     </td>
+       <!-- dartShell -->
+    <td align="center">
+      <b><a href="https://github.com/hsduren/dartshell">DartShell</a></b>
+    </td>
   </tr>
 
   <tr> 
@@ -59,8 +63,15 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
     <!-- Ssh! No Ports -->
     <td>
       <a href="https://asciinema.org/a/496148">
-        <img src="https://user-images.githubusercontent.com/6131216/185263634-07e8dba7-b5a8-44fc-ac44-8703e247143f.png" width="300px">
+        <img src="https://user-images.githubusercontent.com/6131216/185263634-07e8dba7-b5a8-44fc-ac44-8703e247143f.png" width="300px" />
+      </a>
     </td>
+    <td>
+         <img src="https://github.com/hsduren/dartshell/blob/main/info1.png" width="300px">
+    </td>
+
+    
+    
   </tr>
 </table>
 
