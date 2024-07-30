@@ -108,13 +108,18 @@ class SftpFileWriter with DoneFuture {
       _subscription.resume();
     }
 
-    if (_streamDone && _bytesSent == _bytesAcked) {
+    if (!_doneCompleter.isCompleted &&
+        _streamDone &&
+        _bytesSent == _bytesAcked) {
       _doneCompleter.complete();
     }
   }
 
   void _handleLocalDone() {
     _streamDone = true;
+    if (_bytesSent == _bytesAcked) {
+      _doneCompleter.complete();
+    }
   }
 }
 
