@@ -28,5 +28,6 @@ class SftpFileOpenMode {
 
   const SftpFileOpenMode._(this.flag);
 
-  operator |(SftpFileOpenMode other) => SftpFileOpenMode._(flag | other.flag);
+  SftpFileOpenMode operator |(SftpFileOpenMode other) =>
+      SftpFileOpenMode._(flag | other.flag);
 }

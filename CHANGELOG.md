@@ -1,7 +1,7 @@
 ## [2.9.2-pre] - 2023-04-02
 - Bumped SDK constraints from `">=2.17.0 <3.0.0"` up to `">=2.17.0 <4.0.0"`
 
-- Bug fix in `SftpFileWriter`:
+- Bug fix in `SftpFileWriter` for [#50](https://github.com/TerminalStudio/dartssh2/issues/50), [#71](https://github.com/TerminalStudio/dartssh2/issues/71), [#100](https://github.com/TerminalStudio/dartssh2/issues/100):
 
   When the input stream contains only one event and that event has fewer bytes than `maxBytesOnTheWire`, then the `SftpFileWriter._doneCompleter` never got completed. This happened because the completer got only completed in the `_handleLocalData` event handler if the `_streamDone` flag was already true, the problem is that if the stream only has one small event, then `_handleLocalData` will only be called once with the event and afterward `_handleLocalDone` will be called once, which sets `_streamDone` to true. At this point the `_doneCompleter` cannot be completed anymore because the `_handleLocalData` will not get called anymore. This problem causes never ending `await` statements when opening and writing a file.
 
@@ -14,6 +14,8 @@
       }
     }
   ```
+
+- Added return type `SftpFileOpenMode` to operator `|` in class `SftpFileOpenMode`. Fix for [#80](https://github.com/TerminalStudio/dartssh2/issues/80).
 
 ## [2.9.1-pre] - 2023-04-02
 - Make the type of `SSHForwardChannel.sink` to `StreamSink<List<int>>` to match
