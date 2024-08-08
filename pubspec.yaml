@@ -14,10 +14,10 @@ dependencies:
   pinenacl: ^0.6.0
 
 dev_dependencies:
-  build_runner: ^2.1.1
-  dart_code_metrics: ^4.16.0
-  lints: ^2.0.0
-  test: ^1.6.5
+  build_runner: ^2.4.12
+  dart_code_metrics: ^5.7.6
+  lints: ^4.0.0
+  test: ^1.25.8
 
 false_secrets:
   - test
