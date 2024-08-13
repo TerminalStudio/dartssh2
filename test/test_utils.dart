@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:dartssh2/dartssh2.dart';
+import 'package:dartssh3/dartssh3.dart';
 
 /// A honeypot that accepts all passwords and public-keys
 Future<SSHClient> getHoneypotClient() async {

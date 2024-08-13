@@ -1,7 +1,7 @@
-import 'package:dartssh2/src/algorithm/ssh_cipher_type.dart';
-import 'package:dartssh2/src/algorithm/ssh_hostkey_type.dart';
-import 'package:dartssh2/src/algorithm/ssh_kex_type.dart';
-import 'package:dartssh2/src/algorithm/ssh_mac_type.dart';
+import 'package:dartssh3/src/algorithm/ssh_cipher_type.dart';
+import 'package:dartssh3/src/algorithm/ssh_hostkey_type.dart';
+import 'package:dartssh3/src/algorithm/ssh_kex_type.dart';
+import 'package:dartssh3/src/algorithm/ssh_mac_type.dart';
 
 abstract class SSHAlgorithm {
   /// The name of the algorithm.

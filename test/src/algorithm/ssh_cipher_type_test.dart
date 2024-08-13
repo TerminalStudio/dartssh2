@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
-import 'package:dartssh2/src/algorithm/ssh_cipher_type.dart';
-import 'package:dartssh2/src/utils/cipher_ext.dart';
+import 'package:dartssh3/src/algorithm/ssh_cipher_type.dart';
+import 'package:dartssh3/src/utils/cipher_ext.dart';
 import 'package:test/test.dart';
 
 void main() {

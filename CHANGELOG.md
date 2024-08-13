@@ -1,4 +1,7 @@
-## [2.9.2-pre] - 2023-04-02
+## [3.0.0] - 2024-08-13
+
+- Changed version constraints for package `pinenacl` from `^0.5.0` to `">=0.5.0 <1.0.0"` to support Dart SDK `>= 3.5.0`. See Dart SDK [Changelog](https://github.com/dart-lang/sdk/blob/3ccadc5c277a6c70f207d14600524578f4c527ad/CHANGELOG.md?plain=1#L106).
+
 - Bumped SDK constraints from `">=2.17.0 <3.0.0"` up to `">=2.17.0 <4.0.0"`
 
 - Bug fix in `SftpFileWriter` for [#50](https://github.com/TerminalStudio/dartssh2/issues/50), [#71](https://github.com/TerminalStudio/dartssh2/issues/71), [#100](https://github.com/TerminalStudio/dartssh2/issues/100):

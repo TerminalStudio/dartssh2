@@ -2,7 +2,7 @@
 
 import 'dart:typed_data';
 
-import 'package:dartssh2/src/ssh_message.dart';
+import 'package:dartssh3/src/ssh_message.dart';
 
 /// Message to request opening a channel to remote host.
 class SSH_Message_Channel_Open implements SSHMessage {

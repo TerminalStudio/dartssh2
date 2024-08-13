@@ -1,4 +1,4 @@
-import 'package:dartssh2/src/kex/kex_dh.dart';
+import 'package:dartssh3/src/kex/kex_dh.dart';
 import 'package:test/test.dart';
 
 void main() {
