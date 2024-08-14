@@ -1,6 +1,12 @@
 <!-- Title-->
 <p align="center">
-  <h1 align="center">DartSSH 2</h1>
+  <h1 align="center">DartSSH 2 (ssh-rsa support)</h1>
+</p>
+
+<p align="center">
+  <h2 align="center">NOTE 1: this fork reverts an old commit that dropped support of ssh-rsa.
+    
+  NOTE2: THIS ISN'T SECURE, SO USE WITH CAUTION!</h2>
 </p>
 
 <!-- Badges-->
