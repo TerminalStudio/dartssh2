@@ -136,7 +136,7 @@ abstract class StreamConsumerBase<T> {
 
 /// A helper class that can be used to read data from a byte stream on demand.
 class StreamConsumer extends StreamConsumerBase<Uint8List> {
-  StreamConsumer(Stream<Uint8List> stream) : super(stream);
+  StreamConsumer(super.stream);
 
   @override
   int getLength(Uint8List chunk) {
