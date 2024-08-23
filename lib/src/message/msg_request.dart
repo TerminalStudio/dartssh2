@@ -3,7 +3,7 @@
 import 'dart:typed_data';
 
 import 'package:convert/convert.dart';
-import 'package:dartssh2/src/ssh_message.dart';
+import 'package:dartssh3/src/ssh_message.dart';
 
 class SSH_Message_Global_Request extends SSHMessage {
   static const messageId = 80;

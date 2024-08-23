@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
-import 'package:dartssh2/src/ssh_kex.dart';
-import 'package:dartssh2/src/utils/bigint.dart';
-import 'package:dartssh2/src/utils/list.dart';
+import 'package:dartssh3/src/ssh_kex.dart';
+import 'package:dartssh3/src/utils/bigint.dart';
+import 'package:dartssh3/src/utils/list.dart';
 import 'package:pinenacl/tweetnacl.dart';
 
 class SSHKexX25519 implements SSHKexECDH {

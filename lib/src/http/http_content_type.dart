@@ -1,7 +1,7 @@
 import 'dart:collection';
 
-import 'package:dartssh2/src/http/http_exception.dart';
-import 'package:dartssh2/src/http/http_headers.dart';
+import 'package:dartssh3/src/http/http_exception.dart';
+import 'package:dartssh3/src/http/http_headers.dart';
 
 /// A MIME/IANA media type used as the value of the
 /// [SSHHttpHeaders.contentTypeHeader] header.

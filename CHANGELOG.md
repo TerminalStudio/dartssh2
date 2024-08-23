@@ -1,3 +1,7 @@
+## [3.0.0] - 2024-08-23
+- Reimplemented as dartssh3.
+- Fixed Flutter 3.24 issue.
+
 ## [2.9.1-pre] - 2023-04-02
 - Make the type of `SSHForwardChannel.sink` to `StreamSink<List<int>>` to match
   its super class.

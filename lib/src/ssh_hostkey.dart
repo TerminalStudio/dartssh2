@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:dartssh2/src/ssh_message.dart';
+import 'package:dartssh3/src/ssh_message.dart';
 
 abstract class SSHHostKey {
   /// Encode the host key to SSH encoded data.

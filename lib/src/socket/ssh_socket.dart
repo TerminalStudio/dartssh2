@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:dartssh2/src/socket/ssh_socket_io.dart'
-    if (dart.library.js) 'package:dartssh2/src/socket/ssh_socket_js.dart';
+import 'package:dartssh3/src/socket/ssh_socket_io.dart'
+    if (dart.library.js) 'package:dartssh3/src/socket/ssh_socket_js.dart';
 
 abstract class SSHSocket {
   static Future<SSHSocket> connect(
