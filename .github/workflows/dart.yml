@@ -2,9 +2,7 @@ name: Dart
 
 on:
   push:
-    branches: [master]
   pull_request:
-    branches: [master]
 
 jobs:
   test:
@@ -17,7 +15,7 @@ jobs:
         sdk: [stable, dev]
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: ${{ matrix.sdk }}
@@ -43,4 +41,4 @@ jobs:
         run: dart pub global run coverage:test_with_coverage
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4

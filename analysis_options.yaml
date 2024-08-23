@@ -6,12 +6,9 @@ linter:
 
 analyzer:
   plugins:
-    - dart_code_metrics
+    - dart_code_metrics_presets
 
 dart_code_metrics:
-  anti-patterns:
-  # - long-method
-  # - long-parameter-list
   metrics:
     cyclomatic-complexity: 20
     maximum-nesting-level: 5
