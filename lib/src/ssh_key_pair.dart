@@ -4,15 +4,15 @@ import 'dart:typed_data';
 
 import 'package:asn1lib/asn1lib.dart';
 import 'package:convert/convert.dart';
-import 'package:dartssh3/dartssh3.dart';
-import 'package:dartssh3/src/hostkey/hostkey_ecdsa.dart';
-import 'package:dartssh3/src/hostkey/hostkey_ed25519.dart';
-import 'package:dartssh3/src/hostkey/hostkey_rsa.dart';
-import 'package:dartssh3/src/ssh_hostkey.dart';
-import 'package:dartssh3/src/ssh_message.dart';
-import 'package:dartssh3/src/utils/bcrypt.dart';
-import 'package:dartssh3/src/utils/cipher_ext.dart';
-import 'package:dartssh3/src/utils/list.dart';
+import 'package:dartssh4/dartssh4.dart';
+import 'package:dartssh4/src/hostkey/hostkey_ecdsa.dart';
+import 'package:dartssh4/src/hostkey/hostkey_ed25519.dart';
+import 'package:dartssh4/src/hostkey/hostkey_rsa.dart';
+import 'package:dartssh4/src/ssh_hostkey.dart';
+import 'package:dartssh4/src/ssh_message.dart';
+import 'package:dartssh4/src/utils/bcrypt.dart';
+import 'package:dartssh4/src/utils/cipher_ext.dart';
+import 'package:dartssh4/src/utils/list.dart';
 import 'package:pinenacl/ed25519.dart' as ed25519;
 import 'package:pointycastle/export.dart';
 

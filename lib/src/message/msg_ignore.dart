@@ -2,7 +2,7 @@
 
 import 'dart:typed_data';
 
-import 'package:dartssh3/src/ssh_message.dart';
+import 'package:dartssh4/src/ssh_message.dart';
 
 class SSH_Message_Ignore extends SSHMessage {
   static const messageId = 2;

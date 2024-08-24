@@ -1,5 +1,5 @@
-import 'package:dartssh3/src/sftp/sftp_packet.dart';
-import 'package:dartssh3/src/sftp/sftp_status_code.dart';
+import 'package:dartssh4/src/sftp/sftp_packet.dart';
+import 'package:dartssh4/src/sftp/sftp_status_code.dart';
 
 class SftpError {
   final String message;

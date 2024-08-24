@@ -1,21 +1,21 @@
 <!-- Title-->
 <p align="center">
-  <h1 align="center">DartSSH 3</h1>
+  <h1 align="center">DartSSH 4</h1>
 </p>
 
 <!-- Badges-->
 <p align="center">
-  <a href="https://pub.dartlang.org/packages/dartssh3">
-    <img src="https://img.shields.io/pub/v/dartssh3.svg">
+  <a href="https://pub.dartlang.org/packages/dartssh4">
+    <img src="https://img.shields.io/pub/v/dartssh4.svg">
   </a>
-  <a href="https://pub.dev/packages/dartssh3">
-    <img src="https://img.shields.io/pub/popularity/dartssh3?logo=dart">
+  <a href="https://pub.dev/packages/dartssh4">
+    <img src="https://img.shields.io/pub/popularity/dartssh4?logo=dart">
   </a>
-  <a href="https://www.dartdocs.org/documentation/dartssh3/latest/">
-    <img src="https://img.shields.io/badge/Docs-dartssh3-blue.svg">
+  <a href="https://www.dartdocs.org/documentation/dartssh4/latest/">
+    <img src="https://img.shields.io/badge/Docs-dartssh4-blue.svg">
   </a>
-  <a href="https://github.com/vicajilau/dartssh3/actions/workflows/dart.yml">
-    <img src="https://github.com/vicajilau/dartssh3/actions/workflows/dart.yml/badge.svg">
+  <a href="https://github.com/vicajilau/dartssh4/actions/workflows/dart.yml">
+    <img src="https://github.com/vicajilau/dartssh4/actions/workflows/dart.yml/badge.svg">
   </a>
 
   <a href="https://ko-fi.com/F1F61K6BL">
@@ -27,7 +27,7 @@
 SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as easy to use.
 </p>
 
-> **dartssh3** is a fork of [dartssh3] with a fresh start.
+> **dartssh4** is a fork of [dartssh4] with a fresh start.
 
 ## ✨ Features
 
@@ -37,7 +37,7 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
 -  **Forwarding**: Supports local forwarding and remote forwarding.
 -  **SFTP**: Supports all operations defined in [SFTPv3 protocol](https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02) including upload, download, list, link, remove, rename, etc.
 
-## 🧬 Built with dartssh3
+## 🧬 Built with dartssh4
 
 <table>
   <tr>
@@ -54,8 +54,8 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
   <tr> 
     <!-- ServerBox -->
     <td>
-      <img src="https://raw.githubusercontent.com/vicajilau/dartssh3/master/media/showcase-1-serverbox.1.jpg" width="150px">
-      <img src="https://raw.githubusercontent.com/vicajilau/dartssh3/master/media/showcase-1-serverbox.2.png" width="150px">
+      <img src="https://raw.githubusercontent.com/vicajilau/dartssh4/master/media/showcase-1-serverbox.1.jpg" width="150px">
+      <img src="https://raw.githubusercontent.com/vicajilau/dartssh4/master/media/showcase-1-serverbox.2.png" width="150px">
     </td>
     <!-- Ssh! No Ports -->
     <td>
@@ -73,7 +73,7 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
 
 ```sh
 # Install the `dartssh` command.
-dart pub global activate dartssh3_cli
+dart pub global activate dartssh4_cli
 
 # Then use `dartssh` as regular `ssh` command.
 dartssh user@example.com
@@ -345,20 +345,20 @@ print('free: ${statvfs.blockSize * statvfs.freeBlocks}');
 
 ### SSH client:
 
-- [example/example.dart](https://github.com/vicajilau/dartssh3/blob/master/example/example.dart)
-- [example/execute.dart](https://github.com/vicajilau/dartssh3/blob/master/example/execute.dart)
-- [example/forward_local.dart](https://github.com/vicajilau/dartssh3/blob/master/example/forward_local.dart)
-- [example/forward_remote.dart](https://github.com/vicajilau/dartssh3/blob/master/example/forward_remote.dart)
-- [example/pubkey.dart](https://github.com/vicajilau/dartssh3/blob/master/example/pubkey.dart)
-- [example/shell.dart](https://github.com/vicajilau/dartssh3/blob/master/example/shell.dart)
-- [example/ssh_jump.dart](https://github.com/vicajilau/dartssh3/blob/master/example/ssh_jump.dart)
+- [example/example.dart](https://github.com/vicajilau/dartssh4/blob/master/example/example.dart)
+- [example/execute.dart](https://github.com/vicajilau/dartssh4/blob/master/example/execute.dart)
+- [example/forward_local.dart](https://github.com/vicajilau/dartssh4/blob/master/example/forward_local.dart)
+- [example/forward_remote.dart](https://github.com/vicajilau/dartssh4/blob/master/example/forward_remote.dart)
+- [example/pubkey.dart](https://github.com/vicajilau/dartssh4/blob/master/example/pubkey.dart)
+- [example/shell.dart](https://github.com/vicajilau/dartssh4/blob/master/example/shell.dart)
+- [example/ssh_jump.dart](https://github.com/vicajilau/dartssh4/blob/master/example/ssh_jump.dart)
 
 ### SFTP:
-- [example/sftp_read.dart](https://github.com/vicajilau/dartssh3/blob/master/example/sftp_read.dart)
-- [example/sftp_list.dart](https://github.com/vicajilau/dartssh3/blob/master/example/sftp_list.dart)
-- [example/sftp_stat.dart](https://github.com/vicajilau/dartssh3/blob/master/example/sftp_stat.dart)
-- [example/sftp_upload.dart](https://github.com/vicajilau/dartssh3/blob/master/example/sftp_upload.dart)
-- [example/sftp_filetype.dart](https://github.com/vicajilau/dartssh3/blob/master/example/sftp_filetype.dart)
+- [example/sftp_read.dart](https://github.com/vicajilau/dartssh4/blob/master/example/sftp_read.dart)
+- [example/sftp_list.dart](https://github.com/vicajilau/dartssh4/blob/master/example/sftp_list.dart)
+- [example/sftp_stat.dart](https://github.com/vicajilau/dartssh4/blob/master/example/sftp_stat.dart)
+- [example/sftp_upload.dart](https://github.com/vicajilau/dartssh4/blob/master/example/sftp_upload.dart)
+- [example/sftp_filetype.dart](https://github.com/vicajilau/dartssh4/blob/master/example/sftp_filetype.dart)
 
 
 
@@ -431,4 +431,4 @@ https://github.com/GreenAppers/dartssh by GreenAppers
 
 dartssh is released under the terms of the MIT license. See [LICENSE](LICENSE).
 
-[dartssh3]: https://github.com/vicajilau/dartssh3
+[dartssh4]: https://github.com/vicajilau/dartssh4

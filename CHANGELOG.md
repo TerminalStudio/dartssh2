@@ -1,5 +1,5 @@
-## [3.0.0] - 2024-08-23
-- Reimplemented as dartssh3.
+## [4.0.0] - 2024-08-23
+- Reimplemented as dartssh4 because dartssh4 already exist.
 - DCM updated.
 - Fixed warnings related with new DCM version.
 - Dependencies updated.

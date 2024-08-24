@@ -1,4 +1,4 @@
-import 'package:dartssh3/src/http/http_content_type.dart';
+import 'package:dartssh4/src/http/http_content_type.dart';
 
 /// Headers for HTTP requests and responses.
 ///

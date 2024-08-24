@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:dartssh3/src/socket/ssh_socket.dart';
-import 'package:dartssh3/src/ssh_channel.dart';
+import 'package:dartssh4/src/socket/ssh_socket.dart';
+import 'package:dartssh4/src/ssh_channel.dart';
 
 class SSHForwardChannel implements SSHSocket {
   final SSHChannel _channel;

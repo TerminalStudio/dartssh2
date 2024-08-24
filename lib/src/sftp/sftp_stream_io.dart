@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:dartssh3/src/sftp/sftp_client.dart';
-import 'package:dartssh3/src/utils/stream.dart';
+import 'package:dartssh4/src/sftp/sftp_client.dart';
+import 'package:dartssh4/src/utils/stream.dart';
 
 /// The amount of data to send in a single SFTP packet.
 ///
@@ -120,7 +120,7 @@ class SftpFileWriter with DoneFuture {
 
 /// Implements [Future] interface for [SftpFileWriter].
 ///
-/// This is for compatibility with earlier versions of dartssh3 and dartssh2.
+/// This is for compatibility with earlier versions of dartssh4 and dartssh2.
 mixin DoneFuture implements Future {
   Future<void> get done;
 

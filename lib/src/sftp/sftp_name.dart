@@ -1,5 +1,5 @@
-import 'package:dartssh3/src/sftp/sftp_file_attrs.dart';
-import 'package:dartssh3/src/ssh_message.dart';
+import 'package:dartssh4/src/sftp/sftp_file_attrs.dart';
+import 'package:dartssh4/src/ssh_message.dart';
 
 class SftpName {
   final String filename;

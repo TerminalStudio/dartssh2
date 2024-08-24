@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
-import 'package:dartssh3/src/ssh_kex.dart';
-import 'package:dartssh3/src/utils/bigint.dart';
-import 'package:dartssh3/src/utils/list.dart';
+import 'package:dartssh4/src/ssh_kex.dart';
+import 'package:dartssh4/src/utils/bigint.dart';
+import 'package:dartssh4/src/utils/list.dart';
 
 /// The Diffie-Hellman (DH) key exchange provides a shared secret that
 /// cannot be determined by either party alone.

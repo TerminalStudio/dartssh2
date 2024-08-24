@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:dartssh3/dartssh3.dart';
+import 'package:dartssh4/dartssh4.dart';
 import 'package:test/test.dart';
 
 import '../test_utils.dart';

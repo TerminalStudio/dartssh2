@@ -1,4 +1,4 @@
-import 'package:dartssh3/src/ssh_algorithm.dart';
+import 'package:dartssh4/src/ssh_algorithm.dart';
 
 class SSHHostkeyType with SSHAlgorithm {
   static const rsaSha1 = SSHHostkeyType._('ssh-rsa');
