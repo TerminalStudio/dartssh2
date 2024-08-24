@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:dartssh2/src/utils/stream.dart';
+import 'package:dartssh3/src/utils/stream.dart';
 import 'package:test/test.dart';
 
 void main() {

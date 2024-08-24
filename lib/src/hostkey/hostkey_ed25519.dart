@@ -1,6 +1,6 @@
 import 'package:convert/convert.dart';
-import 'package:dartssh2/src/ssh_hostkey.dart';
-import 'package:dartssh2/src/ssh_message.dart';
+import 'package:dartssh3/src/ssh_hostkey.dart';
+import 'package:dartssh3/src/ssh_message.dart';
 import 'package:pinenacl/ed25519.dart';
 
 class SSHEd25519PublicKey implements SSHHostKey {

@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:dartssh2/src/utils/bcrypt.dart';
+import 'package:dartssh3/src/utils/bcrypt.dart';
 import 'package:test/test.dart';
 
 void main() {

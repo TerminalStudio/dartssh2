@@ -1,4 +1,4 @@
-import 'package:dartssh2/src/socket/ssh_socket.dart';
+import 'package:dartssh3/src/socket/ssh_socket.dart';
 
 Future<SSHSocket> connectNativeSocket(
   String host,
@@ -7,7 +7,7 @@ Future<SSHSocket> connectNativeSocket(
 }) async {
   throw UnimplementedError(
     'Native socket is not supported on web. '
-    'To use dartssh2 in browser, you have to bring your own implementation '
+    'To use dartssh3 in browser, you have to bring your own implementation '
     'of SSHSocket.',
   );
 }

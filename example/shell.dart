@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:dartssh2/dartssh2.dart';
+import 'package:dartssh3/dartssh3.dart';
 
 void main(List<String> args) async {
   final socket = await SSHSocket.connect('localhost', 22);

@@ -1,4 +1,4 @@
-import 'package:dartssh2/dartssh2.dart';
+import 'package:dartssh3/dartssh3.dart';
 import 'package:test/test.dart';
 
 import '../../test_utils.dart';
@@ -16,8 +16,7 @@ void main() {
     test('throws if the extension is not supported by the server', () async {
       final client = await getTestClient();
       final sftp = await client.sftp();
-      final file = await sftp.open('/root/a', mode: SftpFileOpenMode.create);
-      expect(() => file.statvfs(), throwsA(isA<SftpExtensionError>()));
+      expect(() => sftp.statvfs('/root/a'), throwsA(isA<SftpExtensionError>()));
     });
   });
 }

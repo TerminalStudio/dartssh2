@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:dartssh2/src/http/http_exception.dart';
-import 'package:dartssh2/src/http/line_decoder.dart';
-import 'package:dartssh2/src/http/http_content_type.dart';
-import 'package:dartssh2/src/http/http_headers.dart';
-import 'package:dartssh2/src/socket/ssh_socket.dart';
-import 'package:dartssh2/src/ssh_client.dart';
+import 'package:dartssh3/src/http/http_exception.dart';
+import 'package:dartssh3/src/http/line_decoder.dart';
+import 'package:dartssh3/src/http/http_content_type.dart';
+import 'package:dartssh3/src/http/http_headers.dart';
+import 'package:dartssh3/src/socket/ssh_socket.dart';
+import 'package:dartssh3/src/ssh_client.dart';
 
 /// A HTTP client that works over SSH port forwarding.
 ///

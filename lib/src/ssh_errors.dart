@@ -86,7 +86,7 @@ class SSHKeyDecodeError with SSHMessageError implements SSHError {
 
 /// Errors that happen when the library fails to decrypt the host key.
 class SSHKeyDecryptError extends SSHKeyDecodeError {
-  SSHKeyDecryptError(String message, [Object? error]) : super(message, error);
+  SSHKeyDecryptError(super.message, [super.error]);
 }
 
 /// Errors that happen when the library fails to open a channel.
