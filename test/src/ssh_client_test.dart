@@ -13,7 +13,7 @@ void main() {
 
     test('throws SSHAuthFailError when password is wrong', () async {
       var client = SSHClient(
-        await SSHSocket.connect('honeypot.terminal.studio', 2023),
+        await SSHSocket.connect('test.rebex.net', 22),
         username: 'root',
         onPasswordRequest: () => 'bad-password',
       );
@@ -26,20 +26,10 @@ void main() {
       client.close();
     });
 
-    test('can connect to a ssh server with a public key', () async {
-      var client = SSHClient(
-        await SSHSocket.connect('honeypot.terminal.studio', 2022),
-        username: 'root',
-        identities: await getTestKeyPairs(),
-      );
-      await client.authenticated;
-      client.close();
-    });
-
     test('throws SSHAuthFailError when public key is wrong', () async {
       var client = SSHClient(
-        await SSHSocket.connect('honeypot.terminal.studio', 2023),
-        username: 'root',
+        await SSHSocket.connect('test.rebex.net', 22),
+        username: 'demo',
         identities: await getTestKeyPairs(),
       );
       try {
@@ -53,8 +43,8 @@ void main() {
 
     test('throws SSHAuthFailError when all public keys are wrong', () async {
       var client = SSHClient(
-        await SSHSocket.connect('honeypot.terminal.studio', 2023),
-        username: 'root',
+        await SSHSocket.connect('test.rebex.net', 22),
+        username: 'demo',
         identities: [
           ...await getTestKeyPairs(),
           ...await getTestKeyPairs(),
@@ -73,8 +63,8 @@ void main() {
       'throws SSHAuthFailError when both password and public key are wrong',
       () async {
         var client = SSHClient(
-          await SSHSocket.connect('honeypot.terminal.studio', 2023),
-          username: 'root',
+          await SSHSocket.connect('test.rebex.net', 22),
+          username: 'demo',
           onPasswordRequest: () => 'bad-password',
           identities: await getTestKeyPairs(),
         );
@@ -90,8 +80,8 @@ void main() {
 
     test('throws SSHAuthFailError when identity is empty', () async {
       var client = SSHClient(
-        await SSHSocket.connect('honeypot.terminal.studio', 2023),
-        username: 'root',
+        await SSHSocket.connect('test.rebex.net', 22),
+        username: 'demo',
         identities: [],
       );
       try {

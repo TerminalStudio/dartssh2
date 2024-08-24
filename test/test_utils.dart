@@ -5,9 +5,9 @@ import 'package:dartssh3/dartssh3.dart';
 /// A honeypot that accepts all passwords and public-keys
 Future<SSHClient> getHoneypotClient() async {
   return SSHClient(
-    await SSHSocket.connect('honeypot.terminal.studio', 2022),
-    username: 'root',
-    onPasswordRequest: () => 'random',
+    await SSHSocket.connect('test.rebex.net', 22),
+    username: 'demo',
+    onPasswordRequest: () => 'password',
   );
 }
 
@@ -23,9 +23,9 @@ Future<SSHClient> getDenyingHoneypotClient() async {
 /// A test server provided by test.rebex.net.
 Future<SSHClient> getTestClient() async {
   return SSHClient(
-    await SSHSocket.connect('honeypot.terminal.studio', 2222),
-    username: 'root',
-    onPasswordRequest: () => 'random',
+    await SSHSocket.connect('test.rebex.net', 22),
+    username: 'demo',
+    onPasswordRequest: () => 'password',
   );
 }
 
