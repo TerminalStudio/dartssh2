@@ -4,7 +4,7 @@ description: SSH and SFTP client written in pure Dart, aiming to be feature-rich
 homepage: https://github.com/vicajilau/dartssh3
 
 environment:
-  sdk: ">=2.17.0 <3.0.0"
+  sdk: ">=2.17.0 <4.0.0"
 
 dependencies:
   asn1lib: ^1.5.3
