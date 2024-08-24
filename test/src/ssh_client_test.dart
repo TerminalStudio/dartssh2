@@ -29,7 +29,7 @@ void main() {
     test('throws SSHAuthFailError when public key is wrong', () async {
       var client = SSHClient(
         await SSHSocket.connect('test.rebex.net', 22),
-        username: 'demo',
+        username: 'demos',
         identities: await getTestKeyPairs(),
       );
       try {
@@ -44,7 +44,7 @@ void main() {
     test('throws SSHAuthFailError when all public keys are wrong', () async {
       var client = SSHClient(
         await SSHSocket.connect('test.rebex.net', 22),
-        username: 'demo',
+        username: 'bad-user',
         identities: [
           ...await getTestKeyPairs(),
           ...await getTestKeyPairs(),
