@@ -1,5 +1,5 @@
 name: dartssh4
-version: 4.0.0
+version: 4.0.1
 description: SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as easy to use.
 homepage: https://github.com/vicajilau/dartssh4
 

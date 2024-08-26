@@ -116,7 +116,9 @@ class SftpFileWriter with DoneFuture {
       _subscription.resume();
     }
 
-    if (_streamDone && _bytesSent == _bytesAcked && !_doneCompleter.isCompleted) {
+    if (_streamDone &&
+        _bytesSent == _bytesAcked &&
+        !_doneCompleter.isCompleted) {
       _doneCompleter.complete();
     }
   }

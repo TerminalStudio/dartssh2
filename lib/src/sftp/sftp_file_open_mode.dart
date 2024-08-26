@@ -52,5 +52,6 @@ class SftpFileOpenMode {
   ///
   /// - Parameter [other]: Another instance of `SftpFileOpenMode` to combine with.
   /// - Returns: A new `SftpFileOpenMode` instance containing the combined flags.
-  SftpFileOpenMode operator |(SftpFileOpenMode other) => SftpFileOpenMode._(flag | other.flag);
+  SftpFileOpenMode operator |(SftpFileOpenMode other) =>
+      SftpFileOpenMode._(flag | other.flag);
 }

@@ -1,29 +1,27 @@
 <!-- Title-->
-<p align="center">
-  <h1 align="center">DartSSH 4</h1>
-</p>
+<h1 style="text-align: center;">DartSSH 4</h1>
 
 <!-- Badges-->
-<p align="center">
+<p style="text-align: center;">
   <a href="https://pub.dartlang.org/packages/dartssh4">
-    <img src="https://img.shields.io/pub/v/dartssh4.svg">
+    <img src="https://img.shields.io/pub/v/dartssh4.svg" alt="">
   </a>
   <a href="https://pub.dev/packages/dartssh4">
-    <img src="https://img.shields.io/pub/popularity/dartssh4?logo=dart">
+    <img src="https://img.shields.io/pub/popularity/dartssh4?logo=dart" alt="">
   </a>
   <a href="https://www.dartdocs.org/documentation/dartssh4/latest/">
-    <img src="https://img.shields.io/badge/Docs-dartssh4-blue.svg">
+    <img src="https://img.shields.io/badge/Docs-dartssh4-blue.svg" alt="">
   </a>
   <a href="https://github.com/vicajilau/dartssh4/actions/workflows/dart.yml">
-    <img src="https://github.com/vicajilau/dartssh4/actions/workflows/dart.yml/badge.svg">
+    <img src="https://github.com/vicajilau/dartssh4/actions/workflows/dart.yml/badge.svg" alt="">
   </a>
 
   <a href="https://ko-fi.com/F1F61K6BL">
-    <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-F16061?style=flat&logo=buy-me-a-coffee&logoColor=white&labelColor=555555">
+    <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-F16061?style=flat&logo=buy-me-a-coffee&logoColor=white&labelColor=555555" alt="">
   </a>
 </p>
 
-<p align="center">
+<p style="text-align: center;">
 SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as easy to use.
 </p>
 
@@ -42,28 +40,38 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
 <table>
   <tr>
     <!-- ServerBox -->
-    <td align="center">
+    <td style="text-align: center;">
       <b><a href="https://github.com/LollipopKit/flutter_server_box">ServerBox</a></b>
     </td>
     <!-- Ssh! No Ports -->
-    <td align="center">
+    <td style="text-align: center;">
       <b><a href="https://github.com/atsign-foundation/sshnoports">Ssh! No Ports</a></b>
+    </td>
+    <!-- dartShell -->
+    <td style="text-align: center;">
+      <b><a href="https://github.com/hsduren/dartshell">DartShell</a></b>
     </td>
   </tr>
 
   <tr> 
     <!-- ServerBox -->
     <td>
-      <img src="https://raw.githubusercontent.com/vicajilau/dartssh4/master/media/showcase-1-serverbox.1.jpg" width="150px">
-      <img src="https://raw.githubusercontent.com/vicajilau/dartssh4/master/media/showcase-1-serverbox.2.png" width="150px">
+      <img src="https://raw.githubusercontent.com/vicajilau/dartssh4/master/media/showcase-1-serverbox.1.jpg" width="150px" alt="ServerBox interface displaying connection management options">
+      <img src="https://raw.githubusercontent.com/vicajilau/dartssh4/master/media/showcase-1-serverbox.2.png" width="150px" alt="ServerBox user interface for server control and monitoring">
     </td>
     <!-- Ssh! No Ports -->
     <td>
       <a href="https://asciinema.org/a/496148">
-        <img src="https://user-images.githubusercontent.com/6131216/185263634-07e8dba7-b5a8-44fc-ac44-8703e247143f.png" width="300px">
+        <img src="https://user-images.githubusercontent.com/6131216/185263634-07e8dba7-b5a8-44fc-ac44-8703e247143f.png" width="300px" alt="Ssh! No Ports demo showcasing SSH connectivity without open ports">
+      </a>
+    </td>
+    <!-- dartShell -->
+    <td>
+      <img src="https://github.com/hsduren/dartshell/blob/main/info1.png" width="300px" alt="dartShell displaying terminal and session information for SSH operations">
     </td>
   </tr>
 </table>
+
 
 > Feel free to add your own app here by opening a pull request.
 
@@ -389,11 +397,11 @@ print('free: ${statvfs.blockSize * statvfs.freeBlocks}');
 **Private key**:
 
 | **Type**            | **Decode** | **Decrypt** | **Encode** | **Encrypt** |
-| ------------------- | ---------- | ----------- | ---------- | ----------- |
-| **RSA**             | ✔️          | ✔️           | ✔️          | WIP         |
-| **OpenSSH RSA**     | ✔️          | ✔️           | ✔️          | WIP         |
-| **OpenSSH ECDSA**   | ✔️          | ✔️           | ✔️          | WIP         |
-| **OpenSSH Ed25519** | ✔️          | ✔️           | ✔️          | WIP         |
+|---------------------|------------|-------------|------------|-------------|
+| **RSA**             | ✔️         | ✔️          | ✔️         | WIP         |
+| **OpenSSH RSA**     | ✔️         | ✔️          | ✔️         | WIP         |
+| **OpenSSH ECDSA**   | ✔️         | ✔️          | ✔️         | WIP         |
+| **OpenSSH Ed25519** | ✔️         | ✔️          | ✔️         | WIP         |
 
 
   
