@@ -61,8 +61,10 @@ void main() {
       final kex = SSHKexNist.p256();
       final privateKey = kex.privateKey;
 
-      expect(privateKey, isNot(equals(BigInt.zero)), reason: 'Private key should not be zero.');
-      expect(privateKey < kex.curve.n, isTrue, reason: 'Private key should be less than curve order.');
+      expect(privateKey, isNot(equals(BigInt.zero)),
+          reason: 'Private key should not be zero.');
+      expect(privateKey < kex.curve.n, isTrue,
+          reason: 'Private key should be less than curve order.');
     });
   });
 }
