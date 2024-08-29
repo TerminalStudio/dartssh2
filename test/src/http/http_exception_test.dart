@@ -1,5 +1,5 @@
-import 'package:test/test.dart';
 import 'package:dartssh2/src/http/http_exception.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('SSHHttpException', () {
@@ -38,7 +38,10 @@ void main() {
       final resultString = exception.toString();
 
       // Assert
-      expect(resultString, equals('SSHHttpException: An error occurred, uri = http://example.com/'));
+      expect(
+          resultString,
+          equals(
+              'SSHHttpException: An error occurred, uri = http://example.com/'));
     });
 
     test('should return correct string representation without URI', () {
