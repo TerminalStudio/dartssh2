@@ -1,10 +1,6 @@
 name: Dart
 
-on:
-  push:
-    branches: [master]
-  pull_request:
-    branches: [master]
+on: push
 
 jobs:
   test:
@@ -13,11 +9,10 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        # sdk: [stable, beta, dev, 2.10.3, 2.12.0-29.10.beta]
-        sdk: [stable, dev]
+        sdk: [stable]
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: ${{ matrix.sdk }}
@@ -43,4 +38,11 @@ jobs:
         run: dart pub global run coverage:test_with_coverage
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
+        with:
+          fail_ci_if_error: true # optional (default = false)
+          files: ./coverage1.xml,./coverage2.xml # optional
+          flags: unittests # optional
+          name: codecov-umbrella # optional
+          token: ${{ secrets.CODECOV_TOKEN }} # required
+          verbose: true # optional (default = false)

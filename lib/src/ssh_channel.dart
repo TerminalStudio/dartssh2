@@ -489,7 +489,7 @@ class SSHChannelDataSplitter
 }
 
 class SSHChannelDataConsumer extends StreamConsumerBase<SSHChannelData> {
-  SSHChannelDataConsumer(Stream<SSHChannelData> stream) : super(stream);
+  SSHChannelDataConsumer(super.stream);
 
   @override
   int getLength(SSHChannelData chunk) {

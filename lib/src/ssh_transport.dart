@@ -31,6 +31,8 @@ import 'package:dartssh2/src/message/msg_kex_ecdh.dart';
 import 'package:dartssh2/src/ssh_message.dart';
 import 'package:pointycastle/export.dart';
 
+import '../dartssh2.dart';
+
 typedef SSHPrintHandler = void Function(String?);
 
 /// Function called when host key is received.

@@ -1,3 +1,13 @@
+## [2.10.0] - 2024-08-29
+- Improved Readme.
+- Bug fix in SftpFileWriter for [#50], [#71], [#100].
+- Added DartShell product [#101].
+- Fixed dynamic return on SftpFileOpenMode in | operator [#80].
+- DCM updated.
+- Fixed warnings related with new DCM version.
+- Dependencies updated.
+- Fixed Flutter 3.24 issue.
+
 ## [2.9.1-pre] - 2023-04-02
 - Make the type of `SSHForwardChannel.sink` to `StreamSink<List<int>>` to match
   its super class.
@@ -146,6 +156,11 @@
 
 - Initial release.
 
+[#101]: https://github.com/TerminalStudio/dartssh2/pull/101
+[#100]: https://github.com/TerminalStudio/dartssh2/issues/100
+[#80]: https://github.com/TerminalStudio/dartssh2/issues/80
+[#71]: https://github.com/TerminalStudio/dartssh2/issues/71
+[#50]: https://github.com/TerminalStudio/dartssh2/issues/50
 [#24]: https://github.com/TerminalStudio/dartssh2/issues/24
 [#21]: https://github.com/TerminalStudio/dartssh2/issues/21
 [#18]: https://github.com/TerminalStudio/dartssh2/issues/18

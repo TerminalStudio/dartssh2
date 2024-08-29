@@ -1,28 +1,27 @@
 <!-- Title-->
-<p align="center">
-  <h1 align="center">DartSSH 2</h1>
-</p>
+<h1 style="text-align: center;">DartSSH 2</h1>
 
 <!-- Badges-->
-<p align="center">
+<p style="text-align: center;">
   <a href="https://pub.dartlang.org/packages/dartssh2">
-    <img src="https://img.shields.io/pub/v/dartssh2.svg">
+    <img src="https://img.shields.io/pub/v/dartssh2.svg" alt="">
   </a>
   <a href="https://pub.dev/packages/dartssh2">
-    <img src="https://img.shields.io/pub/popularity/dartssh2?logo=dart">
+    <img src="https://img.shields.io/pub/popularity/dartssh2?logo=dart" alt="">
   </a>
   <a href="https://www.dartdocs.org/documentation/dartssh2/latest/">
-    <img src="https://img.shields.io/badge/Docs-dartssh2-blue.svg">
+    <img src="https://img.shields.io/badge/Docs-dartssh2-blue.svg" alt="">
   </a>
   <a href="https://github.com/TerminalStudio/dartssh2/actions/workflows/dart.yml">
-    <img src="https://github.com/TerminalStudio/dartssh2/actions/workflows/dart.yml/badge.svg">
+    <img src="https://github.com/TerminalStudio/dartssh2/actions/workflows/dart.yml/badge.svg" alt="">
   </a>
+
   <a href="https://ko-fi.com/F1F61K6BL">
-    <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-F16061?style=flat&logo=buy-me-a-coffee&logoColor=white&labelColor=555555">
+    <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-F16061?style=flat&logo=buy-me-a-coffee&logoColor=white&labelColor=555555" alt="">
   </a>
 </p>
 
-<p align="center">
+<p style="text-align: center;">
 SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as easy to use.
 </p>
 
@@ -41,28 +40,38 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
 <table>
   <tr>
     <!-- ServerBox -->
-    <td align="center">
+    <td style="text-align: center;">
       <b><a href="https://github.com/LollipopKit/flutter_server_box">ServerBox</a></b>
     </td>
     <!-- Ssh! No Ports -->
-    <td align="center">
+    <td style="text-align: center;">
       <b><a href="https://github.com/atsign-foundation/sshnoports">Ssh! No Ports</a></b>
+    </td>
+    <!-- dartShell -->
+    <td style="text-align: center;">
+      <b><a href="https://github.com/hsduren/dartshell">DartShell</a></b>
     </td>
   </tr>
 
   <tr> 
     <!-- ServerBox -->
     <td>
-      <img src="https://raw.githubusercontent.com/TerminalStudio/dartssh2/master/media/showcase-1-serverbox.1.jpg" width="150px">
-      <img src="https://raw.githubusercontent.com/TerminalStudio/dartssh2/master/media/showcase-1-serverbox.2.png" width="150px">
+      <img src="https://raw.githubusercontent.com/TerminalStudio/dartssh2/master/media/showcase-1-serverbox.1.jpg" width="150px" alt="ServerBox interface displaying connection management options">
+      <img src="https://raw.githubusercontent.com/TerminalStudio/dartssh2/master/media/showcase-1-serverbox.2.png" width="150px" alt="ServerBox user interface for server control and monitoring">
     </td>
     <!-- Ssh! No Ports -->
     <td>
       <a href="https://asciinema.org/a/496148">
-        <img src="https://user-images.githubusercontent.com/6131216/185263634-07e8dba7-b5a8-44fc-ac44-8703e247143f.png" width="300px">
+        <img src="https://user-images.githubusercontent.com/6131216/185263634-07e8dba7-b5a8-44fc-ac44-8703e247143f.png" width="300px" alt="Ssh! No Ports demo showcasing SSH connectivity without open ports">
+      </a>
+    </td>
+    <!-- dartShell -->
+    <td>
+      <img src="https://github.com/hsduren/dartshell/blob/main/info1.png" width="300px" alt="dartShell displaying terminal and session information for SSH operations">
     </td>
   </tr>
 </table>
+
 
 > Feel free to add your own app here by opening a pull request.
 
@@ -388,43 +397,43 @@ print('free: ${statvfs.blockSize * statvfs.freeBlocks}');
 **Private key**:
 
 | **Type**            | **Decode** | **Decrypt** | **Encode** | **Encrypt** |
-| ------------------- | ---------- | ----------- | ---------- | ----------- |
-| **RSA**             | ✔️          | ✔️           | ✔️          | WIP         |
-| **OpenSSH RSA**     | ✔️          | ✔️           | ✔️          | WIP         |
-| **OpenSSH ECDSA**   | ✔️          | ✔️           | ✔️          | WIP         |
-| **OpenSSH Ed25519** | ✔️          | ✔️           | ✔️          | WIP         |
+|---------------------|------------|-------------|------------|-------------|
+| **RSA**             | ✔️         | ✔️          | ✔️         | WIP         |
+| **OpenSSH RSA**     | ✔️         | ✔️          | ✔️         | WIP         |
+| **OpenSSH ECDSA**   | ✔️         | ✔️          | ✔️         | WIP         |
+| **OpenSSH Ed25519** | ✔️         | ✔️          | ✔️         | WIP         |
 
 
   
 ## ⏳ Roadmap
 
-- [x] Fix broken tests
-- [x] Sound null safety
+- [x] Fix broken tests.
+- [x] Sound null safety.
 - [x] Redesign API to allow starting multiple sessions.
-- [x] Full SFTP
-- [ ] Server
+- [x] Full SFTP.
+- [ ] Server.
 
 ## References
 
-- [`RFC 4250`](https://datatracker.ietf.org/doc/html/rfc4250) The Secure Shell (SSH) Protocol Assigned Numbers
-- [`RFC 4251`](https://datatracker.ietf.org/doc/html/rfc4251) The Secure Shell (SSH) Protocol Architecture
-- [`RFC 4252`](https://datatracker.ietf.org/doc/html/rfc4252) The Secure Shell (SSH) Authentication Protocol
-- [`RFC 4253`](https://datatracker.ietf.org/doc/html/rfc4253) The Secure Shell (SSH) Transport Layer Protocol
-- [`RFC 4254`](https://datatracker.ietf.org/doc/html/rfc4254) The Secure Shell (SSH) Connection Protocol
-- [`RFC 4255`](https://datatracker.ietf.org/doc/html/rfc4255) Using DNS to Securely Publish Secure Shell (SSH) Key Fingerprints
-- [`RFC 4256`](https://datatracker.ietf.org/doc/html/rfc4256) Generic Message Exchange Authentication for the Secure Shell Protocol (SSH)
-- [`RFC 4419`](https://datatracker.ietf.org/doc/html/rfc4419) Diffie-Hellman Group Exchange for the Secure Shell (SSH) Transport Layer Protocol
-- [`RFC 4716`](https://datatracker.ietf.org/doc/html/rfc4716) The Secure Shell (SSH) Public Key File Format
-- [`RFC 5656`](https://datatracker.ietf.org/doc/html/rfc5656) Elliptic Curve Algorithm Integration in the Secure Shell Transport Layer
-- [`RFC 8332`](https://datatracker.ietf.org/doc/html/rfc8332) Use of RSA Keys with SHA-256 and SHA-512 in the Secure Shell (SSH) Protocol
-- [`RFC 8731`](https://datatracker.ietf.org/doc/html/rfc8731) Secure Shell (SSH) Key Exchange Method Using Curve25519 and Curve448
-- [`draft-miller-ssh-agent-03`](https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent-03) SSH Agent Protocol
-- [`draft-ietf-secsh-filexfer-02`](https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02) SSH File Transfer Protocol
-- [`draft-dbider-sha2-mac-for-ssh-06`](https://datatracker.ietf.org/doc/html/draft-dbider-sha2-mac-for-ssh-06) SHA-2 Data Integrity Verification for the Secure Shell (SSH) Transport Layer Protocol
+- [`RFC 4250`](https://datatracker.ietf.org/doc/html/rfc4250) The Secure Shell (SSH) Protocol Assigned Numbers.
+- [`RFC 4251`](https://datatracker.ietf.org/doc/html/rfc4251) The Secure Shell (SSH) Protocol Architecture.
+- [`RFC 4252`](https://datatracker.ietf.org/doc/html/rfc4252) The Secure Shell (SSH) Authentication Protocol.
+- [`RFC 4253`](https://datatracker.ietf.org/doc/html/rfc4253) The Secure Shell (SSH) Transport Layer Protocol.
+- [`RFC 4254`](https://datatracker.ietf.org/doc/html/rfc4254) The Secure Shell (SSH) Connection Protocol.
+- [`RFC 4255`](https://datatracker.ietf.org/doc/html/rfc4255) Using DNS to Securely Publish Secure Shell (SSH) Key Fingerprints.
+- [`RFC 4256`](https://datatracker.ietf.org/doc/html/rfc4256) Generic Message Exchange Authentication for the Secure Shell Protocol (SSH).
+- [`RFC 4419`](https://datatracker.ietf.org/doc/html/rfc4419) Diffie-Hellman Group Exchange for the Secure Shell (SSH) Transport Layer Protocol.
+- [`RFC 4716`](https://datatracker.ietf.org/doc/html/rfc4716) The Secure Shell (SSH) Public Key File Format.
+- [`RFC 5656`](https://datatracker.ietf.org/doc/html/rfc5656) Elliptic Curve Algorithm Integration in the Secure Shell Transport Layer.
+- [`RFC 8332`](https://datatracker.ietf.org/doc/html/rfc8332) Use of RSA Keys with SHA-256 and SHA-512 in the Secure Shell (SSH) Protocol.
+- [`RFC 8731`](https://datatracker.ietf.org/doc/html/rfc8731) Secure Shell (SSH) Key Exchange Method Using Curve25519 and Curve448.
+- [`draft-miller-ssh-agent-03`](https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent-03) SSH Agent Protocol.
+- [`draft-ietf-secsh-filexfer-02`](https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02) SSH File Transfer Protocol.
+- [`draft-dbider-sha2-mac-for-ssh-06`](https://datatracker.ietf.org/doc/html/draft-dbider-sha2-mac-for-ssh-06) SHA-2 Data Integrity Verification for the Secure Shell (SSH) Transport Layer Protocol.
 
 ## Credits
 
-https://github.com/GreenAppers/dartssh by GreenAppers
+- [https://github.com/GreenAppers/dartssh](https://github.com/GreenAppers/dartssh) by GreenAppers.
 
 ## License
 
