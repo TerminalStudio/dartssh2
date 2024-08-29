@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:dartssh4/dartssh4.dart';
+import 'package:dartssh2/dartssh2.dart';
 
 void main() async {
   final jumpServer = SSHClient(

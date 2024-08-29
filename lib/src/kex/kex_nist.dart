@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
-import 'package:dartssh4/src/ssh_kex.dart';
-import 'package:dartssh4/src/utils/bigint.dart';
-import 'package:dartssh4/src/utils/list.dart';
+import 'package:dartssh2/src/ssh_kex.dart';
+import 'package:dartssh2/src/utils/bigint.dart';
+import 'package:dartssh2/src/utils/list.dart';
 import 'package:pointycastle/ecc/curves/secp256r1.dart';
 import 'package:pointycastle/ecc/curves/secp384r1.dart';
 import 'package:pointycastle/ecc/curves/secp521r1.dart';

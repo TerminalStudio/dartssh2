@@ -1,11 +1,8 @@
-## [4.0.1] - 2024-08-26
+## [2.10.0] - 2024-08-29
 - Improved Readme.
 - Bug fix in SftpFileWriter for [#50], [#71], [#100].
 - Added DartShell product [#101].
 - Fixed dynamic return on SftpFileOpenMode in | operator [#80].
-
-## [4.0.0] - 2024-08-23
-- Reimplemented as dartssh4 because dartssh4 already exist.
 - DCM updated.
 - Fixed warnings related with new DCM version.
 - Dependencies updated.

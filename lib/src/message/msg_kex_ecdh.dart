@@ -3,7 +3,7 @@
 import 'dart:typed_data';
 
 import 'package:convert/convert.dart';
-import 'package:dartssh4/src/ssh_message.dart';
+import 'package:dartssh2/src/ssh_message.dart';
 
 class SSH_Message_KexECDH_Init implements SSHMessage {
   static const messageId = 30;

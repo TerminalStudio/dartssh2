@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:dartssh4/src/ssh_algorithm.dart';
+import 'package:dartssh2/src/ssh_algorithm.dart';
 import 'package:pointycastle/export.dart';
 
 class SSHMacType with SSHAlgorithm {

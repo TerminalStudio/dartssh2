@@ -1,5 +1,5 @@
-import 'package:dartssh4/src/utils/int.dart';
-import 'package:dartssh4/src/ssh_message.dart';
+import 'package:dartssh2/src/utils/int.dart';
+import 'package:dartssh2/src/ssh_message.dart';
 
 abstract class _Flags {
   static const size = 0x00000001;

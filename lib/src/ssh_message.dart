@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:dartssh4/src/utils/int.dart';
-import 'package:dartssh4/src/utils/bigint.dart';
-import 'package:dartssh4/src/utils/utf8.dart';
+import 'package:dartssh2/src/utils/int.dart';
+import 'package:dartssh2/src/utils/bigint.dart';
+import 'package:dartssh2/src/utils/utf8.dart';
 
 abstract class SSHMessage {
   /// Encode the message to SSH encoded data.

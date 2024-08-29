@@ -1,4 +1,4 @@
-import 'package:dartssh4/dartssh4.dart';
+import 'package:dartssh2/dartssh2.dart';
 
 import 'package:test/test.dart';
 

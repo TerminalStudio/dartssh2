@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
-import 'package:dartssh4/src/kex/kex_dh.dart';
-import 'package:dartssh4/src/ssh_algorithm.dart';
-import 'package:dartssh4/src/ssh_message.dart';
+import 'package:dartssh2/src/kex/kex_dh.dart';
+import 'package:dartssh2/src/ssh_algorithm.dart';
+import 'package:dartssh2/src/ssh_message.dart';
 import 'package:pointycastle/export.dart';
 
 abstract class SSHKexUtils {
