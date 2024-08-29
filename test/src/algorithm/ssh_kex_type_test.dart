@@ -9,14 +9,19 @@ void main() {
       expect(SSHKexType.nistp256.name, equals('ecdh-sha2-nistp256'));
       expect(SSHKexType.nistp384.name, equals('ecdh-sha2-nistp384'));
       expect(SSHKexType.nistp521.name, equals('ecdh-sha2-nistp521'));
-      expect(SSHKexType.dhGexSha256.name, equals('diffie-hellman-group-exchange-sha256'));
-      expect(SSHKexType.dhGexSha1.name, equals('diffie-hellman-group-exchange-sha1'));
+      expect(SSHKexType.dhGexSha256.name,
+          equals('diffie-hellman-group-exchange-sha256'));
+      expect(SSHKexType.dhGexSha1.name,
+          equals('diffie-hellman-group-exchange-sha1'));
       expect(SSHKexType.dh14Sha1.name, equals('diffie-hellman-group14-sha1'));
-      expect(SSHKexType.dh14Sha256.name, equals('diffie-hellman-group14-sha256'));
+      expect(
+          SSHKexType.dh14Sha256.name, equals('diffie-hellman-group14-sha256'));
       expect(SSHKexType.dh1Sha1.name, equals('diffie-hellman-group1-sha1'));
     });
 
-    test('Static constants have correct digestFactory and isGroupExchange values', () {
+    test(
+        'Static constants have correct digestFactory and isGroupExchange values',
+        () {
       expect(SSHKexType.x25519.digestFactory, equals(digestSha256));
       expect(SSHKexType.nistp256.digestFactory, equals(digestSha256));
       expect(SSHKexType.nistp384.digestFactory, equals(digestSha384));
@@ -40,7 +45,9 @@ void main() {
       expect(digest, isA<SHA256Digest>());
     });
 
-    test('createDigest() returns correct Digest instance for different algorithms', () {
+    test(
+        'createDigest() returns correct Digest instance for different algorithms',
+        () {
       final kexTypeSha1 = SSHKexType.dhGexSha1;
       final digestSha1 = kexTypeSha1.createDigest();
       expect(digestSha1, isA<SHA1Digest>());

@@ -18,14 +18,16 @@ class MockSSHHttpHeaders extends SSHHttpHeaders {
   @override
   void add(String name, Object value, {bool preserveHeaderCase = false}) {
     final headerName = preserveHeaderCase ? name : name.toLowerCase();
-    final valueStr = value is DateTime ? value.toIso8601String() : value.toString();
+    final valueStr =
+        value is DateTime ? value.toIso8601String() : value.toString();
     _headers.putIfAbsent(headerName, () => []).add(valueStr);
   }
 
   @override
   void set(String name, Object value, {bool preserveHeaderCase = false}) {
     final headerName = preserveHeaderCase ? name : name.toLowerCase();
-    final valueStr = value is DateTime ? value.toIso8601String() : value.toString();
+    final valueStr =
+        value is DateTime ? value.toIso8601String() : value.toString();
     _headers[headerName] = [valueStr];
   }
 

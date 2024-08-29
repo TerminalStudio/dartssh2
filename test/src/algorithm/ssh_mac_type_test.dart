@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+
 import 'package:dartssh2/dartssh2.dart';
 import 'package:pointycastle/export.dart';
 import 'package:test/test.dart';
@@ -26,13 +27,13 @@ void main() {
     test('createMac() throws ArgumentError for incorrect key length', () {
       final shortKey = Uint8List(15); // One byte too short for hmacMd5
       expect(
-            () => SSHMacType.hmacMd5.createMac(shortKey),
+        () => SSHMacType.hmacMd5.createMac(shortKey),
         throwsArgumentError,
       );
 
       final longKey = Uint8List(17); // One byte too long for hmacMd5
       expect(
-            () => SSHMacType.hmacMd5.createMac(longKey),
+        () => SSHMacType.hmacMd5.createMac(longKey),
         throwsArgumentError,
       );
     });

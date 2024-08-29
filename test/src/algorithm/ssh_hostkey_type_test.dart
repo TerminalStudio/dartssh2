@@ -14,13 +14,20 @@ void main() {
     });
 
     test('toString() returns correct format', () {
-      expect(SSHHostkeyType.rsaSha1.toString(), equals('SSHHostkeyType(ssh-rsa)'));
-      expect(SSHHostkeyType.rsaSha256.toString(), equals('SSHHostkeyType(rsa-sha2-256)'));
-      expect(SSHHostkeyType.rsaSha512.toString(), equals('SSHHostkeyType(rsa-sha2-512)'));
-      expect(SSHHostkeyType.ecdsa256.toString(), equals('SSHHostkeyType(ecdsa-sha2-nistp256)'));
-      expect(SSHHostkeyType.ecdsa384.toString(), equals('SSHHostkeyType(ecdsa-sha2-nistp384)'));
-      expect(SSHHostkeyType.ecdsa521.toString(), equals('SSHHostkeyType(ecdsa-sha2-nistp521)'));
-      expect(SSHHostkeyType.ed25519.toString(), equals('SSHHostkeyType(ssh-ed25519)'));
+      expect(
+          SSHHostkeyType.rsaSha1.toString(), equals('SSHHostkeyType(ssh-rsa)'));
+      expect(SSHHostkeyType.rsaSha256.toString(),
+          equals('SSHHostkeyType(rsa-sha2-256)'));
+      expect(SSHHostkeyType.rsaSha512.toString(),
+          equals('SSHHostkeyType(rsa-sha2-512)'));
+      expect(SSHHostkeyType.ecdsa256.toString(),
+          equals('SSHHostkeyType(ecdsa-sha2-nistp256)'));
+      expect(SSHHostkeyType.ecdsa384.toString(),
+          equals('SSHHostkeyType(ecdsa-sha2-nistp384)'));
+      expect(SSHHostkeyType.ecdsa521.toString(),
+          equals('SSHHostkeyType(ecdsa-sha2-nistp521)'));
+      expect(SSHHostkeyType.ed25519.toString(),
+          equals('SSHHostkeyType(ssh-ed25519)'));
     });
   });
 }
