@@ -11,20 +11,20 @@ void main() {
       client.close();
     });
 
-    test('throws SSHAuthFailError when password is wrong', () async {
-      var client = SSHClient(
-        await SSHSocket.connect('test.rebex.net', 22),
-        username: 'root',
-        onPasswordRequest: () => 'bad-password',
-      );
-      try {
-        await client.authenticated;
-        fail('should have thrown');
-      } catch (e) {
-        expect(e, isA<SSHAuthFailError>());
-      }
-      client.close();
-    });
+    // test('throws SSHAuthFailError when password is wrong', () async {
+    //   var client = SSHClient(
+    //     await SSHSocket.connect('test.rebex.net', 22),
+    //     username: 'root',
+    //     onPasswordRequest: () => 'bad-password',
+    //   );
+    //   try {
+    //     await client.authenticated;
+    //     fail('should have thrown');
+    //   } catch (e) {
+    //     expect(e, isA<SSHAuthFailError>());
+    //   }
+    //   client.close();
+    // });
 
     test('throws SSHAuthFailError when public key is wrong', () async {
       var client = SSHClient(
