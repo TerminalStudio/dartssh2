@@ -1,3 +1,6 @@
+## [2.11.0] - 2024-11-19
+- Fixed Type 'Uint8' not found issue.
+
 ## [2.10.0] - 2024-08-29
 - Improved Readme.
 - Bug fix in SftpFileWriter for [#50], [#71], [#100].
