@@ -11,3 +11,9 @@ updates:
       interval: "weekly"
       time: "09:00"
       timezone: Europe/Madrid
+  - package-ecosystem: "pub"
+    directory: "/example/"
+    schedule:
+      interval: "weekly"
+      time: "09:00"
+      timezone: Europe/Madrid
