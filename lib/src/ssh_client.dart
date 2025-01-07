@@ -125,6 +125,8 @@ class SSHClient {
   /// method. Set this to null to disable automatic keep-alive messages.
   final Duration? keepAliveInterval;
 
+  final Map<String, String> environmentVariables;
+
   /// Function called when additional host keys are received. This is an OpenSSH
   /// extension. May not be called if the server does not support the extension.
   // final SSHHostKeysHandler? onHostKeys;
@@ -151,6 +153,7 @@ class SSHClient {
     this.onUserauthBanner,
     this.onAuthenticated,
     this.keepAliveInterval = const Duration(seconds: 10),
+    this.environmentVariables = const {},
   }) {
     _transport = SSHTransport(
       socket,
@@ -951,12 +954,20 @@ class SSHClient {
       throw SSHStateError('Unexpected channel confirmation');
     }
 
-    return _acceptChannel(
+    final channelController = _acceptChannel(
       localChannelId: localChannelId,
       remoteChannelId: reply.senderChannel,
       remoteInitialWindowSize: reply.initialWindowSize,
       remoteMaximumPacketSize: reply.maximumPacketSize,
     );
+
+    // Sending environment variables
+    for (final environmentVariable in environmentVariables.entries) {
+      channelController.sendEnv(
+          environmentVariable.key, environmentVariable.value);
+    }
+
+    return channelController;
   }
 
   SSHChannelController _acceptChannel({
