@@ -36,7 +36,7 @@ typedef SSHUserInfoRequestHandler = FutureOr<List<String>?> Function(
 /// https://datatracker.ietf.org/doc/html/rfc4252#section-5.4
 typedef SSHUserauthBannerHandler = void Function(String banner);
 
-typedef SSHAuthenticatedHandler = void Function();
+typedef SSHAuthenticatedHandler = void Function(SSHClient);
 
 typedef SSHRemoteConnectionFilter = bool Function(String host, int port);
 
@@ -559,7 +559,7 @@ class SSHClient {
     printTrace?.call('<- $socket: SSH_Message_Userauth_Success');
     printDebug?.call('SSHClient._handleUserauthSuccess');
     _authenticated.complete();
-    onAuthenticated?.call();
+    onAuthenticated?.call(this);
     _keepAlive?.start();
   }
 
