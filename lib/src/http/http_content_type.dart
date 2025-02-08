@@ -248,7 +248,9 @@ class _HeaderValue {
         if (char == " " ||
             char == "\t" ||
             char == valueSeparator ||
-            char == parameterSeparator) break;
+            char == parameterSeparator) {
+          break;
+        }
         index++;
       }
       return s.substring(start, index);
@@ -280,7 +282,9 @@ class _HeaderValue {
               char == "\t" ||
               char == "=" ||
               char == parameterSeparator ||
-              char == valueSeparator) break;
+              char == valueSeparator) {
+            break;
+          }
           index++;
         }
         return s.substring(start, index).toLowerCase();
