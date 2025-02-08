@@ -2,6 +2,7 @@
 - Fixed streams and channel not closing after receiving SSH_Message_Channel_Close [#116]. [@cbenhagen].
 - Fixed lint issues.
 - Added tests.
+- Updated dependencies.
 
 ## [2.11.0] - 2024-11-19
 - Fixed Type 'Uint8' not found issue.
