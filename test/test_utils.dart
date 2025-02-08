@@ -1,6 +1,8 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
+import 'package:dartssh2/src/message/msg_channel.dart';
 
 /// A honeypot that accepts all passwords and public-keys
 Future<SSHClient> getHoneypotClient() async {
@@ -39,4 +41,12 @@ Future<List<SSHKeyPair>> getTestKeyPairs() async {
 /// The path is relative to the test/fixtures directory.
 String fixture(String path) {
   return File('test/fixtures/$path').readAsStringSync();
+}
+
+/// Create a [SSH_Message_Channel_Close] message.
+Uint8List createChannelCloseMessage(int recipientChannel) {
+  final message = SSH_Message_Channel_Close(
+    recipientChannel: recipientChannel,
+  );
+  return message.encode();
 }

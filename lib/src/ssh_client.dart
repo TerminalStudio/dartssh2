@@ -21,6 +21,7 @@ import 'package:dartssh2/src/message/msg_userauth.dart';
 import 'package:dartssh2/src/ssh_message.dart';
 import 'package:dartssh2/src/socket/ssh_socket.dart';
 import 'package:dartssh2/src/ssh_userauth.dart';
+import 'package:meta/meta.dart';
 
 /// https://datatracker.ietf.org/doc/html/rfc4252#section-8
 typedef SSHPasswordRequestHandler = FutureOr<String?> Function();
@@ -486,6 +487,10 @@ class SSHClient {
     }
   }
 
+  /// Handles a raw SSH packet. This method is only exposed for testing purposes.
+  @visibleForTesting
+  void handlePacket(Uint8List packet) => _handlePacket(packet);
+
   void _sendMessage(SSHMessage message) {
     printTrace?.call('-> $socket: $message');
     _transport.sendPacket(message.encode());
@@ -792,7 +797,7 @@ class SSHClient {
     printTrace?.call('<- $socket: $message');
     final channel = _channels[message.recipientChannel];
     if (channel != null) {
-      channel.close();
+      channel.handleMessage(message);
       _channels.remove(message.recipientChannel);
       _channelIdAllocator.release(message.recipientChannel);
     }
