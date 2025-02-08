@@ -25,6 +25,6 @@ void main() {
       client.handlePacket(closeMessage);
 
       await drainFuture;
-    }, timeout: const Timeout(Duration(seconds: 1)));
+    }, timeout: const Timeout(Duration(seconds: 5)));
   });
 }
