@@ -43,9 +43,9 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
     <td style="text-align: center;">
       <b><a href="https://github.com/LollipopKit/flutter_server_box">ServerBox</a></b>
     </td>
-    <!-- Ssh! No Ports -->
+    <!-- NoPorts -->
     <td style="text-align: center;">
-      <b><a href="https://github.com/atsign-foundation/sshnoports">Ssh! No Ports</a></b>
+      <b><a href="https://github.com/atsign-foundation/noports">NoPorts</a></b>
     </td>
     <!-- dartShell -->
     <td style="text-align: center;">
@@ -59,10 +59,10 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
       <img src="https://raw.githubusercontent.com/TerminalStudio/dartssh2/master/media/showcase-1-serverbox.1.jpg" width="150px" alt="ServerBox interface displaying connection management options">
       <img src="https://raw.githubusercontent.com/TerminalStudio/dartssh2/master/media/showcase-1-serverbox.2.png" width="150px" alt="ServerBox user interface for server control and monitoring">
     </td>
-    <!-- Ssh! No Ports -->
+    <!-- NoPorts -->
     <td>
       <a href="https://asciinema.org/a/496148">
-        <img src="https://user-images.githubusercontent.com/6131216/185263634-07e8dba7-b5a8-44fc-ac44-8703e247143f.png" width="300px" alt="Ssh! No Ports demo showcasing SSH connectivity without open ports">
+        <img src="https://user-images.githubusercontent.com/6131216/185263634-07e8dba7-b5a8-44fc-ac44-8703e247143f.png" width="300px" alt="NoPorts demo showcasing SSH connectivity without open ports">
       </a>
     </td>
     <!-- dartShell -->
