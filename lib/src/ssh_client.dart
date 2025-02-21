@@ -37,7 +37,7 @@ typedef SSHUserInfoRequestHandler = FutureOr<List<String>?> Function(
 /// https://datatracker.ietf.org/doc/html/rfc4252#section-5.4
 typedef SSHUserauthBannerHandler = void Function(String banner);
 
-typedef SSHAuthenticatedHandler = void Function();
+typedef SSHAuthenticatedHandler = void Function(SSHClient);
 
 typedef SSHRemoteConnectionFilter = bool Function(String host, int port);
 
@@ -126,6 +126,8 @@ class SSHClient {
   /// method. Set this to null to disable automatic keep-alive messages.
   final Duration? keepAliveInterval;
 
+  final Map<String, String> environmentVariables;
+
   /// Function called when additional host keys are received. This is an OpenSSH
   /// extension. May not be called if the server does not support the extension.
   // final SSHHostKeysHandler? onHostKeys;
@@ -152,6 +154,7 @@ class SSHClient {
     this.onUserauthBanner,
     this.onAuthenticated,
     this.keepAliveInterval = const Duration(seconds: 10),
+    this.environmentVariables = const {},
   }) {
     _transport = SSHTransport(
       socket,
@@ -564,7 +567,7 @@ class SSHClient {
     printTrace?.call('<- $socket: SSH_Message_Userauth_Success');
     printDebug?.call('SSHClient._handleUserauthSuccess');
     _authenticated.complete();
-    onAuthenticated?.call();
+    onAuthenticated?.call(this);
     _keepAlive?.start();
   }
 
@@ -956,12 +959,20 @@ class SSHClient {
       throw SSHStateError('Unexpected channel confirmation');
     }
 
-    return _acceptChannel(
+    final channelController = _acceptChannel(
       localChannelId: localChannelId,
       remoteChannelId: reply.senderChannel,
       remoteInitialWindowSize: reply.initialWindowSize,
       remoteMaximumPacketSize: reply.maximumPacketSize,
     );
+
+    // Sending environment variables
+    for (final environmentVariable in environmentVariables.entries) {
+      channelController.sendEnv(
+          environmentVariable.key, environmentVariable.value);
+    }
+
+    return channelController;
   }
 
   SSHChannelController _acceptChannel({
