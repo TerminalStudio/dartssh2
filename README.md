@@ -1,23 +1,19 @@
 <!-- Title-->
-<h1 style="text-align: center;">DartSSH 2</h1>
+<h1 align="center">DartSSH 2</h1>
 
 <!-- Badges-->
-<p style="text-align: center;">
+<p align="center">
   <a href="https://pub.dartlang.org/packages/dartssh2">
-    <img src="https://img.shields.io/pub/v/dartssh2.svg" alt="">
-  </a>
-  <a href="https://pub.dev/packages/dartssh2">
-    <img src="https://img.shields.io/pub/popularity/dartssh2?logo=dart" alt="">
+    <img src="https://img.shields.io/pub/v/dartssh2.svg" alt="DartSSH2 package version on Pub">
   </a>
   <a href="https://www.dartdocs.org/documentation/dartssh2/latest/">
-    <img src="https://img.shields.io/badge/Docs-dartssh2-blue.svg" alt="">
+    <img src="https://img.shields.io/badge/Docs-dartssh2-blue.svg" alt="DartSSH2 documentation">
   </a>
   <a href="https://github.com/TerminalStudio/dartssh2/actions/workflows/dart.yml">
-    <img src="https://github.com/TerminalStudio/dartssh2/actions/workflows/dart.yml/badge.svg" alt="">
+    <img src="https://github.com/TerminalStudio/dartssh2/actions/workflows/dart.yml/badge.svg" alt="DartSSH2 GitHub Actions workflow status">
   </a>
-
   <a href="https://ko-fi.com/F1F61K6BL">
-    <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-F16061?style=flat&logo=buy-me-a-coffee&logoColor=white&labelColor=555555" alt="">
+    <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-F16061?style=flat&logo=buy-me-a-coffee&logoColor=white&labelColor=555555" alt="Support me on Ko-fi">
   </a>
 </p>
 
@@ -102,11 +98,13 @@ dartsftp user@example.com
 
 ### Connect to a remote host
 ```dart
-final client = SSHClient(
-  await SSHSocket.connect('localhost', 22),
-  username: '<username>',
-  onPasswordRequest: () => '<password>',
-);
+void main() async {
+  final client = SSHClient(
+    await SSHSocket.connect('localhost', 22),
+    username: '<username>',
+    onPasswordRequest: () => '<password>',
+  );
+}
 ```
 
 > `SSHSocket` is an interface and it's possible to implement your own `SSHSocket` if you want to use a different underlying transport rather than standard TCP socket. For example WebSocket or Unix domain socket.
@@ -114,39 +112,47 @@ final client = SSHClient(
 ### Spawn a shell on remote host
 
 ```dart
-final shell = await client.shell();
-stdout.addStream(shell.stdout); // listening for stdout
-stderr.addStream(shell.stderr); // listening for stderr
-stdin.cast<Uint8List>().listen(shell.write); // writing to stdin
+void main() async {
+  final shell = await client.shell();
+  stdout.addStream(shell.stdout); // listening for stdout
+  stderr.addStream(shell.stderr); // listening for stderr
+  stdin.cast<Uint8List>().listen(shell.write); // writing to stdin
 
-await shell.done; // wait for shell to exit
-client.close();
+  await shell.done; // wait for shell to exit
+  client.close();
+}
 ```
 
 ### Execute a command on remote host
 
 
 ```dart
-final uptime = await client.run('uptime');
-print(utf8.decode(uptime));
+void main() async {
+  final uptime = await client.run('uptime');
+  print(utf8.decode(uptime));
+}
 ```
 
 Ignoring stderr:
 ```dart
-final uptime = await client.run('uptime', stderr: false);
-print(utf8.decode(uptime));
+void main() async {
+  final uptime = await client.run('uptime', stderr: false);
+  print(utf8.decode(uptime));
+}
 ```
 
 > `client.run()` is a convenience method that wraps `client.execute()` for running non-interactive commands.
 
 ### Start a process on remote host
 ```dart
-final session = await client.execute('cat > file.txt');
-await session.stdin.addStream(File('local_file.txt').openRead().cast());
-await session.stdin.close(); // Close the sink to send EOF to the remote process.
+void main() async {
+  final session = await client.execute('cat > file.txt');
+  await session.stdin.addStream(File('local_file.txt').openRead().cast());
+  await session.stdin.close(); // Close the sink to send EOF to the remote process.
 
-await session.done; // Wait for session to exit to ensure all data is flushed to the remote process.
-print(session.exitCode); // You can get the exit code after the session is done
+  await session.done; // Wait for session to exit to ensure all data is flushed to the remote process.
+  print(session.exitCode); // You can get the exit code after the session is done
+}
 ```
 
 > `session.write()` is a shorthand for `session.stdin.add()`. It's recommended to use `session.stdin.addStream()` instead of `session.write()` when you want to stream large amount of data to the remote process.
@@ -154,10 +160,12 @@ print(session.exitCode); // You can get the exit code after the session is done
 **Killing a remote process by sending signal**
 
 ```dart
-session.kill(SSHSignal.KILL);
-await session.done;
-print('exitCode: ${session.exitCode}'); // -> exitCode: null
-print('signal: ${session.exitSignal?.signalName}'); // -> signal: KILL
+void main() async {
+  session.kill(SSHSignal.KILL);
+  await session.done;
+  print('exitCode: ${session.exitCode}'); // -> exitCode: null
+  print('signal: ${session.exitSignal?.signalName}'); // -> signal: KILL
+}
 ```
 
 Processes killed by signals do not have an exit code, instead they have an exit signal property.
@@ -165,88 +173,102 @@ Processes killed by signals do not have an exit code, instead they have an exit 
 ### Forward connections on local port 8080 to the server
 
 ```dart
-final serverSocket = await ServerSocket.bind('localhost', 8080);
-await for (final socket in serverSocket) {
-  final forward = await client.forwardLocal('httpbin.org', 80);
-  forward.stream.cast<List<int>>().pipe(socket);
-  socket.pipe(forward.sink);
+void main() async {
+  final serverSocket = await ServerSocket.bind('localhost', 8080);
+  await for (final socket in serverSocket) {
+    final forward = await client.forwardLocal('httpbin.org', 80);
+    forward.stream.cast<List<int>>().pipe(socket);
+    socket.pipe(forward.sink);
+  }
 }
 ```
 
 ### Forward connections to port 2222 on the server to local port 22
 
 ```dart
-final forward = await client.forwardRemote(port: 2222);
+void main() async {
+  final forward = await client.forwardRemote(port: 2222);
 
-if (forward == null) {
-  print('Failed to forward remote port');
-  return;
-}
+  if (forward == null) {
+    print('Failed to forward remote port');
+    return;
+  }
 
-await for (final connection in forward.connections) {
-  final socket = await Socket.connect('localhost', 22);
-  connection.stream.cast<List<int>>().pipe(socket);
-  socket.pipe(connection.sink);
+  await for (final connection in forward.connections) {
+    final socket = await Socket.connect('localhost', 22);
+    connection.stream.cast<List<int>>().pipe(socket);
+    socket.pipe(connection.sink);
+  }
 }
 ```
 
 ### Authenticate with public keys
 
 ```dart
-final client = SSHClient(
-  socket,
-  username: '<username>',
-  identities: [
-    // A single private key file may contain multiple keys.
-    ...SSHKeyPair.fromPem(await File('path/to/id_rsa').readAsString())
-  ],
-);
+void main() async {
+  final client = SSHClient(
+    socket,
+    username: '<username>',
+    identities: [
+      // A single private key file may contain multiple keys.
+      ...SSHKeyPair.fromPem(await File('path/to/id_rsa').readAsString())
+    ],
+  );
+}
 ```
 
 ### Use encrypted PEM files
 ```dart
-// Test whether the private key is encrypted.
-final encrypted = SSHKeyPair.isEncrypted(await File('path/to/id_rsa').readAsString());
-print(encrypted);
+void main() async {
+  // Test whether the private key is encrypted.
+  final encrypted = SSHKeyPair.isEncrypted(await File('path/to/id_rsa').readAsString());
+  print(encrypted);
 
 // If the private key is encrypted, you need to provide the passphrase.
-final keys = SSHKeyPair.fromPem('<pem text>', '<passphrase>');
-print(keys);
+  final keys = SSHKeyPair.fromPem('<pem text>', '<passphrase>');
+  print(keys);
+}
 ```
 
 Decrypt PEM file with [`compute`](https://api.flutter.dev/flutter/foundation/compute-constant.html) in Flutter
 
 ```dart
-List<SSHKeyPair> decryptKeyPairs(List<String> args) {
-  return SSHKeyPair.fromPem(args[0], args[1]);
-}
+void main() async {
+  List<SSHKeyPair> decryptKeyPairs(List<String> args) {
+    return SSHKeyPair.fromPem(args[0], args[1]);
+  }
 
-final keypairs = await compute(decryptKeyPairs, ['<pem text>', '<passphrase>']);
+  final keypairs = await compute(decryptKeyPairs, ['<pem text>', '<passphrase>']);
+}
 ```
 
 ### Get the version of SSH server
 
 ```dart
-await client.authenticated;
-print(client.remoteVersion); // SSH-2.0-OpenSSH_7.4p1
+void main() async {
+  await client.authenticated;
+  print(client.remoteVersion); // SSH-2.0-OpenSSH_7.4p1
+}
 ```
 
 ### Connect through a jump server
 
 ```dart
-final jumpServer = SSHClient(
-  await SSHSocket.connect('<jump server>', 22),
-  username: '...',
-  onPasswordRequest: () => '...',
-);
+void main() async {
+  final jumpServer = SSHClient(
+    await SSHSocket.connect('<jump server>', 22),
+    username: '...',
+    onPasswordRequest: () => '...',
+  );
 
-final client = SSHClient(
-  await jumpServer.forwardLocal('<target server>', 22),
-  username: '...',
-  onPasswordRequest: () => '...',
-);
+  final client = SSHClient(
+    await jumpServer.forwardLocal('<target server>', 22),
+    username: '...',
+    onPasswordRequest: () => '...',
+  );
 
-print(utf8.decode(await client.run('hostname'))); // -> hostname of  <target server>
+  print(utf8.decode(await client.run('hostname'))); // -> hostname of  <target server>
+}
 ```
 }
 
@@ -255,98 +277,122 @@ print(utf8.decode(await client.run('hostname'))); // -> hostname of  <target ser
 
 ### List remote directory
 ```dart
-final sftp = await client.sftp();
-final items = await sftp.listdir('/');
-for (final item in items) {
-  print(item.longname);
+void main() async {
+  final sftp = await client.sftp();
+  final items = await sftp.listdir('/');
+  for (final item in items) {
+    print(item.longname);
+  }
 }
 ```
 
 ### Read remote file
 ```dart
-final sftp = await client.sftp();
-final file = await sftp.open('/etc/passwd');
-final content = await file.readBytes();
-print(latin1.decode(content));
+void main() async {
+  final sftp = await client.sftp();
+  final file = await sftp.open('/etc/passwd');
+  final content = await file.readBytes();
+  print(latin1.decode(content));
+}
 ```
 
 ### Write remote file
 ```dart
-final sftp = await client.sftp();
-final file = await sftp.open('file.txt', mode: SftpFileOpenMode.write);
-await file.writeBytes(utf8.encode('hello there!') as Uint8List);
+void main() async {
+  final sftp = await client.sftp();
+  final file = await sftp.open('file.txt', mode: SftpFileOpenMode.write);
+  await file.writeBytes(utf8.encode('hello there!') as Uint8List);
+}
 ```
 
 **Write at specific offset**
 ```dart
-final data = utf8.encode('world') as Uint8List
-await file.writeBytes(data, offset: 6);
+void main() async {
+  final data = utf8.encode('world') as Uint8List;
+  await file.writeBytes(data, offset: 6);
+}
 ```
 
 ### File upload
 ```dart
-final sftp = await client.sftp();
-final file = await sftp.open('file.txt', mode: SftpFileOpenMode.create | SftpFileOpenMode.write);
-await file.write(File('local_file.txt').openRead().cast());
+void main() async {
+  final sftp = await client.sftp();
+  final file = await sftp.open('file.txt', mode: SftpFileOpenMode.create | SftpFileOpenMode.write);
+  await file.write(File('local_file.txt').openRead().cast());
+}
 ```
 
 #### Pause and resume file upload
 ```dart
-final uploader = await file.write(File('local_file.txt').openRead().cast());
+void main() async {
+  final uploader = await file.write(File('local_file.txt').openRead().cast());
 // ...
-await uploader.pause();
+  await uploader.pause();
 // ...
-await uploader.resume();
-await uploader.done;
+  await uploader.resume();
+  await uploader.done;
+}
 ```
 
 **Clear the remote file before opening it**
 
 ```dart
-final file = await sftp.open('file.txt',
-  mode: SftpFileOpenMode.create | SftpFileOpenMode.truncate | SftpFileOpenMode.write
-);
+void main() async {
+  final file = await sftp.open('file.txt',
+      mode: SftpFileOpenMode.create | SftpFileOpenMode.truncate | SftpFileOpenMode.write
+  );
+}
 ```
 
 ### Directory operations
 ```dart
-final sftp = await client.sftp();
-await sftp.mkdir('/path/to/dir');
-await sftp.rmdir('/path/to/dir');
+void main() async {
+  final sftp = await client.sftp();
+  await sftp.mkdir('/path/to/dir');
+  await sftp.rmdir('/path/to/dir');
+}
 ```
 
 ### Get/Set attributes from/to remote file/directory
 ```dart
-await sftp.stat('/path/to/file');
-await sftp.setStat(
-  '/path/to/file',
-  SftpFileAttrs(mode: SftpFileMode(userRead: true)),
-);
+void main() async {
+  await sftp.stat('/path/to/file');
+  await sftp.setStat(
+    '/path/to/file',
+    SftpFileAttrs(mode: SftpFileMode(userRead: true)),
+  );
+}
 ```
 
 ### Get the type of a remote file
 ```dart
-final stat = await sftp.stat('/path/to/file');
-print(stat.type);
-// or
-print(stat.isDirectory);
-print(stat.isSocket);
-print(stat.isSymbolicLink);
-// ...
+void main() async {
+  final stat = await sftp.stat('/path/to/file');
+  print(stat.type);
+  // or
+  print(stat.isDirectory);
+  print(stat.isSocket);
+  print(stat.isSymbolicLink);
+  // ...
+}
 ```
 
 ### Create a link
 ```dart
-final sftp = await client.sftp();
-sftp.link('/from', '/to');
+void main() async {
+  final sftp = await client.sftp();
+  sftp.link('/from', '/to');
+}
 ```
 
 ### Get (estimated) total and free space on the remote filesystem
 ```dart
-final sftp = await client.sftp();
-final statvfs = await sftp.statvfs('/root');
-print('total: ${statvfs.blockSize * statvfs.totalBlocks}');
-print('free: ${statvfs.blockSize * statvfs.freeBlocks}');
+void main() async {
+  final sftp = await client.sftp();
+  final statvfs = await sftp.statvfs('/root');
+  print('total: ${statvfs.blockSize * statvfs.totalBlocks}');
+  print('free: ${statvfs.blockSize * statvfs.freeBlocks}');
+}
 ```
 
 ## 🪜 Example
