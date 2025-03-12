@@ -130,6 +130,9 @@ class SSHClient {
   /// extension. May not be called if the server does not support the extension.
   // final SSHHostKeysHandler? onHostKeys;
 
+  /// Allow to disable hostkey verification, which can be slow in debug mode.
+  final bool disableHostkeyVerification;
+
   /// A [Future] that completes when the transport is closed, or when an error
   /// occurs. After this [Future] completes, [isClosed] will be true and no more
   /// data can be sent or received.
@@ -152,6 +155,7 @@ class SSHClient {
     this.onUserauthBanner,
     this.onAuthenticated,
     this.keepAliveInterval = const Duration(seconds: 10),
+    this.disableHostkeyVerification = false,
   }) {
     _transport = SSHTransport(
       socket,
@@ -162,6 +166,7 @@ class SSHClient {
       onVerifyHostKey: onVerifyHostKey,
       onReady: _handleTransportReady,
       onPacket: _handlePacket,
+      disableHostkeyVerification: disableHostkeyVerification,
     );
 
     _transport.done.then(
