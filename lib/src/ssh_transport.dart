@@ -181,10 +181,19 @@ class SSHTransport {
   /// exchange round. This is reset when the exchange finishes.
   bool _sentKexInit = false;
 
+  /// Packets queued during key exchange that will be sent after NEW_KEYS
+  final List<Uint8List> _rekeyPendingPackets = [];
+
   void sendPacket(Uint8List data) {
     if (isClosed) {
       throw SSHStateError('Transport is closed');
     }
+
+    if (_kexInProgress && !_isKexPacket(data)) {
+      _rekeyPendingPackets.add(Uint8List.fromList(data));
+      return;
+    }
+
     final packetAlign = _encryptCipher == null
         ? SSHPacket.minAlign
         : max(SSHPacket.minAlign, _encryptCipher!.blockSize);
@@ -893,6 +902,13 @@ class SSHTransport {
     _kexInProgress = false;
     _sentKexInit = false;
     _kex = null;
+
+    // Flush any pending packets
+    final pending = List<Uint8List>.from(_rekeyPendingPackets);
+    _rekeyPendingPackets.clear();
+    for (final packet in pending) {
+      sendPacket(packet);
+    }
   }
 
   /// Initiates a client-side re-key operation. This can be called
@@ -905,5 +921,21 @@ class SSHTransport {
       return;
     }
     _sendKexInit();
+  }
+
+  bool _isKexPacket(Uint8List data) {
+    if (data.isEmpty) return false;
+
+    // All KEX message IDs
+    const kexMsgIds = [
+      SSH_Message_KexInit.messageId,
+      SSH_Message_NewKeys.messageId,
+      SSH_Message_KexDH_Init.messageId,
+      SSH_Message_KexDH_Reply.messageId,
+      SSH_Message_KexDH_GexRequest.messageId,
+      SSH_Message_KexDH_GexGroup.messageId,
+      SSH_Message_KexDH_GexInit.messageId,
+    ];
+    return kexMsgIds.contains(data[0]);
   }
 }
