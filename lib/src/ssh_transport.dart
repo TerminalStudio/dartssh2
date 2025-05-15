@@ -189,7 +189,7 @@ class SSHTransport {
       throw SSHStateError('Transport is closed');
     }
 
-    if (_kexInProgress && !_isKexPacket(data)) {
+    if (_kexInProgress && !_shouldBypassRekeyBuffer(data)) {
       _rekeyPendingPackets.add(Uint8List.fromList(data));
       return;
     }
@@ -923,19 +923,34 @@ class SSHTransport {
     _sendKexInit();
   }
 
-  bool _isKexPacket(Uint8List data) {
+  /// Determines if a packet should bypass the rekey buffer.
+  ///
+  /// During key exchange, most packets should be buffered until the exchange
+  /// is complete. However, key exchange packets themselves and transport layer
+  /// control messages (like disconnect) need to be sent immediately.
+  ///
+  /// Per RFC 4253, the following message types bypass the buffer:
+  ///
+  ///  /// Critical transport messages (1-4):
+  /// - 1: [SSH_Message_Disconnect]
+  /// - 2: [SSH_Message_Ignore]
+  /// - 3: [SSH_Message_Unimplemented]
+  /// - 4: [SSH_Message_Debug]
+  ///
+  /// Key exchange messages (20-49):
+  /// - 20: [SSH_Message_KexInit]
+  /// - 21: [SSH_Message_NewKeys]
+  /// - 30: [SSH_Message_KexDH_Init]/[SSH_Message_KexECDH_Init]
+  /// - 31: [SSH_Message_KexDH_Reply]/[SSH_Message_KexECDH_Reply]/[SSH_Message_KexDH_GexGroup]
+  /// - 32: [SSH_Message_KexDH_GexInit]
+  /// - 33: [SSH_Message_KexDH_GexReply]
+  /// - 34: [SSH_Message_KexDH_GexRequest]
+  ///
+  ///
+  bool _shouldBypassRekeyBuffer(Uint8List data) {
     if (data.isEmpty) return false;
 
-    // All KEX message IDs
-    const kexMsgIds = [
-      SSH_Message_KexInit.messageId,
-      SSH_Message_NewKeys.messageId,
-      SSH_Message_KexDH_Init.messageId,
-      SSH_Message_KexDH_Reply.messageId,
-      SSH_Message_KexDH_GexRequest.messageId,
-      SSH_Message_KexDH_GexGroup.messageId,
-      SSH_Message_KexDH_GexInit.messageId,
-    ];
-    return kexMsgIds.contains(data[0]);
+    final messageId = data[0];
+    return (messageId >= 20 && messageId <= 49) || messageId <= 4;
   }
 }
