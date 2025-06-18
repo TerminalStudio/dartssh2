@@ -81,6 +81,10 @@ void main() {
     expect(
         algorithms.mac,
         equals([
+          SSHMacType.hmacSha256_96,
+          SSHMacType.hmacSha512_96,
+          SSHMacType.hmacSha256Etm,
+          SSHMacType.hmacSha512Etm,
           SSHMacType.hmacSha1,
           SSHMacType.hmacSha256,
           SSHMacType.hmacSha512,

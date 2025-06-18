@@ -69,6 +69,12 @@ class SSHAlgorithms {
       SSHCipherType.aes256cbc,
     ],
     this.mac = const [
+      // added by Rein
+      SSHMacType.hmacSha256_96,
+      SSHMacType.hmacSha512_96,
+      SSHMacType.hmacSha256Etm,
+      SSHMacType.hmacSha512Etm,
+      // end added by Rein
       SSHMacType.hmacSha1,
       SSHMacType.hmacSha256,
       SSHMacType.hmacSha512,
