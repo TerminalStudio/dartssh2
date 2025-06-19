@@ -178,24 +178,95 @@ class SSHTransport {
     if (isClosed) {
       throw SSHStateError('Transport is closed');
     }
-    final packetAlign = _encryptCipher == null
-        ? SSHPacket.minAlign
-        : max(SSHPacket.minAlign, _encryptCipher!.blockSize);
 
-    final packet = SSHPacket.pack(data, align: packetAlign);
+    // Check if encryption is enabled and if we have MAC types initialized
+    final clientMacType = _clientMacType;
+    final serverMacType = _serverMacType;
+    final macType = isClient ? clientMacType : serverMacType;
+    final isEtm = _encryptCipher != null && macType != null && macType.isEtm;
 
-    if (_encryptCipher == null) {
-      socket.sink.add(packet);
-    } else {
+    // For ETM, we need to handle the packet differently
+    if (isEtm) {
+      // For ETM (Encrypt-Then-MAC):
+      // 1. Keep the packet length in plaintext
+      // 2. Encrypt only the payload (padding length, payload, padding)
+
+      // Calculate the block size for alignment
+      final blockSize = _encryptCipher!.blockSize;
+
+      // Create a custom packet structure for ETM mode
+      // We need to ensure that the payload we're encrypting is a multiple of the block size
+
+      // Calculate the padding length to ensure the total length is a multiple of the block size
+      // We need to account for the 1 byte padding length field
+      final paddingLength = blockSize - ((data.length + 1) % blockSize);
+      // Ensure padding is at least 4 bytes as per SSH spec
+      final adjustedPaddingLength = paddingLength < 4 ? paddingLength + blockSize : paddingLength;
+
+      // Calculate the total packet length (excluding the length field itself)
+      final packetLength = 1 + data.length + adjustedPaddingLength;
+
+      // Create the packet length field (4 bytes)
+      final packetLengthBytes = Uint8List(4);
+      packetLengthBytes.buffer.asByteData().setUint32(0, packetLength);
+
+      // Create the payload to be encrypted (padding length + payload + padding)
+      final payloadToEncrypt = Uint8List(packetLength);
+      payloadToEncrypt[0] = adjustedPaddingLength; // Set padding length
+      payloadToEncrypt.setRange(1, 1 + data.length, data); // Copy data
+
+      // Add random padding
+      for (var i = 0; i < adjustedPaddingLength; i++) {
+        payloadToEncrypt[1 + data.length + i] = (DateTime.now().microsecondsSinceEpoch + i) & 0xFF;
+      }
+
+      // Verify that the payload length is a multiple of the block size
+      if (payloadToEncrypt.length % blockSize != 0) {
+        throw StateError('Payload length ${payloadToEncrypt.length} is not a multiple of block size $blockSize');
+      }
+
+      // Encrypt the payload
+      final encryptedPayload = _encryptCipher!.processAll(payloadToEncrypt);
+
+      // Calculate MAC on the packet length and encrypted payload
       final mac = _localMac!;
       mac.updateAll(_localPacketSN.value.toUint32());
-      mac.updateAll(packet);
+      mac.updateAll(packetLengthBytes);
+      mac.updateAll(encryptedPayload);
+      final macBytes = mac.finish();
 
+      // Build the final packet: length + encrypted payload + MAC
       final buffer = BytesBuilder(copy: false);
-      buffer.add(_encryptCipher!.processAll(packet));
-      buffer.add(mac.finish());
+      buffer.add(packetLengthBytes);
+      buffer.add(encryptedPayload);
+      buffer.add(macBytes);
 
       socket.sink.add(buffer.takeBytes());
+    } else {
+      // For standard encryption or no encryption:
+      // Use the original packet packing logic
+      final packetAlign = _encryptCipher == null
+          ? SSHPacket.minAlign
+          : max(SSHPacket.minAlign, _encryptCipher!.blockSize);
+
+      final packet = SSHPacket.pack(data, align: packetAlign);
+
+      if (_encryptCipher == null) {
+        socket.sink.add(packet);
+      } else {
+        final mac = _localMac!;
+        final encryptedPacket = _encryptCipher!.processAll(packet);
+
+        final buffer = BytesBuilder(copy: false);
+        buffer.add(encryptedPacket);
+
+        // Calculate MAC on the unencrypted packet
+        mac.updateAll(_localPacketSN.value.toUint32());
+        mac.updateAll(packet);
+        buffer.add(mac.finish());
+
+        socket.sink.add(buffer.takeBytes());
+      }
     }
 
     _localPacketSN.increase();
@@ -357,33 +428,109 @@ class SSHTransport {
       return null;
     }
 
-    if (_decryptBuffer.isEmpty) {
-      final firstBlock = _buffer.consume(blockSize);
-      _decryptBuffer.add(_decryptCipher!.process(firstBlock));
-    }
-
-    final packetLength = SSHPacket.readPacketLength(_decryptBuffer.data);
-    _verifyPacketLength(packetLength);
-
+    final macType = isClient ? _serverMacType! : _clientMacType!;
+    final isEtm = macType.isEtm;
     final macLength = _remoteMac!.macSize;
-    if (_buffer.length + _decryptBuffer.length < 4 + packetLength + macLength) {
-      return null;
+
+    if (isEtm) {
+      // For ETM (Encrypt-Then-MAC) algorithms, the packet length is in plaintext
+      // followed by the encrypted payload and then the MAC
+
+      // We need at least 4 bytes to read the packet length
+      if (_buffer.length < 4) {
+        return null;
+      }
+
+      // Read the packet length from the plaintext data
+      final packetLength = SSHPacket.readPacketLength(_buffer.data);
+      _verifyPacketLength(packetLength);
+
+      // Make sure we have enough data for the entire packet and MAC
+      if (_buffer.length < 4 + packetLength + macLength) {
+        return null;
+      }
+
+      // Get the packet length bytes
+      final packetLengthBytes = _buffer.view(0, 4);
+
+      // Get the encrypted payload and MAC
+      final encryptedPayload = _buffer.view(4, packetLength);
+      final mac = _buffer.view(4 + packetLength, macLength);
+
+      // Verify the MAC on the packet length and encrypted payload
+      final packetForMac = Uint8List(4 + packetLength);
+      packetForMac.setRange(0, 4, packetLengthBytes);
+      packetForMac.setRange(4, 4 + packetLength, encryptedPayload);
+      _verifyPacketMac(packetForMac, mac, isEncrypted: true);
+
+      // Consume the packet and MAC from the buffer
+      _buffer.consume(4 + packetLength + macLength);
+
+      // Ensure the encrypted payload length is a multiple of the block size
+      if (encryptedPayload.length % blockSize != 0) {
+        throw SSHPacketError(
+          'Encrypted payload length ${encryptedPayload.length} is not a multiple of block size $blockSize',
+        );
+      }
+
+      // Decrypt the payload
+      final decryptedPayload = _decryptCipher!.processAll(encryptedPayload);
+
+      // Process the decrypted payload
+      final paddingLength = decryptedPayload[0];
+
+      // Verify that the padding length is valid
+      if (paddingLength < 4) {
+        throw SSHPacketError(
+          'Padding length too small: $paddingLength (minimum is 4)',
+        );
+      }
+
+      if (paddingLength >= packetLength) {
+        throw SSHPacketError(
+          'Padding length too large: $paddingLength (packet length is $packetLength)',
+        );
+      }
+
+      final payloadLength = packetLength - paddingLength - 1;
+      if (payloadLength < 0) {
+        throw SSHPacketError(
+          'Invalid payload length: $payloadLength (packet length: $packetLength, padding length: $paddingLength)',
+        );
+      }
+
+      // Skip the padding length byte and extract the payload
+      return Uint8List.sublistView(decryptedPayload, 1, 1 + payloadLength);
+    } else {
+      // For standard MAC algorithms, decrypt the packet first, then verify the MAC
+
+      if (_decryptBuffer.isEmpty) {
+        final firstBlock = _buffer.consume(blockSize);
+        _decryptBuffer.add(_decryptCipher!.process(firstBlock));
+      }
+
+      final packetLength = SSHPacket.readPacketLength(_decryptBuffer.data);
+      _verifyPacketLength(packetLength);
+
+      if (_buffer.length + _decryptBuffer.length < 4 + packetLength + macLength) {
+        return null;
+      }
+
+      while (_decryptBuffer.length < 4 + packetLength) {
+        final block = _buffer.consume(blockSize);
+        _decryptBuffer.add(_decryptCipher!.process(block));
+      }
+
+      final packet = _decryptBuffer.consume(packetLength + 4);
+      final paddingLength = SSHPacket.readPaddingLength(packet);
+      final payloadLength = packetLength - paddingLength - 1;
+      _verifyPacketPadding(payloadLength, paddingLength);
+
+      final mac = _buffer.consume(macLength);
+      _verifyPacketMac(packet, mac, isEncrypted: false);
+
+      return Uint8List.sublistView(packet, 5, packet.length - paddingLength);
     }
-
-    while (_decryptBuffer.length < 4 + packetLength) {
-      final block = _buffer.consume(blockSize);
-      _decryptBuffer.add(_decryptCipher!.process(block));
-    }
-
-    final packet = _decryptBuffer.consume(packetLength + 4);
-    final paddingLength = SSHPacket.readPaddingLength(packet);
-    final payloadLength = packetLength - paddingLength - 1;
-    _verifyPacketPadding(payloadLength, paddingLength);
-
-    final mac = _buffer.consume(macLength);
-    _verifyPacketMac(packet, mac);
-
-    return Uint8List.sublistView(packet, 5, packet.length - paddingLength);
   }
 
   void _verifyPacketLength(int packetLength) {
@@ -413,14 +560,32 @@ class SSHTransport {
 
   /// Verifies that the MAC of the packet is correct. Throws [SSHPacketError]
   /// if the MAC is incorrect.
-  void _verifyPacketMac(Uint8List payload, Uint8List actualMac) {
+  /// 
+  /// For ETM (Encrypt-Then-MAC) algorithms, the MAC is calculated on the packet length and encrypted payload.
+  /// For standard MAC algorithms, the MAC is calculated on the unencrypted packet.
+  void _verifyPacketMac(Uint8List payload, Uint8List actualMac, {bool isEncrypted = false}) {
     final macSize = _remoteMac!.macSize;
     if (actualMac.length != macSize) {
       throw ArgumentError.value(actualMac, 'mac', 'Invalid MAC size');
     }
 
+    final macType = isClient ? _serverMacType! : _clientMacType!;
+    final isEtm = macType.isEtm;
+
     _remoteMac!.updateAll(_remotePacketSN.value.toUint32());
-    _remoteMac!.updateAll(payload);
+
+    // For ETM algorithms, the MAC is calculated on the packet length and encrypted payload
+    // For standard MAC algorithms, the MAC is calculated on the unencrypted packet
+    if (isEtm && isEncrypted) {
+      _remoteMac!.updateAll(payload);
+    } else if (!isEtm && !isEncrypted) {
+      _remoteMac!.updateAll(payload);
+    } else {
+      throw SSHPacketError(
+        'MAC algorithm mismatch: isEtm=$isEtm, isEncrypted=$isEncrypted',
+      );
+    }
+
     final expectedMac = _remoteMac!.finish();
 
     if (!expectedMac.equals(actualMac)) {
