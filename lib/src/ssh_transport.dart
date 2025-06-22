@@ -72,6 +72,8 @@ class SSHTransport {
   /// Function called when a packet is received.
   final SSHPacketHandler? onPacket;
 
+  final bool disableHostkeyVerification;
+
   /// A [Future] that completes when the transport is closed, or when an error
   /// occurs. After this [Future] completes, [isClosed] will be true and no
   /// more data can be sent or received.
@@ -94,6 +96,7 @@ class SSHTransport {
     this.onVerifyHostKey,
     this.onReady,
     this.onPacket,
+    this.disableHostkeyVerification = false,
   }) {
     _initSocket();
     _startHandshake();
@@ -174,9 +177,24 @@ class SSHTransport {
 
   final _remotePacketSN = SSHPacketSN.fromZero();
 
+  /// Whether a key exchange is currently in progress (initial or re-key).
+  bool _kexInProgress = false;
+
+  /// Whether we have already sent our SSH_MSG_KEXINIT for the ongoing key
+  /// exchange round. This is reset when the exchange finishes.
+  bool _sentKexInit = false;
+
+  /// Packets queued during key exchange that will be sent after NEW_KEYS
+  final List<Uint8List> _rekeyPendingPackets = [];
+
   void sendPacket(Uint8List data) {
     if (isClosed) {
       throw SSHStateError('Transport is closed');
+    }
+
+    if (_kexInProgress && !_shouldBypassRekeyBuffer(data)) {
+      _rekeyPendingPackets.add(Uint8List.fromList(data));
+      return;
     }
 
     // Check if encryption is enabled and if we have MAC types initialized
@@ -723,6 +741,16 @@ class SSHTransport {
   void _sendKexInit() {
     printDebug?.call('SSHTransport._sendKexInit');
 
+    // Don't start a new key exchange when one is already in progress
+    if (_kexInProgress && _sentKexInit) {
+      printDebug?.call('Key exchange already in progress, ignoring');
+      return;
+    }
+
+    // Mark that a new key-exchange round has started from our side.
+    _kexInProgress = true;
+    _sentKexInit = true;
+
     final message = SSH_Message_KexInit(
       kexAlgorithms: algorithms.kex.toNameList(),
       // kexAlgorithms: ['curve25519-sha256'],
@@ -815,6 +843,18 @@ class SSHTransport {
 
   void _handleMessageKexInit(Uint8List payload) {
     printDebug?.call('SSHTransport._handleMessageKexInit');
+
+    // If this message initiates a new key-exchange round from the remote
+    // side, we MUST respond with our own KEXINIT (RFC 4253 §7.1).
+    if (!_kexInProgress) {
+      // Start a new exchange initiated by the peer.
+      _kexInProgress = true;
+    }
+
+    if (!_sentKexInit) {
+      // We have not sent our KEXINIT for this round yet, do it now.
+      _sendKexInit();
+    }
 
     final message = SSH_Message_KexInit.decode(payload);
     printTrace?.call('<- $socket: $message');
@@ -973,12 +1013,14 @@ class SSHTransport {
       sharedSecret: sharedSecret,
     );
 
-    final verified = _verifyHostkey(
-      keyBytes: hostkey,
-      signatureBytes: hostSignature,
-      exchangeHash: exchangeHash,
-    );
-    if (!verified) throw SSHHostkeyError('Signature verification failed');
+    if (!disableHostkeyVerification) {
+      final verified = _verifyHostkey(
+        keyBytes: hostkey,
+        signatureBytes: hostSignature,
+        exchangeHash: exchangeHash,
+      );
+      if (!verified) throw SSHHostkeyError('Signature verification failed');
+    }
 
     _exchangeHash = exchangeHash;
     _sessionId ??= exchangeHash;
@@ -1027,6 +1069,62 @@ class SSHTransport {
   void _handleMessageNewKeys(Uint8List message) {
     printDebug?.call('SSHTransport._handleMessageNewKeys');
     printTrace?.call('<- $socket: SSH_Message_NewKeys');
+
     _applyRemoteKeys();
+
+    // Key exchange round finished.
+    _kexInProgress = false;
+    _sentKexInit = false;
+    _kex = null;
+
+    // Flush any pending packets
+    final pending = List<Uint8List>.from(_rekeyPendingPackets);
+    _rekeyPendingPackets.clear();
+    for (final packet in pending) {
+      sendPacket(packet);
+    }
+  }
+
+  /// Initiates a client-side re-key operation. This can be called
+  /// by client code to refresh session keys when needed.
+  void rekey() {
+    printDebug?.call('SSHTransport.rekey');
+    if (_kexInProgress) {
+      printDebug
+          ?.call('Key exchange already in progress, ignoring rekey request');
+      return;
+    }
+    _sendKexInit();
+  }
+
+  /// Determines if a packet should bypass the rekey buffer.
+  ///
+  /// During key exchange, most packets should be buffered until the exchange
+  /// is complete. However, key exchange packets themselves and transport layer
+  /// control messages (like disconnect) need to be sent immediately.
+  ///
+  /// Per RFC 4253, the following message types bypass the buffer:
+  ///
+  ///  /// Critical transport messages (1-4):
+  /// - 1: [SSH_Message_Disconnect]
+  /// - 2: [SSH_Message_Ignore]
+  /// - 3: [SSH_Message_Unimplemented]
+  /// - 4: [SSH_Message_Debug]
+  ///
+  /// Key exchange messages (20-49):
+  /// - 20: [SSH_Message_KexInit]
+  /// - 21: [SSH_Message_NewKeys]
+  /// - 30: [SSH_Message_KexDH_Init]/[SSH_Message_KexECDH_Init]
+  /// - 31: [SSH_Message_KexDH_Reply]/[SSH_Message_KexECDH_Reply]/[SSH_Message_KexDH_GexGroup]
+  /// - 32: [SSH_Message_KexDH_GexInit]
+  /// - 33: [SSH_Message_KexDH_GexReply]
+  /// - 34: [SSH_Message_KexDH_GexRequest]
+  ///
+  ///
+  bool _shouldBypassRekeyBuffer(Uint8List data) {
+    if (data.isEmpty) return false;
+
+    final messageId = data[0];
+    return (messageId >= 20 && messageId <= 49) || messageId <= 4;
   }
 }
