@@ -806,8 +806,7 @@ class SSHTransport {
       sharedSecret: sharedSecret,
     );
 
-    if (!disableHostkeyVerification)
-    {    
+    if (!disableHostkeyVerification) {
       final verified = _verifyHostkey(
         keyBytes: hostkey,
         signatureBytes: hostSignature,

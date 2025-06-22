@@ -460,7 +460,8 @@ class SSHChannelExtendedDataType {
   static const stderr = 1;
 }
 
-class SSHChannelDataSplitter extends StreamTransformerBase<SSHChannelData, SSHChannelData> {
+class SSHChannelDataSplitter
+    extends StreamTransformerBase<SSHChannelData, SSHChannelData> {
   SSHChannelDataSplitter(this.maxSize);
 
   final int maxSize;
