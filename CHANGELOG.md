@@ -1,5 +1,8 @@
-## [2.13.0] - 2025-mm-dd
+## [2.13.0] - 2025-06-22
 - docs: Update NoPorts naming [#115]. [@XavierChanth].
+- Add parameter disableHostkeyVerification [#123]. Thanks [@alexander-irion].
+- Add support for server initiated re-keying [#125]. Thanks [@MarBazuz].
+- Add support for new algorithms "mac-sha2-256-96", "hmac-sha2-512-96", "hmac-sha2-256-etm@openssh.com", "hmac-sha2-512-etm@openssh.com" [#126] [#127]. Thanks [@reinbeumer].
 
 ## [2.12.0] - 2025-02-08
 - Fixed streams and channel not closing after receiving SSH_Message_Channel_Close [#116]. [@cbenhagen].
@@ -168,6 +171,10 @@
 
 - Initial release.
 
+[#127]: https://github.com/TerminalStudio/dartssh2/pull/127
+[#126]: https://github.com/TerminalStudio/dartssh2/pull/126
+[#125]: https://github.com/TerminalStudio/dartssh2/pull/125
+[#123]: https://github.com/TerminalStudio/dartssh2/pull/123
 [#101]: https://github.com/TerminalStudio/dartssh2/pull/101
 [#100]: https://github.com/TerminalStudio/dartssh2/issues/100
 [#80]: https://github.com/TerminalStudio/dartssh2/issues/80
@@ -183,3 +190,7 @@
 [@linhanyu]: https://github.com/linhanyu
 [@Migarl]: https://github.com/Migarl
 [@PIDAMI]: https://github.com/PIDAMI
+[@XavierChanth]: https://github.com/XavierChanth
+[@MarBazuz]: https://github.com/MarBazuz
+[@reinbeumer]: https://github.com/reinbeumer
+[@alexander-irion]: https://github.com/alexander-irion
