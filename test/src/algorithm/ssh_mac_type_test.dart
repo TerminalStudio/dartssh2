@@ -11,11 +11,17 @@ void main() {
       expect(SSHMacType.hmacSha1.name, equals('hmac-sha1'));
       expect(SSHMacType.hmacSha256.name, equals('hmac-sha2-256'));
       expect(SSHMacType.hmacSha512.name, equals('hmac-sha2-512'));
+      expect(SSHMacType.hmacSha256Etm.name,
+          equals('hmac-sha2-256-etm@openssh.com'));
+      expect(SSHMacType.hmacSha512Etm.name,
+          equals('hmac-sha2-512-etm@openssh.com'));
 
       expect(SSHMacType.hmacMd5.keySize, equals(16));
       expect(SSHMacType.hmacSha1.keySize, equals(20));
       expect(SSHMacType.hmacSha256.keySize, equals(32));
       expect(SSHMacType.hmacSha512.keySize, equals(64));
+      expect(SSHMacType.hmacSha256Etm.keySize, equals(32));
+      expect(SSHMacType.hmacSha512Etm.keySize, equals(64));
     });
 
     test('createMac() returns correct Mac instance', () {
@@ -48,6 +54,20 @@ void main() {
       final key = Uint8List(64); // 64 bytes key for hmacSha512
       final mac = SSHMacType.hmacSha512.createMac(key);
       expect(mac, isA<HMac>());
+    });
+
+    test('isEtm property is set correctly', () {
+      // Non-ETM algorithms
+      expect(SSHMacType.hmacMd5.isEtm, isFalse);
+      expect(SSHMacType.hmacSha1.isEtm, isFalse);
+      expect(SSHMacType.hmacSha256.isEtm, isFalse);
+      expect(SSHMacType.hmacSha512.isEtm, isFalse);
+      expect(SSHMacType.hmacSha256_96.isEtm, isFalse);
+      expect(SSHMacType.hmacSha512_96.isEtm, isFalse);
+
+      // ETM algorithms
+      expect(SSHMacType.hmacSha256Etm.isEtm, isTrue);
+      expect(SSHMacType.hmacSha512Etm.isEtm, isTrue);
     });
   });
 }

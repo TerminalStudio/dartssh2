@@ -5,11 +5,14 @@ import 'package:dartssh2/dartssh2.dart';
 import 'package:dartssh2/src/message/msg_channel.dart';
 
 /// A honeypot that accepts all passwords and public-keys
-Future<SSHClient> getHoneypotClient() async {
+Future<SSHClient> getHoneypotClient({
+  SSHAlgorithms algorithms = const SSHAlgorithms(),
+}) async {
   return SSHClient(
     await SSHSocket.connect('test.rebex.net', 22),
     username: 'demo',
     onPasswordRequest: () => 'password',
+    algorithms: algorithms,
   );
 }
 
