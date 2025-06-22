@@ -26,6 +26,38 @@ void main() {
     //   client.close();
     // });
 
+    // test('hmacSha256_96 mac works', () async {
+    //   var client = await getHoneypotClient(
+    //     algorithms: SSHAlgorithms(mac: [SSHMacType.hmacSha256_96]),
+    //   );
+    //   await client.authenticated;
+    //   client.close();
+    // });
+
+    // test('hmacSha512_96 mac works', () async {
+    //   var client = await getHoneypotClient(
+    //     algorithms: SSHAlgorithms(mac: [SSHMacType.hmacSha512_96]),
+    //   );
+    //   await client.authenticated;
+    //   client.close();
+    // });
+
+    test('hmacSha256Etm mac works', () async {
+      var client = await getHoneypotClient(
+        algorithms: SSHAlgorithms(mac: [SSHMacType.hmacSha256Etm]),
+      );
+      await client.authenticated;
+      client.close();
+    });
+
+    test('hmacSha512Etm mac works', () async {
+      var client = await getHoneypotClient(
+        algorithms: SSHAlgorithms(mac: [SSHMacType.hmacSha512Etm]),
+      );
+      await client.authenticated;
+      client.close();
+    });
+
     test('throws SSHAuthFailError when public key is wrong', () async {
       var client = SSHClient(
         await SSHSocket.connect('test.rebex.net', 22),
