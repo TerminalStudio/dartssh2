@@ -22,6 +22,8 @@ void main(List<String> args) async {
   await file.write(File('local_file.txt').openRead().cast()).done;
   print('done');
 
+  await file.close();
+
   client.close();
   await client.done;
 }
