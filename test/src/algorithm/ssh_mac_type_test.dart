@@ -11,8 +11,10 @@ void main() {
       expect(SSHMacType.hmacSha1.name, equals('hmac-sha1'));
       expect(SSHMacType.hmacSha256.name, equals('hmac-sha2-256'));
       expect(SSHMacType.hmacSha512.name, equals('hmac-sha2-512'));
-      expect(SSHMacType.hmacSha256Etm.name, equals('hmac-sha2-256-etm@openssh.com'));
-      expect(SSHMacType.hmacSha512Etm.name, equals('hmac-sha2-512-etm@openssh.com'));
+      expect(SSHMacType.hmacSha256Etm.name,
+          equals('hmac-sha2-256-etm@openssh.com'));
+      expect(SSHMacType.hmacSha512Etm.name,
+          equals('hmac-sha2-512-etm@openssh.com'));
 
       expect(SSHMacType.hmacMd5.keySize, equals(16));
       expect(SSHMacType.hmacSha1.keySize, equals(20));
