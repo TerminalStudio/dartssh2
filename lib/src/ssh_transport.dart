@@ -201,7 +201,8 @@ class SSHTransport {
       // We need to account for the 1 byte padding length field
       final paddingLength = blockSize - ((data.length + 1) % blockSize);
       // Ensure padding is at least 4 bytes as per SSH spec
-      final adjustedPaddingLength = paddingLength < 4 ? paddingLength + blockSize : paddingLength;
+      final adjustedPaddingLength =
+          paddingLength < 4 ? paddingLength + blockSize : paddingLength;
 
       // Calculate the total packet length (excluding the length field itself)
       final packetLength = 1 + data.length + adjustedPaddingLength;
@@ -217,12 +218,14 @@ class SSHTransport {
 
       // Add random padding
       for (var i = 0; i < adjustedPaddingLength; i++) {
-        payloadToEncrypt[1 + data.length + i] = (DateTime.now().microsecondsSinceEpoch + i) & 0xFF;
+        payloadToEncrypt[1 + data.length + i] =
+            (DateTime.now().microsecondsSinceEpoch + i) & 0xFF;
       }
 
       // Verify that the payload length is a multiple of the block size
       if (payloadToEncrypt.length % blockSize != 0) {
-        throw StateError('Payload length ${payloadToEncrypt.length} is not a multiple of block size $blockSize');
+        throw StateError(
+            'Payload length ${payloadToEncrypt.length} is not a multiple of block size $blockSize');
       }
 
       // Encrypt the payload
@@ -512,7 +515,8 @@ class SSHTransport {
       final packetLength = SSHPacket.readPacketLength(_decryptBuffer.data);
       _verifyPacketLength(packetLength);
 
-      if (_buffer.length + _decryptBuffer.length < 4 + packetLength + macLength) {
+      if (_buffer.length + _decryptBuffer.length <
+          4 + packetLength + macLength) {
         return null;
       }
 
@@ -560,10 +564,11 @@ class SSHTransport {
 
   /// Verifies that the MAC of the packet is correct. Throws [SSHPacketError]
   /// if the MAC is incorrect.
-  /// 
+  ///
   /// For ETM (Encrypt-Then-MAC) algorithms, the MAC is calculated on the packet length and encrypted payload.
   /// For standard MAC algorithms, the MAC is calculated on the unencrypted packet.
-  void _verifyPacketMac(Uint8List payload, Uint8List actualMac, {bool isEncrypted = false}) {
+  void _verifyPacketMac(Uint8List payload, Uint8List actualMac,
+      {bool isEncrypted = false}) {
     final macSize = _remoteMac!.macSize;
     if (actualMac.length != macSize) {
       throw ArgumentError.value(actualMac, 'mac', 'Invalid MAC size');
