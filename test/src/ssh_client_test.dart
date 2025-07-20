@@ -58,6 +58,14 @@ void main() {
       client.close();
     });
 
+    test('dhGroup16Sha512 kex works', () async {
+      var client = await getHoneypotClient(
+        algorithms: SSHAlgorithms(kex: [SSHKexType.dhGroup16Sha512]),
+      );
+      await client.authenticated;
+      client.close();
+    });
+
     test('throws SSHAuthFailError when public key is wrong', () async {
       var client = SSHClient(
         await SSHSocket.connect('test.rebex.net', 22),

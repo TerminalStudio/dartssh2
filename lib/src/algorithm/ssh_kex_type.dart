@@ -49,6 +49,16 @@ class SSHKexType extends SSHAlgorithm {
     digestFactory: digestSha1,
   );
 
+  static const dhGroup16Sha512 = SSHKexType._(
+    name: 'diffie-hellman-group16-sha512',
+    digestFactory: digestSha512,
+  );
+
+  static const dhGroup18Sha512 = SSHKexType._(
+    name: 'diffie-hellman-group18-sha512',
+    digestFactory: digestSha512,
+  );
+
   const SSHKexType._({
     required this.name,
     required this.digestFactory,
