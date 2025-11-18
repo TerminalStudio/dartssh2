@@ -11,6 +11,8 @@ class SSHCipherType extends SSHAlgorithm {
     aes128ctr,
     aes192ctr,
     aes256ctr,
+    aes128gcm,
+    aes256gcm,
   ];
 
   static const aes128ctr = SSHCipherType._(
@@ -49,6 +51,20 @@ class SSHCipherType extends SSHAlgorithm {
     cipherFactory: _aesCbcFactory,
   );
 
+  static const aes128gcm = SSHCipherType._(
+    name: 'aes128-gcm@openssh.com',
+    keySize: 16,
+    ivSize: 12,
+    cipherFactory: _aesGcmFactory,
+  );
+
+  static const aes256gcm = SSHCipherType._(
+    name: 'aes256-gcm@openssh.com',
+    keySize: 32,
+    ivSize: 12,
+    cipherFactory: _aesGcmFactory,
+  );
+
   static SSHCipherType? fromName(String name) {
     for (final value in values) {
       if (value.name == name) {
@@ -61,6 +77,7 @@ class SSHCipherType extends SSHAlgorithm {
   const SSHCipherType._({
     required this.name,
     required this.keySize,
+    this.ivSize = 16,
     required this.cipherFactory,
   });
 
@@ -70,7 +87,7 @@ class SSHCipherType extends SSHAlgorithm {
 
   final int keySize;
 
-  final int ivSize = 16;
+  final int ivSize;
 
   final int blockSize = 16;
 
@@ -102,4 +119,10 @@ BlockCipher _aesCtrFactory() {
 
 BlockCipher _aesCbcFactory() {
   return CBCBlockCipher(AESEngine());
+}
+
+BlockCipher _aesGcmFactory() {
+  // GCM is an AEAD cipher, but we'll handle it specially in the key decryption
+  // For now, return a placeholder - we'll override createCipher for GCM
+  throw UnimplementedError('GCM cipher factory should not be called directly');
 }

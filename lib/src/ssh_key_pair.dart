@@ -218,7 +218,22 @@ class OpenSSHKeyPairs {
 
     final kdfOptions = this.kdfOptions as OpenSSHBcryptKdfOptions;
 
-    final kdfHash = Uint8List(cipher.keySize + cipher.ivSize);
+    // Debug logging for KDF (disabled by default)
+    // Uncomment to debug GCM key derivation:
+    // if (cipherName.contains('gcm@openssh.com')) {
+    //   print('gcm-kdf-salt-length: ${kdfOptions.salt.length}');
+    //   _debugBytes('gcm-kdf-salt', kdfOptions.salt);
+    //   print('gcm-kdf-rounds: ${kdfOptions.rounds}');
+    //   print('gcm-cipher-name: $cipherName');
+    //   print('gcm-cipher-keySize: ${cipher.keySize}');
+    //   print('gcm-cipher-ivSize: ${cipher.ivSize}');
+    // }
+
+    // For OpenSSH key files, bcrypt_pbkdf derives keylen + ivlen bytes
+    // For aes256-gcm: 32 (key) + 12 (IV) = 44 bytes total
+    // No special handling for GCM - same as CBC/CTR
+    final kdfOutputLength = cipher.keySize + cipher.ivSize;
+    final kdfHash = Uint8List(kdfOutputLength);
 
     bcrypt_pbkdf(
       passphrase,
@@ -232,9 +247,96 @@ class OpenSSHKeyPairs {
 
     final key = Uint8List.view(kdfHash.buffer, 0, cipher.keySize);
     final iv = Uint8List.view(kdfHash.buffer, cipher.keySize, cipher.ivSize);
+
+    // Handle GCM ciphers specially (they use authenticated encryption)
+    if (cipherName.contains('gcm@openssh.com')) {
+      return _decryptGcm(blob, key, iv, cipher.keySize);
+    }
+
+    // Standard CBC/CTR decryption
     final decryptCipher = cipher.createCipher(key, iv, forEncryption: false);
     return decryptCipher.processAll(blob);
   }
+
+  Uint8List _decryptGcm(
+      Uint8List blob, Uint8List key, Uint8List iv, int keySize) {
+    // For OpenSSH private key files encrypted with GCM:
+    // - The blob format is: [ciphertext][16-byte tag]
+    // - IV is 12 bytes, entirely derived from bcrypt_pbkdf (no counter from blob)
+    // - AAD is empty (unlike SSH transport layer)
+    //
+    // OpenSSH source (sshkey.c):
+    //   bcrypt_pbkdf(..., key, keylen + ivlen, rounds)  // 32 + 12 = 44 bytes
+    //   cipher_crypt(..., encrypted_len, 0, authlen)   // aadlen=0, authlen=16
+    //   blob = ciphertext (encrypted_len bytes) || tag (authlen bytes)
+
+    const tagLength = 16; // GCM tag length for aes256-gcm
+
+    if (blob.length < tagLength) {
+      throw SSHKeyDecryptError('Invalid GCM encrypted blob: too short');
+    }
+
+    // Blob format: [ciphertext][tag] where tag is last 16 bytes
+    // The blob is passed directly to GCMBlockCipher.process() which handles
+    // tag separation and verification internally
+
+    // Debug logging (disabled by default)
+    // Uncomment to debug GCM decryption:
+    // final ciphertextLength = blob.length - tagLength;
+    // _debugBytes('gcm-key', key);
+    // _debugBytes('gcm-iv', iv);
+    // print('gcm-blob-length: ${blob.length}');
+    // print('gcm-ciphertext-length: $ciphertextLength');
+    // print('gcm-tag-length: $tagLength');
+    // final ciphertextPrefix = ciphertextLength >= 32
+    //     ? Uint8List.view(blob.buffer, blob.offsetInBytes, 32)
+    //     : Uint8List.view(blob.buffer, blob.offsetInBytes, ciphertextLength);
+    // _debugBytes('gcm-ciphertext-prefix-32', ciphertextPrefix);
+    // final tag = Uint8List.view(blob.buffer, blob.offsetInBytes + ciphertextLength, tagLength);
+    // _debugBytes('gcm-tag', tag);
+    // _debugBytes('gcm-ciphertext-full', Uint8List.view(blob.buffer, blob.offsetInBytes, ciphertextLength));
+
+    // Create GCM cipher - same pattern as standalone tests
+    final gcm = GCMBlockCipher(AESEngine());
+
+    // For OpenSSH private key encryption, GCM uses empty AAD
+    // (This is different from SSH transport layer GCM)
+    final aad = Uint8List(0);
+
+    // Initialize for decryption
+    gcm.init(
+      false, // forEncryption = false (decryption)
+      AEADParameters(
+        KeyParameter(key),
+        128, // macSize in bits (16 bytes = 128 bits)
+        iv,
+        aad,
+      ),
+    );
+
+    // For pointycastle's GCMBlockCipher.process():
+    // - It expects ciphertext + tag together
+    // - For decryption, it automatically separates the last macSize bytes as the tag
+    // - The blob is already in the correct format: [ciphertext][tag]
+    // - So we can pass the blob directly, or create a combined view
+
+    // Pass the blob directly since it's already [ciphertext][tag]
+    // process() will handle tag separation and verification internally
+    try {
+      final result = gcm.process(blob);
+      return result;
+    } catch (e) {
+      throw SSHKeyDecryptError(
+          'GCM authentication failed: invalid passphrase or corrupted key. Error: $e',
+          e);
+    }
+  }
+
+  // Debug helper (commented out, uncomment if needed for debugging)
+  // void _debugBytes(String label, Uint8List bytes) {
+  //   final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
+  //   print('$label (${bytes.length}): $hex');
+  // }
 
   @override
   String toString() {
