@@ -1,10 +1,16 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:dartssh2/src/hostkey/hostkey_rsa.dart';
 import 'package:dartssh2/src/ssh_channel.dart';
 import 'package:dartssh2/src/ssh_key_pair.dart';
 import 'package:dartssh2/src/ssh_message.dart';
 import 'package:dartssh2/src/ssh_transport.dart';
+import 'package:pointycastle/asymmetric/api.dart' as asymmetric;
+import 'package:pointycastle/digests/sha1.dart';
+import 'package:pointycastle/digests/sha256.dart';
+import 'package:pointycastle/digests/sha512.dart';
+import 'package:pointycastle/signers/rsa_signer.dart';
 
 abstract class SSHAgentHandler {
   Future<Uint8List> handleRequest(Uint8List request);
@@ -48,18 +54,74 @@ class SSHKeyPairAgent implements SSHAgentHandler {
   Uint8List _handleSignRequest(SSHMessageReader reader) {
     final keyBlob = reader.readString();
     final data = reader.readString();
-    reader.readUint32(); // flags, ignored for now
+    final flags = reader.readUint32();
 
     final identity = _findIdentity(keyBlob);
     if (identity == null) {
       return _failure();
     }
 
-    final signature = identity.sign(data);
+    final signature = _sign(identity, data, flags);
     final writer = SSHMessageWriter();
     writer.writeUint8(SSHAgentProtocol.signResponse);
     writer.writeString(signature.encode());
     return writer.takeBytes();
+  }
+
+  SSHSignature _sign(SSHKeyPair identity, Uint8List data, int flags) {
+    if (identity is OpenSSHRsaKeyPair || identity is RsaPrivateKey) {
+      final signatureType = _rsaSignatureTypeForFlags(flags);
+      return _signRsa(identity, data, signatureType);
+    }
+    return identity.sign(data);
+  }
+
+  String _rsaSignatureTypeForFlags(int flags) {
+    if (flags & SSHAgentProtocol.rsaSha2_512 != 0) {
+      return SSHRsaSignatureType.sha512;
+    }
+    if (flags & SSHAgentProtocol.rsaSha2_256 != 0) {
+      return SSHRsaSignatureType.sha256;
+    }
+    return SSHRsaSignatureType.sha1;
+  }
+
+  SSHRsaSignature _signRsa(
+    SSHKeyPair identity,
+    Uint8List data,
+    String signatureType,
+  ) {
+    final key = _rsaKeyFrom(identity);
+    if (key == null) {
+      return identity.sign(data) as SSHRsaSignature;
+    }
+
+    final signer = _rsaSignerFor(signatureType);
+    signer.init(true, asymmetric.PrivateKeyParameter<asymmetric.RSAPrivateKey>(key));
+    return SSHRsaSignature(signatureType, signer.generateSignature(data).bytes);
+  }
+
+  asymmetric.RSAPrivateKey? _rsaKeyFrom(SSHKeyPair identity) {
+    if (identity is OpenSSHRsaKeyPair) {
+      return asymmetric.RSAPrivateKey(identity.n, identity.d, identity.p, identity.q);
+    }
+    if (identity is RsaPrivateKey) {
+      return asymmetric.RSAPrivateKey(identity.n, identity.d, identity.p, identity.q);
+    }
+    return null;
+  }
+
+  RSASigner _rsaSignerFor(String signatureType) {
+    switch (signatureType) {
+      case SSHRsaSignatureType.sha1:
+        return RSASigner(SHA1Digest(), '06052b0e03021a');
+      case SSHRsaSignatureType.sha256:
+        return RSASigner(SHA256Digest(), '0609608648016503040201');
+      case SSHRsaSignatureType.sha512:
+        return RSASigner(SHA512Digest(), '0609608648016503040203');
+      default:
+        return RSASigner(SHA256Digest(), '0609608648016503040201');
+    }
   }
 
   SSHKeyPair? _findIdentity(Uint8List keyBlob) {
@@ -165,4 +227,6 @@ abstract class SSHAgentProtocol {
   static const int identitiesAnswer = 12;
   static const int signRequest = 13;
   static const int signResponse = 14;
+  static const int rsaSha2_256 = 2;
+  static const int rsaSha2_512 = 4;
 }
