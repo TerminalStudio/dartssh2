@@ -3,9 +3,11 @@ import 'dart:typed_data';
 
 import 'package:dartssh2/src/hostkey/hostkey_rsa.dart';
 import 'package:dartssh2/src/ssh_channel.dart';
+import 'package:dartssh2/src/ssh_hostkey.dart';
 import 'package:dartssh2/src/ssh_key_pair.dart';
 import 'package:dartssh2/src/ssh_message.dart';
 import 'package:dartssh2/src/ssh_transport.dart';
+import 'package:pointycastle/api.dart' hide Signature;
 import 'package:pointycastle/asymmetric/api.dart' as asymmetric;
 import 'package:pointycastle/digests/sha1.dart';
 import 'package:pointycastle/digests/sha256.dart';
@@ -97,7 +99,7 @@ class SSHKeyPairAgent implements SSHAgentHandler {
     }
 
     final signer = _rsaSignerFor(signatureType);
-    signer.init(true, asymmetric.PrivateKeyParameter<asymmetric.RSAPrivateKey>(key));
+    signer.init(true, PrivateKeyParameter<asymmetric.RSAPrivateKey>(key));
     return SSHRsaSignature(signatureType, signer.generateSignature(data).bytes);
   }
 
