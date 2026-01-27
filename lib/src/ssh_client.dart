@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:dartssh2/src/http/http_client.dart';
 import 'package:dartssh2/src/sftp/sftp_client.dart';
 import 'package:dartssh2/src/ssh_algorithm.dart';
+import 'package:dartssh2/src/ssh_agent.dart';
 import 'package:dartssh2/src/ssh_channel.dart';
 import 'package:dartssh2/src/ssh_channel_id.dart';
 import 'package:dartssh2/src/ssh_errors.dart';
@@ -122,6 +123,9 @@ class SSHClient {
   /// Function called when authentication is complete.
   final SSHAuthenticatedHandler? onAuthenticated;
 
+  /// Optional handler for SSH agent forwarding requests.
+  final SSHAgentHandler? agentHandler;
+
   /// The interval at which to send a keep-alive message through the [ping]
   /// method. Set this to null to disable automatic keep-alive messages.
   final Duration? keepAliveInterval;
@@ -154,6 +158,7 @@ class SSHClient {
     this.onUserInfoRequest,
     this.onUserauthBanner,
     this.onAuthenticated,
+    this.agentHandler,
     this.keepAliveInterval = const Duration(seconds: 10),
     this.disableHostkeyVerification = false,
   }) {
@@ -314,6 +319,10 @@ class SSHClient {
       }
     }
 
+    if (agentHandler != null) {
+      await channelController.sendAgentForwardingRequest();
+    }
+
     if (pty != null) {
       final ptyOk = await channelController.sendPtyReq(
         terminalType: pty.type,
@@ -351,6 +360,10 @@ class SSHClient {
       for (var pair in environment.entries) {
         channelController.sendEnv(pair.key, pair.value);
       }
+    }
+
+    if (agentHandler != null) {
+      await channelController.sendAgentForwardingRequest();
     }
 
     if (pty != null) {
@@ -676,6 +689,8 @@ class SSHClient {
     switch (message.channelType) {
       case 'forwarded-tcpip':
         return _handleForwardedTcpipChannelOpen(message);
+      case 'auth-agent@openssh.com':
+        return _handleAgentChannelOpen(message);
     }
 
     printDebug?.call('unknown channelType: ${message.channelType}');
@@ -737,6 +752,42 @@ class SSHClient {
 
     remoteForward._connections.add(
       SSHForwardChannel(channelController.channel),
+    );
+  }
+
+  void _handleAgentChannelOpen(SSH_Message_Channel_Open message) {
+    final handler = agentHandler;
+    if (handler == null) {
+      final reply = SSH_Message_Channel_Open_Failure(
+        recipientChannel: message.senderChannel,
+        reasonCode: SSH_Message_Channel_Open_Failure.codeUnknownChannelType,
+        description: 'agent forwarding not enabled',
+      );
+      _sendMessage(reply);
+      return;
+    }
+
+    final localChannelId = _channelIdAllocator.allocate();
+    final confirmation = SSH_Message_Channel_Confirmation(
+      recipientChannel: message.senderChannel,
+      senderChannel: localChannelId,
+      initialWindowSize: _initialWindowSize,
+      maximumPacketSize: _maximumPacketSize,
+      data: Uint8List(0),
+    );
+    _sendMessage(confirmation);
+
+    final channelController = _acceptChannel(
+      localChannelId: localChannelId,
+      remoteChannelId: message.senderChannel,
+      remoteInitialWindowSize: message.initialWindowSize,
+      remoteMaximumPacketSize: message.maximumPacketSize,
+    );
+
+    SSHAgentChannel(
+      channelController.channel,
+      handler,
+      printDebug: printDebug,
     );
   }
 
