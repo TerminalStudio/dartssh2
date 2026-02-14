@@ -297,7 +297,7 @@ class SSHClient {
     return SSHForwardChannel(channelController.channel);
   }
 
-  /// Forward connections to a Unix domain socket at [remoteSocketPath] on the
+  /// Forward local connections to a remote Unix domain socket at [remoteSocketPath] on the
   /// remote side via a `direct-streamlocal@openssh.com` channel.
   ///
   /// This is the equivalent of `ssh -L localPort:remoteSocketPath`.
