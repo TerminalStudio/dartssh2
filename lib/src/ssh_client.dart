@@ -496,6 +496,17 @@ class SSHClient {
     }
     _keepAlive?.stop();
 
+    // Complete any pending channel-open waiters so callers (e.g.
+    // forwardLocalUnix) don't hang forever when the connection drops.
+    for (final entry in _channelOpenReplyWaiters.entries) {
+      if (!entry.value.isCompleted) {
+        entry.value.completeError(
+          SSHStateError('Connection closed while waiting for channel open'),
+        );
+      }
+    }
+    _channelOpenReplyWaiters.clear();
+
     try {
       _closeChannels();
     } catch (e) {
