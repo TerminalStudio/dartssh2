@@ -751,6 +751,17 @@ class SSHClient {
   void _handleChannelConfirmation(Uint8List payload) {
     final message = SSH_Message_Channel_Confirmation.decode(payload);
     printTrace?.call('<- $socket: $message');
+    // Register the channel synchronously BEFORE completing the future.
+    // CHANNEL_DATA for this channel may arrive in the same TCP segment as
+    // the CONFIRMATION. If we defer registration to the async continuation
+    // of _waitChannelOpen, that data hits _handleChannelData while
+    // _channels[id] is still null and is silently dropped.
+    _acceptChannel(
+      localChannelId: message.recipientChannel,
+      remoteChannelId: message.senderChannel,
+      remoteInitialWindowSize: message.initialWindowSize,
+      remoteMaximumPacketSize: message.maximumPacketSize,
+    );
     _dispatchChannelOpenReply(message.recipientChannel, message);
   }
 
@@ -961,17 +972,8 @@ class SSHClient {
       throw SSHChannelOpenError(message.reasonCode, message.description);
     }
 
-    final reply = message as SSH_Message_Channel_Confirmation;
-    if (reply.recipientChannel != localChannelId) {
-      throw SSHStateError('Unexpected channel confirmation');
-    }
-
-    return _acceptChannel(
-      localChannelId: localChannelId,
-      remoteChannelId: reply.senderChannel,
-      remoteInitialWindowSize: reply.initialWindowSize,
-      remoteMaximumPacketSize: reply.maximumPacketSize,
-    );
+    // Channel was already registered synchronously in _handleChannelConfirmation.
+    return _channels[localChannelId]!;
   }
 
   SSHChannelController _acceptChannel({
