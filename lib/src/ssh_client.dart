@@ -302,6 +302,20 @@ class SSHClient {
     return SSHForwardChannel(channelController.channel);
   }
 
+  /// Forward local connections to a remote Unix domain socket at [remoteSocketPath] on the
+  /// remote side via a `direct-streamlocal@openssh.com` channel.
+  ///
+  /// This is the equivalent of `ssh -L localPort:remoteSocketPath`.
+  Future<SSHForwardChannel> forwardLocalUnix(
+    String remoteSocketPath,
+  ) async {
+    await _authenticated.future;
+    final channelController = await _openForwardLocalUnixChannel(
+      remoteSocketPath,
+    );
+    return SSHForwardChannel(channelController.channel);
+  }
+
   /// Execute [command] on the remote side. Returns a [SSHChannel] that can be
   /// used to read and write to the remote side.
   Future<SSHSession> execute(
@@ -494,6 +508,17 @@ class SSHClient {
       );
     }
     _keepAlive?.stop();
+
+    // Complete any pending channel-open waiters so callers (e.g.
+    // forwardLocalUnix) don't hang forever when the connection drops.
+    for (final entry in _channelOpenReplyWaiters.entries) {
+      if (!entry.value.isCompleted) {
+        entry.value.completeError(
+          SSHStateError('Connection closed while waiting for channel open'),
+        );
+      }
+    }
+    _channelOpenReplyWaiters.clear();
 
     try {
       _closeChannels();
@@ -802,6 +827,17 @@ class SSHClient {
   void _handleChannelConfirmation(Uint8List payload) {
     final message = SSH_Message_Channel_Confirmation.decode(payload);
     printTrace?.call('<- $socket: $message');
+    // Register the channel synchronously BEFORE completing the future.
+    // CHANNEL_DATA for this channel may arrive in the same TCP segment as
+    // the CONFIRMATION. If we defer registration to the async continuation
+    // of _waitChannelOpen, that data hits _handleChannelData while
+    // _channels[id] is still null and is silently dropped.
+    _acceptChannel(
+      localChannelId: message.recipientChannel,
+      remoteChannelId: message.senderChannel,
+      remoteInitialWindowSize: message.initialWindowSize,
+      remoteMaximumPacketSize: message.maximumPacketSize,
+    );
     _dispatchChannelOpenReply(message.recipientChannel, message);
   }
 
@@ -1004,6 +1040,22 @@ class SSHClient {
     return await _waitChannelOpen(localChannelId);
   }
 
+  Future<SSHChannelController> _openForwardLocalUnixChannel(
+    String socketPath,
+  ) async {
+    final localChannelId = _channelIdAllocator.allocate();
+
+    final request = SSH_Message_Channel_Open.directStreamLocal(
+      senderChannel: localChannelId,
+      initialWindowSize: _initialWindowSize,
+      maximumPacketSize: _maximumPacketSize,
+      socketPath: socketPath,
+    );
+    _sendMessage(request);
+
+    return await _waitChannelOpen(localChannelId);
+  }
+
   Future<SSHChannelController> _waitChannelOpen(
     SSHChannelId localChannelId,
   ) async {
@@ -1012,17 +1064,8 @@ class SSHClient {
       throw SSHChannelOpenError(message.reasonCode, message.description);
     }
 
-    final reply = message as SSH_Message_Channel_Confirmation;
-    if (reply.recipientChannel != localChannelId) {
-      throw SSHStateError('Unexpected channel confirmation');
-    }
-
-    return _acceptChannel(
-      localChannelId: localChannelId,
-      remoteChannelId: reply.senderChannel,
-      remoteInitialWindowSize: reply.initialWindowSize,
-      remoteMaximumPacketSize: reply.maximumPacketSize,
-    );
+    // Channel was already registered synchronously in _handleChannelConfirmation.
+    return _channels[localChannelId]!;
   }
 
   SSHChannelController _acceptChannel({
