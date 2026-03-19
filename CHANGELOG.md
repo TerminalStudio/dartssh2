@@ -1,3 +1,6 @@
+## [2.14.0] - 2026-03-19
+- Fixed SSH connections through bastion hosts where the target server sends its version string immediately upon connection (which is standard behavior per RFC 4253) [#141]. Thanks @shihuili1218.
+
 ## [2.13.0] - 2025-06-22
 - docs: Update NoPorts naming [#115]. [@XavierChanth].
 - Add parameter disableHostkeyVerification [#123]. Thanks [@alexander-irion].
