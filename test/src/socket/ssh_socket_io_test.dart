@@ -4,7 +4,7 @@ import 'package:test/test.dart';
 void main() {
   group('SSHSocket', () {
     test('can establish tcp connections', () async {
-      final socket = await SSHSocket.connect('time.nist.gov', 13);
+      final socket = await SSHSocket.connect('test.rebex.net', 22);
       final firstPacket = await socket.stream.first;
       expect(firstPacket, isNotEmpty);
       await socket.close();
