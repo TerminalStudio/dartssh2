@@ -580,6 +580,7 @@ abstract class SSHChannelRequestType {
   static const shell = 'shell';
   static const exec = 'exec';
   static const subsystem = 'subsystem';
+  static const authAgent = 'auth-agent-req@openssh.com';
   static const windowChange = 'window-change';
   static const xon = 'xon-xoff';
   static const signal = 'signal';
