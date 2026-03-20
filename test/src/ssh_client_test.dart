@@ -137,6 +137,7 @@ void main() {
         fail('should have thrown');
       } catch (e) {
         expect(e, isA<SSHAuthAbortError>());
+        expect((e as SSHAuthAbortError).reason!, isA<SSHSocketError>());
       }
 
       client.close();
