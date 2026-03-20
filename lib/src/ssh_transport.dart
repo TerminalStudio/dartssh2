@@ -373,6 +373,7 @@ class SSHTransport {
     }
 
     final versionString = bufferString.substring(0, index);
+    // RFC compatibility: SSH-1.99 banners indicate SSH-2 support with SSH-1 fallback.
     if (!(versionString.startsWith('SSH-2.0-') ||
         versionString.startsWith('SSH-1.99-'))) {
       socket.sink.add(latin1.encode('Protocol mismatch\r\n'));
