@@ -1,4 +1,4 @@
-## [2.15.0] - yyyy-mm-dd
+## [2.15.0] - 2026-03-20
 - Updated `pointycastle` dependency to `^4.0.0` [#131]. Thanks [@vicajilau].
 - Added foundational X11 forwarding support with session x11-req API, incoming x11 channel handling, and protocol tests [#1]. Thanks [@vicajilau].
 - Exposed SSH ident configuration from `SSHClient` [#135]. Thanks [@Remulic] and [@vicajilau].
@@ -219,3 +219,4 @@
 [@Remulic]: https://github.com/Remulic
 [@james-thorpe]: https://github.com/james-thorpe
 [@Wackymax]: https://github.com/Wackymax
+[@vicajilau]: https://github.com/vicajilau
