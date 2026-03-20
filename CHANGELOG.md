@@ -1,7 +1,10 @@
+## [2.15.0] - yyyy-mm-dd
+- Updated `pointycastle` dependency to `^4.0.0` [#131]. Thanks @vicajilau.
+- CI now runs tests for pull requests targeting `master`.
+
 ## [2.14.0] - 2026-03-19
 - Fixed SSH connections through bastion hosts where the target server sends its version string immediately upon connection (which is standard behavior per RFC 4253) [#141]. Thanks @shihuili1218.
 - Adds a new forwardLocalUnix() function, which is an equivalent of ssh -L localPort:remoteSocketPath [#140]. Thanks @isegal.
-
 
 ## [2.13.0] - 2025-06-22
 - docs: Update NoPorts naming [#115]. [@XavierChanth].
