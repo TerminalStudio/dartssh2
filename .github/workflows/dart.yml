@@ -40,14 +40,21 @@ jobs:
       - name: Activate coverage tool
         run: dart pub global activate coverage
 
-      - name: Run tests
-        run: dart pub global run coverage:test_with_coverage
+      - name: Run unit tests with coverage
+        run: dart test --exclude-tags=integration --coverage=coverage
+
+      - name: Build LCOV report
+        run: dart pub global run coverage:format_coverage --lcov --in=coverage/test --out=coverage/lcov.info --packages=.dart_tool/package_config.json --report-on=lib
+
+      - name: Run integration tests
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: dart test --tags=integration
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
           fail_ci_if_error: true # optional (default = false)
-          files: ./coverage1.xml,./coverage2.xml # optional
+          files: ./coverage/lcov.info # optional
           flags: unittests # optional
           name: codecov-umbrella # optional
           token: ${{ secrets.CODECOV_TOKEN }} # required
