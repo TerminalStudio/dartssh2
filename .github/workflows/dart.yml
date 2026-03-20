@@ -18,7 +18,7 @@ jobs:
         sdk: [stable]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: ${{ matrix.sdk }}
@@ -51,7 +51,7 @@ jobs:
         run: dart test --tags=integration
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           fail_ci_if_error: true # optional (default = false)
           files: ./coverage/lcov.info # optional
