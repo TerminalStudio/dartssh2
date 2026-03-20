@@ -204,7 +204,9 @@ class SSHClient {
 
     _transport.done.then(
       (_) => _handleTransportClosed(null),
-      onError: (e) => _handleTransportClosed(e),
+      onError: (e) => _handleTransportClosed(
+        e is SSHError ? e : SSHSocketError(e),
+      ),
     );
 
     _authenticated.future.catchError(
@@ -568,7 +570,7 @@ class SSHClient {
     _requestAuthentication();
   }
 
-  void _handleTransportClosed(Object? error) {
+  void _handleTransportClosed(SSHError? error) {
     printDebug?.call('SSHClient._onTransportClosed');
     if (!_authenticated.isCompleted) {
       _authenticated.completeError(

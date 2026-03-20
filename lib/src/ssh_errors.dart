@@ -50,7 +50,7 @@ class SSHAuthAbortError with SSHMessageError implements SSHAuthError {
   @override
   final String message;
 
-  final Object? reason;
+  final SSHError? reason;
 
   SSHAuthAbortError(this.message, [this.reason]);
 }
