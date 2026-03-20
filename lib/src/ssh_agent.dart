@@ -105,10 +105,12 @@ class SSHKeyPairAgent implements SSHAgentHandler {
 
   asymmetric.RSAPrivateKey? _rsaKeyFrom(SSHKeyPair identity) {
     if (identity is OpenSSHRsaKeyPair) {
-      return asymmetric.RSAPrivateKey(identity.n, identity.d, identity.p, identity.q);
+      return asymmetric.RSAPrivateKey(
+          identity.n, identity.d, identity.p, identity.q);
     }
     if (identity is RsaPrivateKey) {
-      return asymmetric.RSAPrivateKey(identity.n, identity.d, identity.p, identity.q);
+      return asymmetric.RSAPrivateKey(
+          identity.n, identity.d, identity.p, identity.q);
     }
     return null;
   }
