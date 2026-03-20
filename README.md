@@ -47,6 +47,10 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
     <td style="text-align: center;">
       <b><a href="https://github.com/hsduren/dartshell">DartShell</a></b>
     </td>
+    <!-- Naviterm -->
+    <td style="text-align: center;">
+      <b><a href="https://github.com/jc-hk-1916/NaviTerm">Naviterm</a></b>
+    </td>
   </tr>
 
   <tr> 
@@ -64,6 +68,12 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
     <!-- dartShell -->
     <td>
       <img src="https://github.com/hsduren/dartshell/blob/main/info1.png" width="300px" alt="dartShell displaying terminal and session information for SSH operations">
+    </td>
+    <!-- NaviTerm -->
+    <td>
+      <a href="https://apps.apple.com/us/app/naviterm-ssh-sftp-tunnels/id6747072398">
+        <img src="https://raw.githubusercontent.com/jc-hk-1916/NaviTerm/main/images/1.png" width="300px" alt="Your all-in-one SSH terminal, SFTP client, and port forwarding tool, built from the ground up for macOS, iPhone, and iPad.">
+      </a>
     </td>
   </tr>
 </table>
@@ -108,6 +118,24 @@ void main() async {
 ```
 
 > `SSHSocket` is an interface and it's possible to implement your own `SSHSocket` if you want to use a different underlying transport rather than standard TCP socket. For example WebSocket or Unix domain socket.
+
+### Customize client SSH identification
+
+If your jump host or SSH gateway restricts client versions, you can customize the
+software version part of the identification string (`SSH-2.0-<ident>`):
+
+```dart
+void main() async {
+  final client = SSHClient(
+    await SSHSocket.connect('localhost', 22),
+    username: '<username>',
+    onPasswordRequest: () => '<password>',
+    ident: 'MyClient_1.0',
+  );
+}
+```
+
+`ident` defaults to `DartSSH_2.0`.
 
 ### Spawn a shell on remote host
 

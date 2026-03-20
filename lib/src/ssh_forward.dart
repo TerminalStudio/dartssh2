@@ -39,3 +39,17 @@ class SSHForwardChannel implements SSHSocket {
     _channel.destroy();
   }
 }
+
+class SSHX11Channel extends SSHForwardChannel {
+  /// Originator address reported by the SSH server for this X11 channel.
+  final String originatorIP;
+
+  /// Originator port reported by the SSH server for this X11 channel.
+  final int originatorPort;
+
+  SSHX11Channel(
+    super.channel, {
+    required this.originatorIP,
+    required this.originatorPort,
+  });
+}
