@@ -415,20 +415,22 @@ class SSHHttpClientResponse {
     var contentRead = 0;
 
     void processLine(String line, int bytesRead, LineDecoder decoder) {
+      final normalizedLine = line.trimRight();
       if (inBody) {
         body.write(line);
         contentRead += bytesRead;
       } else if (inHeader) {
-        if (line.trim().isEmpty) {
+        if (normalizedLine.trim().isEmpty) {
           inBody = true;
           if (contentLength > 0) {
             decoder.expectedByteCount = contentLength;
           }
           return;
         }
-        final separator = line.indexOf(':');
-        final name = line.substring(0, separator).toLowerCase().trim();
-        final value = line.substring(separator + 1).trim();
+        final separator = normalizedLine.indexOf(':');
+        final name =
+            normalizedLine.substring(0, separator).toLowerCase().trim();
+        final value = normalizedLine.substring(separator + 1).trim();
         if (name == SSHHttpHeaders.transferEncodingHeader &&
             value.toLowerCase() != 'identity') {
           throw UnsupportedError('only identity transfer encoding is accepted');
@@ -440,11 +442,12 @@ class SSHHttpClientResponse {
           headers[name] = [];
         }
         headers[name]!.add(value);
-      } else if (line.startsWith('HTTP/1.1') || line.startsWith('HTTP/1.0')) {
+      } else if (normalizedLine.startsWith('HTTP/1.1') ||
+          normalizedLine.startsWith('HTTP/1.0')) {
         statusCode = int.parse(
-          line.substring('HTTP/1.x '.length, 'HTTP/1.x xxx'.length),
+          normalizedLine.substring('HTTP/1.x '.length, 'HTTP/1.x xxx'.length),
         );
-        reasonPhrase = line.substring('HTTP/1.x xxx '.length);
+        reasonPhrase = normalizedLine.substring('HTTP/1.x xxx '.length);
         inHeader = true;
       } else {
         throw UnsupportedError('unsupported http response format');

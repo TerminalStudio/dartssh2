@@ -5,6 +5,8 @@
 - Propagated the underlying exception in `SSHAuthAbortError` through `reason` for better diagnostics [#133]. Thanks [@james-thorpe] and [@vicajilau].
 - Accepted `SSH-1.99-*` server banners as SSH-2 compatible during version exchange and added regression tests [#132]. Thanks [@james-thorpe] and [@vicajilau].
 - Added SSH agent forwarding support (`auth-agent-req@openssh.com`) with in-memory agent handling and RSA sign-request flag support [#139]. Thanks [@Wackymax] and [@vicajilau].
+- Normalized HTTP response line parsing in `SSHHttpClientResponse` to handle CRLF endings consistently and avoid trailing line-ending artifacts in parsed status/header fields [#145]. Thanks [@vicajilau].
+- Fixed SFTP packet encoding/decoding consistency: `SftpInitPacket.decode` now parses extension pairs correctly and `SftpExtendedReplyPacket.encode` now preserves raw payload bytes [#145]. Thanks [@vicajilau].
 
 ## [2.14.0] - 2026-03-19
 - Fixed SSH connections through bastion hosts where the target server sends its version string immediately upon connection (which is standard behavior per RFC 4253) [#141]. Thanks [@shihuili1218].
@@ -185,6 +187,7 @@
 
 [#141]: https://github.com/TerminalStudio/dartssh2/pull/141
 [#140]: https://github.com/TerminalStudio/dartssh2/pull/140
+[#145]: https://github.com/TerminalStudio/dartssh2/pull/145
 [#139]: https://github.com/TerminalStudio/dartssh2/pull/139
 [#132]: https://github.com/TerminalStudio/dartssh2/pull/132
 [#133]: https://github.com/TerminalStudio/dartssh2/pull/133
