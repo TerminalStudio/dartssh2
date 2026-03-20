@@ -2,6 +2,7 @@
 - Updated `pointycastle` dependency to `^4.0.0` [#131]. Thanks [@vicajilau].
 - Added foundational X11 forwarding support with session x11-req API, incoming x11 channel handling, and protocol tests [#1]. Thanks [@vicajilau].
 - Exposed SSH ident configuration from `SSHClient` [#135]. Thanks [@Remulic] and [@vicajilau].
+- Propagated the underlying exception in `SSHAuthAbortError` through `reason` for better diagnostics [#133]. Thanks [@james-thorpe] and [@vicajilau].
 
 ## [2.14.0] - 2026-03-19
 - Fixed SSH connections through bastion hosts where the target server sends its version string immediately upon connection (which is standard behavior per RFC 4253) [#141]. Thanks [@shihuili1218].
@@ -182,6 +183,7 @@
 
 [#141]: https://github.com/TerminalStudio/dartssh2/pull/141
 [#140]: https://github.com/TerminalStudio/dartssh2/pull/140
+[#133]: https://github.com/TerminalStudio/dartssh2/pull/133
 [#135]: https://github.com/TerminalStudio/dartssh2/pull/135
 [#131]: https://github.com/TerminalStudio/dartssh2/pull/131
 [#127]: https://github.com/TerminalStudio/dartssh2/pull/127
@@ -208,3 +210,4 @@
 [@reinbeumer]: https://github.com/reinbeumer
 [@alexander-irion]: https://github.com/alexander-irion
 [@Remulic]: https://github.com/Remulic
+[@james-thorpe]: https://github.com/james-thorpe
