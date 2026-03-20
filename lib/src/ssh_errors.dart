@@ -50,9 +50,9 @@ class SSHAuthAbortError with SSHMessageError implements SSHAuthError {
   @override
   final String message;
 
-  final SSHError? reason;
+  final Object? reason;
 
-  SSHAuthAbortError(this.message, this.reason);
+  SSHAuthAbortError(this.message, [this.reason]);
 }
 
 /// Errors that happen when the library receives an malformed packet.

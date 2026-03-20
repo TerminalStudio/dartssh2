@@ -568,12 +568,11 @@ class SSHClient {
     _requestAuthentication();
   }
 
-
-  void _handleTransportClosed(SSHError? error) {
+  void _handleTransportClosed(Object? error) {
     printDebug?.call('SSHClient._onTransportClosed');
     if (!_authenticated.isCompleted) {
       _authenticated.completeError(
-        SSHAuthAbortError('Connection closed before authentication', error)
+        SSHAuthAbortError('Connection closed before authentication', error),
       );
     }
     _keepAlive?.stop();
