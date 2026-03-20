@@ -41,6 +41,8 @@ typedef SSHAuthenticatedHandler = void Function();
 
 typedef SSHRemoteConnectionFilter = bool Function(String host, int port);
 
+typedef SSHX11ForwardHandler = void Function(SSHX11Channel channel);
+
 // /// Function called when the host has sent additional host keys after the initial
 // /// key exchange.
 // typedef SSHHostKeysHandler = void Function(List<Uint8List>);
@@ -71,6 +73,27 @@ class SSHPtyConfig {
     this.height = 24,
     this.pixelWidth = 0,
     this.pixelHeight = 0,
+  });
+}
+
+class SSHX11Config {
+  /// Whether only a single forwarded X11 connection should be accepted.
+  final bool singleConnection;
+
+  /// X11 authentication protocol name.
+  final String authenticationProtocol;
+
+  /// X11 authentication cookie value.
+  final String authenticationCookie;
+
+  /// X11 screen number.
+  final int screenNumber;
+
+  const SSHX11Config({
+    required this.authenticationCookie,
+    this.singleConnection = false,
+    this.authenticationProtocol = 'MIT-MAGIC-COOKIE-1',
+    this.screenNumber = 0,
   });
 }
 
@@ -122,6 +145,9 @@ class SSHClient {
   /// Function called when authentication is complete.
   final SSHAuthenticatedHandler? onAuthenticated;
 
+  /// Function called when the server opens an incoming forwarded X11 channel.
+  final SSHX11ForwardHandler? onX11Forward;
+
   /// The interval at which to send a keep-alive message through the [ping]
   /// method. Set this to null to disable automatic keep-alive messages.
   final Duration? keepAliveInterval;
@@ -154,6 +180,7 @@ class SSHClient {
     this.onUserInfoRequest,
     this.onUserauthBanner,
     this.onAuthenticated,
+    this.onX11Forward,
     this.keepAliveInterval = const Duration(seconds: 10),
     this.disableHostkeyVerification = false,
   }) {
@@ -316,6 +343,7 @@ class SSHClient {
   Future<SSHSession> execute(
     String command, {
     SSHPtyConfig? pty,
+    SSHX11Config? x11,
     Map<String, String>? environment,
   }) async {
     await _authenticated.future;
@@ -342,6 +370,19 @@ class SSHClient {
       }
     }
 
+    if (x11 != null) {
+      final x11Ok = await channelController.sendX11Req(
+        singleConnection: x11.singleConnection,
+        authenticationProtocol: x11.authenticationProtocol,
+        authenticationCookie: x11.authenticationCookie,
+        screenNumber: x11.screenNumber,
+      );
+      if (!x11Ok) {
+        channelController.close();
+        throw SSHChannelRequestError('Failed to request x11 forwarding');
+      }
+    }
+
     final success = await channelController.sendExec(command);
     if (!success) {
       channelController.close();
@@ -355,6 +396,7 @@ class SSHClient {
   /// used to read, write and control the pty on the remote side.
   Future<SSHSession> shell({
     SSHPtyConfig? pty = const SSHPtyConfig(),
+    SSHX11Config? x11,
     Map<String, String>? environment,
   }) async {
     await _authenticated.future;
@@ -378,6 +420,19 @@ class SSHClient {
       if (!ok) {
         channelController.close();
         throw SSHChannelRequestError('Failed to start pty');
+      }
+    }
+
+    if (x11 != null) {
+      final x11Ok = await channelController.sendX11Req(
+        singleConnection: x11.singleConnection,
+        authenticationProtocol: x11.authenticationProtocol,
+        authenticationCookie: x11.authenticationCookie,
+        screenNumber: x11.screenNumber,
+      );
+      if (!x11Ok) {
+        channelController.close();
+        throw SSHChannelRequestError('Failed to request x11 forwarding');
       }
     }
 
@@ -701,6 +756,8 @@ class SSHClient {
     switch (message.channelType) {
       case 'forwarded-tcpip':
         return _handleForwardedTcpipChannelOpen(message);
+      case 'x11':
+        return _handleX11ChannelOpen(message);
     }
 
     printDebug?.call('unknown channelType: ${message.channelType}');
@@ -762,6 +819,47 @@ class SSHClient {
 
     remoteForward._connections.add(
       SSHForwardChannel(channelController.channel),
+    );
+  }
+
+  void _handleX11ChannelOpen(SSH_Message_Channel_Open message) {
+    printDebug?.call('SSHClient._handleX11ChannelOpen');
+
+    if (onX11Forward == null) {
+      final reply = SSH_Message_Channel_Open_Failure(
+        recipientChannel: message.senderChannel,
+        reasonCode: 1, // SSH_OPEN_ADMINISTRATIVELY_PROHIBITED
+        description: 'x11 forwarding not enabled',
+      );
+      _sendMessage(reply);
+      return;
+    }
+
+    final localChannelId = _channelIdAllocator.allocate();
+
+    final confirmation = SSH_Message_Channel_Confirmation(
+      recipientChannel: message.senderChannel,
+      senderChannel: localChannelId,
+      initialWindowSize: _initialWindowSize,
+      maximumPacketSize: _maximumPacketSize,
+      data: Uint8List(0),
+    );
+
+    _sendMessage(confirmation);
+
+    final channelController = _acceptChannel(
+      localChannelId: localChannelId,
+      remoteChannelId: message.senderChannel,
+      remoteInitialWindowSize: message.initialWindowSize,
+      remoteMaximumPacketSize: message.maximumPacketSize,
+    );
+
+    onX11Forward!(
+      SSHX11Channel(
+        channelController.channel,
+        originatorIP: message.originatorIP ?? '',
+        originatorPort: message.originatorPort ?? 0,
+      ),
     );
   }
 
