@@ -1,0 +1,19 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 3%
+        flags:
+          - unittests
+    patch:
+      default:
+        target: auto
+        threshold: 3%
+        flags:
+          - unittests
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: false

@@ -139,6 +139,17 @@ class SSHChannelController {
     return await _requestReplyQueue.next;
   }
 
+  Future<bool> sendAgentForwardingRequest() async {
+    sendMessage(
+      SSH_Message_Channel_Request(
+        recipientChannel: remoteId,
+        requestType: SSHChannelRequestType.authAgent,
+        wantReply: true,
+      ),
+    );
+    return await _requestReplyQueue.next;
+  }
+
   Future<bool> sendSubsystem(String subsystem) async {
     sendMessage(
       SSH_Message_Channel_Request.subsystem(

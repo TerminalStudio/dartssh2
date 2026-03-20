@@ -1,3 +1,6 @@
+@Tags(['integration'])
+library sftp_stream_io_test;
+
 import 'package:dartssh2/dartssh2.dart';
 import 'package:test/test.dart';
 
