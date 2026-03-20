@@ -159,6 +159,10 @@ class SSHClient {
   /// Allow to disable hostkey verification, which can be slow in debug mode.
   final bool disableHostkeyVerification;
 
+  /// Identification string advertised during the SSH version exchange (the part
+  /// after `SSH-2.0-`). Defaults to `'DartSSH_2.0'`
+  final String ident;
+
   /// A [Future] that completes when the transport is closed, or when an error
   /// occurs. After this [Future] completes, [isClosed] will be true and no more
   /// data can be sent or received.
@@ -183,6 +187,7 @@ class SSHClient {
     this.onX11Forward,
     this.keepAliveInterval = const Duration(seconds: 10),
     this.disableHostkeyVerification = false,
+    this.ident = 'DartSSH_2.0',
   }) {
     _transport = SSHTransport(
       socket,
@@ -194,6 +199,7 @@ class SSHClient {
       onReady: _handleTransportReady,
       onPacket: _handlePacket,
       disableHostkeyVerification: disableHostkeyVerification,
+      version: ident,
     );
 
     _transport.done.then(
