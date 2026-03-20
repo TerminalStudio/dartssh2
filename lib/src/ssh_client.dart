@@ -187,8 +187,8 @@ class SSHClient {
     this.onX11Forward,
     this.keepAliveInterval = const Duration(seconds: 10),
     this.disableHostkeyVerification = false,
-    this.ident = 'DartSSH_2.0',
-  }) {
+    String ident = 'DartSSH_2.0',
+  }) : ident = _validateIdent(ident) {
     _transport = SSHTransport(
       socket,
       isServer: false,
@@ -214,6 +214,26 @@ class SSHClient {
     if (identities != null) {
       _keyPairsLeft.addAll(identities!);
     }
+  }
+
+  static String _validateIdent(String ident) {
+    if (ident.isEmpty) {
+      throw ArgumentError.value(
+        ident,
+        'ident',
+        'must not be empty',
+      );
+    }
+
+    if (ident.contains('\r') || ident.contains('\n')) {
+      throw ArgumentError.value(
+        ident,
+        'ident',
+        'must not contain carriage return or newline characters',
+      );
+    }
+
+    return ident;
   }
 
   late final SSHTransport _transport;

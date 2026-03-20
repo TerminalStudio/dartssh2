@@ -1,10 +1,11 @@
 ## [2.15.0] - yyyy-mm-dd
-- Updated `pointycastle` dependency to `^4.0.0` [#131]. Thanks @vicajilau.
-- Added foundational X11 forwarding support with session x11-req API, incoming x11 channel handling, and protocol tests [#1]. Thanks @vicajilau.
+- Updated `pointycastle` dependency to `^4.0.0` [#131]. Thanks [@vicajilau].
+- Added foundational X11 forwarding support with session x11-req API, incoming x11 channel handling, and protocol tests [#1]. Thanks [@vicajilau].
+- Exposed SSH ident configuration from `SSHClient` [#135]. Thanks [@Remulic] and [@vicajilau].
 
 ## [2.14.0] - 2026-03-19
-- Fixed SSH connections through bastion hosts where the target server sends its version string immediately upon connection (which is standard behavior per RFC 4253) [#141]. Thanks @shihuili1218.
-- Adds a new forwardLocalUnix() function, which is an equivalent of ssh -L localPort:remoteSocketPath [#140]. Thanks @isegal.
+- Fixed SSH connections through bastion hosts where the target server sends its version string immediately upon connection (which is standard behavior per RFC 4253) [#141]. Thanks [@shihuili1218].
+- Adds a new forwardLocalUnix() function, which is an equivalent of ssh -L localPort:remoteSocketPath [#140]. Thanks [@isegal].
 
 ## [2.13.0] - 2025-06-22
 - docs: Update NoPorts naming [#115]. [@XavierChanth].
@@ -179,6 +180,10 @@
 
 - Initial release.
 
+[#141]: https://github.com/TerminalStudio/dartssh2/pull/141
+[#140]: https://github.com/TerminalStudio/dartssh2/pull/140
+[#135]: https://github.com/TerminalStudio/dartssh2/pull/135
+[#131]: https://github.com/TerminalStudio/dartssh2/pull/131
 [#127]: https://github.com/TerminalStudio/dartssh2/pull/127
 [#126]: https://github.com/TerminalStudio/dartssh2/pull/126
 [#125]: https://github.com/TerminalStudio/dartssh2/pull/125
@@ -202,3 +207,4 @@
 [@MarBazuz]: https://github.com/MarBazuz
 [@reinbeumer]: https://github.com/reinbeumer
 [@alexander-irion]: https://github.com/alexander-irion
+[@Remulic]: https://github.com/Remulic
