@@ -239,4 +239,55 @@ void main() {
 
     controller.destroy();
   });
+
+  test('SSHAgentChannel ignores incomplete frame when channel closes',
+      () async {
+    final dataMessages = <SSH_Message_Channel_Data>[];
+    final handler = _RecordingAgentHandler(Uint8List.fromList([1]));
+
+    final controller = SSHChannelController(
+      localId: 1,
+      localMaximumPacketSize: 1024,
+      localInitialWindowSize: 1024,
+      remoteId: 2,
+      remoteMaximumPacketSize: 1024,
+      remoteInitialWindowSize: 1024,
+      sendMessage: (message) {
+        if (message is SSH_Message_Channel_Data) {
+          dataMessages.add(message);
+        }
+      },
+    );
+
+    SSHAgentChannel(controller.channel, handler);
+
+    final truncatedFrame = Uint8List.fromList([
+      0,
+      0,
+      0,
+      10,
+      SSHAgentProtocol.requestIdentities,
+    ]);
+
+    controller.handleMessage(
+      SSH_Message_Channel_Data(
+        recipientChannel: controller.localId,
+        data: truncatedFrame,
+      ),
+    );
+
+    controller.handleMessage(
+      SSH_Message_Channel_EOF(recipientChannel: controller.localId),
+    );
+    controller.handleMessage(
+      SSH_Message_Channel_Close(recipientChannel: controller.localId),
+    );
+
+    await Future<void>.delayed(Duration.zero);
+
+    expect(handler.requests, isEmpty);
+    expect(dataMessages, isEmpty);
+
+    controller.destroy();
+  });
 }
