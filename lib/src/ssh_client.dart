@@ -390,7 +390,11 @@ class SSHClient {
     }
 
     if (agentHandler != null) {
-      await channelController.sendAgentForwardingRequest();
+      final agentOk = await channelController.sendAgentForwardingRequest();
+      if (!agentOk) {
+        channelController.close();
+        throw SSHChannelRequestError('Failed to request agent forwarding');
+      }
     }
 
     if (pty != null) {
@@ -447,7 +451,11 @@ class SSHClient {
     }
 
     if (agentHandler != null) {
-      await channelController.sendAgentForwardingRequest();
+      final agentOk = await channelController.sendAgentForwardingRequest();
+      if (!agentOk) {
+        channelController.close();
+        throw SSHChannelRequestError('Failed to request agent forwarding');
+      }
     }
 
     if (pty != null) {
@@ -911,7 +919,8 @@ class SSHClient {
     if (handler == null) {
       final reply = SSH_Message_Channel_Open_Failure(
         recipientChannel: message.senderChannel,
-        reasonCode: SSH_Message_Channel_Open_Failure.codeUnknownChannelType,
+        reasonCode:
+            SSH_Message_Channel_Open_Failure.codeAdministrativelyProhibited,
         description: 'agent forwarding not enabled',
       );
       _sendMessage(reply);

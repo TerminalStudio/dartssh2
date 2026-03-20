@@ -68,4 +68,37 @@ void main() {
       expect(signature.type, entry.value);
     }
   });
+
+  test('SSHKeyPairAgent returns failure for empty and unknown requests',
+      () async {
+    final identity = rsaIdentity();
+    final agent = SSHKeyPairAgent([identity]);
+
+    final emptyResponse = await agent.handleRequest(Uint8List(0));
+    expect(
+        SSHMessageReader(emptyResponse).readUint8(), SSHAgentProtocol.failure);
+
+    final unknownWriter = SSHMessageWriter();
+    unknownWriter.writeUint8(255);
+    final unknownResponse =
+        await agent.handleRequest(unknownWriter.takeBytes());
+    expect(
+      SSHMessageReader(unknownResponse).readUint8(),
+      SSHAgentProtocol.failure,
+    );
+  });
+
+  test('SSHKeyPairAgent returns failure when signing with unknown identity',
+      () async {
+    final agent = SSHKeyPairAgent([rsaIdentity()]);
+    final writer = SSHMessageWriter();
+    writer.writeUint8(SSHAgentProtocol.signRequest);
+    writer.writeString(Uint8List.fromList([0, 1, 2, 3]));
+    writer.writeString(Uint8List.fromList('sign-me'.codeUnits));
+    writer.writeUint32(SSHAgentProtocol.rsaSha2_256);
+
+    final response = await agent.handleRequest(writer.takeBytes());
+
+    expect(SSHMessageReader(response).readUint8(), SSHAgentProtocol.failure);
+  });
 }
