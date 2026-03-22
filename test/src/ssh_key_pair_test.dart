@@ -8,10 +8,6 @@ import 'package:test/test.dart';
 
 import '../test_utils.dart';
 
-// extension StringReadAsFile on String {
-//   String readFile() => File(this).readAsStringSync();
-// }
-
 void main() {
   final rsaPrivate = fixture('ssh-rsa/id_rsa');
   final rsaPrivateOpenSSH = fixture('ssh-rsa/id_rsa.openssh');
@@ -20,8 +16,8 @@ void main() {
   final rsaPassphrase = fixture('ssh-rsa-passphrase/passphrase');
 
   final ecdsaNistP256Private = fixture('ecdsa-sha2-nistp256/id_ecdsa');
-  // final ecdsaNistP384Private = fixture('ecdsa-sha2-nistp384/id_ecdsa');
-  // final ecdsaNistP521Private = fixture('ecdsa-sha2-nistp521/id_ecdsa');
+  final ecdsaNistP384Private = fixture('ecdsa-sha2-nistp384/id_ecdsa');
+  final ecdsaNistP521Private = fixture('ecdsa-sha2-nistp521/id_ecdsa');
 
   final ed25519Private = fixture('ssh-ed25519/id_ed25519');
   final ed25519PrivateEncrypted = fixture('ssh-ed25519-passphrase/id_ed25519');
@@ -80,6 +76,24 @@ MAA=
     final keypair = SSHKeyPair.fromPem(pem);
     expect(keypair.length, 1);
     expect(keypair.single, isA<OpenSSHEcdsaKeyPair>());
+  });
+
+  test('SSHKeyPair.fromPem works with ECDSA nistp384 private key', () async {
+    final pem = ecdsaNistP384Private;
+    final keypairs = SSHKeyPair.fromPem(pem);
+
+    expect(keypairs.length, 1);
+    final keypair = keypairs.single as OpenSSHEcdsaKeyPair;
+    expect(keypair.curveId, 'nistp384');
+  });
+
+  test('SSHKeyPair.fromPem works with ECDSA nistp521 private key', () async {
+    final pem = ecdsaNistP521Private;
+    final keypairs = SSHKeyPair.fromPem(pem);
+
+    expect(keypairs.length, 1);
+    final keypair = keypairs.single as OpenSSHEcdsaKeyPair;
+    expect(keypair.curveId, 'nistp521');
   });
 
   test('SSHKeyPair.fromPem works with Ed25519 private key', () async {
@@ -225,6 +239,30 @@ MAA=
     final keypair2 = SSHKeyPair.fromPem(pem2).single as OpenSSHEcdsaKeyPair;
 
     expect(pem1.length, pem2.length);
+
+    expect(keypair1.curveId, keypair2.curveId);
+    expect(keypair1.d, keypair2.d);
+    expect(keypair1.q, keypair2.q);
+  });
+
+  test('OpenSSHEcdsaKeyPair.toPem() works for nistp384', () async {
+    final pem1 = ecdsaNistP384Private;
+    final keypair1 = SSHKeyPair.fromPem(pem1).single as OpenSSHEcdsaKeyPair;
+
+    final pem2 = keypair1.toPem();
+    final keypair2 = SSHKeyPair.fromPem(pem2).single as OpenSSHEcdsaKeyPair;
+
+    expect(keypair1.curveId, keypair2.curveId);
+    expect(keypair1.d, keypair2.d);
+    expect(keypair1.q, keypair2.q);
+  });
+
+  test('OpenSSHEcdsaKeyPair.toPem() works for nistp521', () async {
+    final pem1 = ecdsaNistP521Private;
+    final keypair1 = SSHKeyPair.fromPem(pem1).single as OpenSSHEcdsaKeyPair;
+
+    final pem2 = keypair1.toPem();
+    final keypair2 = SSHKeyPair.fromPem(pem2).single as OpenSSHEcdsaKeyPair;
 
     expect(keypair1.curveId, keypair2.curveId);
     expect(keypair1.d, keypair2.d);
