@@ -1,5 +1,6 @@
 ## [2.16.0] - 2026-03-22
-- Clarified shell stdio wiring for CLI-only usage and guarded `example/shell.dart` against missing local terminal handles (for example GUI-launched Windows `.exe`) [#121]. Thanks [@bradmartin333].
+- **BREAKING**: Changed `SSHChannelController.sendEnv()` from `void` to `Future<bool>` to properly await environment variable setup responses and avoid race conditions with PTY requests [#102]. Thanks [@itzhoujun] and [@vicajilau].
+- Clarified shell stdio wiring for CLI-only usage and guarded `example/shell.dart` against missing local terminal handles (for example GUI-launched Windows `.exe`) [#121]. Thanks [@bradmartin333] and [@vicajilau].
 
 ## [2.15.0] - 2026-03-20
 - Updated `pointycastle` dependency to `^4.0.0` [#131]. Thanks [@vicajilau].
@@ -191,6 +192,7 @@
 [#141]: https://github.com/TerminalStudio/dartssh2/pull/141
 [#140]: https://github.com/TerminalStudio/dartssh2/pull/140
 [#145]: https://github.com/TerminalStudio/dartssh2/pull/145
+[#102]: https://github.com/TerminalStudio/dartssh2/issues/102
 [#121]: https://github.com/TerminalStudio/dartssh2/issues/121
 [#139]: https://github.com/TerminalStudio/dartssh2/pull/139
 [#132]: https://github.com/TerminalStudio/dartssh2/pull/132
@@ -222,6 +224,7 @@
 [@alexander-irion]: https://github.com/alexander-irion
 [@Remulic]: https://github.com/Remulic
 [@james-thorpe]: https://github.com/james-thorpe
+[@itzhoujun]: https://github.com/itzhoujun
 [@bradmartin333]: https://github.com/bradmartin333
 [@Wackymax]: https://github.com/Wackymax
 [@vicajilau]: https://github.com/vicajilau

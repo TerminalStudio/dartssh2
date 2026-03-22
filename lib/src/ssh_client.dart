@@ -385,7 +385,13 @@ class SSHClient {
 
     if (environment != null) {
       for (var pair in environment.entries) {
-        channelController.sendEnv(pair.key, pair.value);
+        final envOk = await channelController.sendEnv(pair.key, pair.value);
+        if (!envOk) {
+          channelController.close();
+          throw SSHChannelRequestError(
+            'Failed to set environment variable: ${pair.key}',
+          );
+        }
       }
     }
 
@@ -446,7 +452,13 @@ class SSHClient {
 
     if (environment != null) {
       for (var pair in environment.entries) {
-        channelController.sendEnv(pair.key, pair.value);
+        final envOk = await channelController.sendEnv(pair.key, pair.value);
+        if (!envOk) {
+          channelController.close();
+          throw SSHChannelRequestError(
+            'Failed to set environment variable: ${pair.key}',
+          );
+        }
       }
     }
 
