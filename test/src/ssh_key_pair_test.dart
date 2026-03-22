@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:asn1lib/asn1lib.dart';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:dartssh2/src/hostkey/hostkey_ecdsa.dart';
 import 'package:test/test.dart';
@@ -40,6 +41,33 @@ ybMM3pZ6HeBa89ariwVsl/wCYzZfgR64JAC1nQ==
   const legacyEcPublicKey =
       'ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBENxFGQDkuMiuNwSl+YJdQT1FjzdwrFNMa6bX8ZyLVA9+Iz3NMmzDN6Weh3gWvPWq4sFbJf8AmM2X4EeuCQAtZ0= ecdsa 256-083024';
 
+  final legacyEcPrivateKeyWithoutPublic = () {
+    final pem = SSHPem.decode(legacyEcPrivateKey);
+    final sequence = ASN1Parser(pem.content).nextObject() as ASN1Sequence;
+    final stripped = ASN1Sequence();
+    for (final element in sequence.elements) {
+      if (element.tag != 0xA1) {
+        stripped.add(element);
+      }
+    }
+    return SSHPem('EC PRIVATE KEY', {}, stripped.encodedBytes).encode(64);
+  }();
+
+  final legacyEcPrivateKeyEncrypted = () {
+    final lines = legacyEcPrivateKey.trim().split('\n');
+    final body = lines.sublist(1, lines.length - 1).join('\n');
+    return '''-----BEGIN EC PRIVATE KEY-----
+Proc-Type: 4,ENCRYPTED
+DEK-Info: DES-EDE3-CBC,74E0BC77BE064544
+
+$body
+-----END EC PRIVATE KEY-----''';
+  }();
+
+  const malformedEcPrivateKey = '''-----BEGIN EC PRIVATE KEY-----
+MAA=
+-----END EC PRIVATE KEY-----''';
+
   test('SSHKeyPair.fromPem works with RSA private key', () async {
     final pem = rsaPrivate;
     final keypair = SSHKeyPair.fromPem(pem);
@@ -72,6 +100,49 @@ ybMM3pZ6HeBa89ariwVsl/wCYzZfgR64JAC1nQ==
     final publicKey = SSHEcdsaPublicKey.decode(Uint8List.fromList(publicBlob));
 
     expect(keypair.q, publicKey.q);
+  });
+
+  test(
+    'SSHKeyPair.fromPem works with legacy EC PRIVATE KEY without embedded public key',
+    () async {
+      final keypairs = SSHKeyPair.fromPem(legacyEcPrivateKeyWithoutPublic);
+      expect(keypairs.length, 1);
+      final keypair = keypairs.single as OpenSSHEcdsaKeyPair;
+
+      final publicBlob = base64.decode(legacyEcPublicKey.split(' ')[1]);
+      final publicKey =
+          SSHEcdsaPublicKey.decode(Uint8List.fromList(publicBlob));
+
+      expect(keypair.curveId, 'nistp256');
+      expect(keypair.q, publicKey.q);
+    },
+  );
+
+  test('SSHKeyPair.fromPem rejects passphrase for unencrypted EC PRIVATE KEY',
+      () {
+    expect(
+      () => SSHKeyPair.fromPem(legacyEcPrivateKey, 'test'),
+      throwsArgumentError,
+    );
+  });
+
+  test('SSHKeyPair.isEncryptedPem detects encrypted EC PRIVATE KEY', () {
+    expect(SSHKeyPair.isEncryptedPem(legacyEcPrivateKeyEncrypted), isTrue);
+  });
+
+  test('SSHKeyPair.fromPem rejects encrypted EC PRIVATE KEY for now', () {
+    expect(
+      () => SSHKeyPair.fromPem(legacyEcPrivateKeyEncrypted),
+      throwsA(isA<UnsupportedError>()),
+    );
+  });
+
+  test('SSHKeyPair.fromPem throws decode error on malformed EC PRIVATE KEY',
+      () {
+    expect(
+      () => SSHKeyPair.fromPem(malformedEcPrivateKey),
+      throwsA(isA<SSHKeyDecodeError>()),
+    );
   });
 
   test('SSHKeyPair.isEncryptedPem works with RSA private key', () async {
