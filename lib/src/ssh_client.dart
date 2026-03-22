@@ -98,6 +98,31 @@ class SSHX11Config {
   });
 }
 
+class SSHRunResult {
+  /// Combined output stream based on [SSHClient.runWithResult] capture flags.
+  final Uint8List output;
+
+  /// Captured stdout bytes. Empty when stdout capture is disabled.
+  final Uint8List stdout;
+
+  /// Captured stderr bytes. Empty when stderr capture is disabled.
+  final Uint8List stderr;
+
+  /// Exit code reported by the remote process if available.
+  final int? exitCode;
+
+  /// Exit signal reported by the remote process if available.
+  final SSHSessionExitSignal? exitSignal;
+
+  const SSHRunResult({
+    required this.output,
+    required this.stdout,
+    required this.stderr,
+    required this.exitCode,
+    required this.exitSignal,
+  });
+}
+
 class SSHClient {
   final SSHSocket socket;
 
@@ -535,11 +560,31 @@ class SSHClient {
   }
 
   /// Execute [command] on the remote side non-interactively. Returns a
-  /// [Future<String?>] that completes with the output of the command.
+  /// [Future<Uint8List>] that completes with the combined command output.
   /// This is a convenience method over [execute]. If [stdout] is false,
   /// the standard output of the command will be ignored. If [stderr] is
   /// false, the standard error of the command will be ignored.
   Future<Uint8List> run(
+    String command, {
+    bool runInPty = false,
+    bool stdout = true,
+    bool stderr = true,
+    Map<String, String>? environment,
+  }) async {
+    final result = await runWithResult(
+      command,
+      runInPty: runInPty,
+      stdout: stdout,
+      stderr: stderr,
+      environment: environment,
+    );
+
+    return result.output;
+  }
+
+  /// Execute [command] on the remote side non-interactively and return
+  /// output together with exit metadata.
+  Future<SSHRunResult> runWithResult(
     String command, {
     bool runInPty = false,
     bool stdout = true,
@@ -552,26 +597,45 @@ class SSHClient {
       environment: environment,
     );
 
-    final result = BytesBuilder(copy: false);
+    final outputBuilder = BytesBuilder(copy: false);
+    final stdoutBuilder = BytesBuilder(copy: false);
+    final stderrBuilder = BytesBuilder(copy: false);
     final stdoutDone = Completer<void>();
     final stderrDone = Completer<void>();
 
     session.stdout.listen(
-      stdout ? result.add : (_) {},
+      stdout
+          ? (data) {
+              outputBuilder.add(data);
+              stdoutBuilder.add(data);
+            }
+          : (_) {},
       onDone: stdoutDone.complete,
       onError: stderrDone.completeError,
     );
 
     session.stderr.listen(
-      stderr ? result.add : (_) {},
+      stderr
+          ? (data) {
+              outputBuilder.add(data);
+              stderrBuilder.add(data);
+            }
+          : (_) {},
       onDone: stderrDone.complete,
       onError: stderrDone.completeError,
     );
 
     await stdoutDone.future;
     await stderrDone.future;
+    await session.done;
 
-    return result.takeBytes();
+    return SSHRunResult(
+      output: outputBuilder.takeBytes(),
+      stdout: stdoutBuilder.takeBytes(),
+      stderr: stderrBuilder.takeBytes(),
+      exitCode: session.exitCode,
+      exitSignal: session.exitSignal,
+    );
   }
 
   /// Send a empty message to the server to keep the connection alive.

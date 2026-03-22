@@ -181,6 +181,47 @@ void main() async {
 
 > `client.run()` is a convenience method that wraps `client.execute()` for running non-interactive commands.
 
+To also access command exit metadata:
+
+```dart
+void main() async {
+  final result = await client.runWithResult('echo hello');
+  print('exitCode: ${result.exitCode}');
+  print('stdout: ${utf8.decode(result.stdout)}');
+}
+```
+
+### End-to-end flow example
+
+Use `example/run_flows.dart` to test the main execution flows in one run:
+
+- `run()`
+- `runWithResult()`
+- `execute()`
+- optional `shell()` via `--shell`
+
+Run it with environment variables:
+
+```sh
+SSH_HOST=test.rebex.net SSH_PORT=22 SSH_USERNAME=demo SSH_PASSWORD=password dart run example/run_flows.dart
+```
+
+Run shell flow too:
+
+```sh
+SSH_HOST=test.rebex.net SSH_PORT=22 SSH_USERNAME=demo SSH_PASSWORD=password dart run example/run_flows.dart --shell
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:SSH_HOST = 'test.rebex.net'
+$env:SSH_PORT = '22'
+$env:SSH_USERNAME = 'demo'
+$env:SSH_PASSWORD = 'password'
+dart run example/run_flows.dart --shell
+```
+
 ### Start a process on remote host
 ```dart
 void main() async {

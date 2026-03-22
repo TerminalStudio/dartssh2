@@ -2,6 +2,7 @@
 - **BREAKING**: Changed `SSHChannelController.sendEnv()` from `void` to `Future<bool>` to properly await environment variable setup responses and avoid race conditions with PTY requests [#102]. Thanks [@itzhoujun] and [@vicajilau].
 - Clarified shell stdio wiring for CLI-only usage and guarded `example/shell.dart` against missing local terminal handles (for example GUI-launched Windows `.exe`) [#121]. Thanks [@bradmartin333] and [@vicajilau].
 - Added support for parsing legacy unencrypted `EC PRIVATE KEY` PEM format in `SSHKeyPair.fromPem` [#109]. Thanks [@jooy2] and [@vicajilau].
+- Added `SSHClient.runWithResult()` to expose command output together with `exitCode` and `exitSignal` while keeping `run()` as a convenience API [#99]. Thanks [@falrom] and [@vicajilau].
 
 ## [2.15.0] - 2026-03-20
 - Updated `pointycastle` dependency to `^4.0.0` [#131]. Thanks [@vicajilau].
@@ -194,6 +195,7 @@
 [#140]: https://github.com/TerminalStudio/dartssh2/pull/140
 [#145]: https://github.com/TerminalStudio/dartssh2/pull/145
 [#102]: https://github.com/TerminalStudio/dartssh2/issues/102
+[#99]: https://github.com/TerminalStudio/dartssh2/issues/99
 [#109]: https://github.com/TerminalStudio/dartssh2/issues/109
 [#121]: https://github.com/TerminalStudio/dartssh2/issues/121
 [#139]: https://github.com/TerminalStudio/dartssh2/pull/139
@@ -228,6 +230,7 @@
 [@james-thorpe]: https://github.com/james-thorpe
 [@itzhoujun]: https://github.com/itzhoujun
 [@jooy2]: https://github.com/jooy2
+[@falrom]: https://github.com/falrom
 [@bradmartin333]: https://github.com/bradmartin333
 [@Wackymax]: https://github.com/Wackymax
 [@vicajilau]: https://github.com/vicajilau
