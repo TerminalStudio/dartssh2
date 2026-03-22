@@ -1,3 +1,6 @@
+## [2.16.0] - 2026-03-22
+- Clarified shell stdio wiring for CLI-only usage and guarded `example/shell.dart` against missing local terminal handles (for example GUI-launched Windows `.exe`) [#121]. Thanks [@bradmartin333].
+
 ## [2.15.0] - 2026-03-20
 - Updated `pointycastle` dependency to `^4.0.0` [#131]. Thanks [@vicajilau].
 - Added foundational X11 forwarding support with session x11-req API, incoming x11 channel handling, and protocol tests [#1]. Thanks [@vicajilau].
@@ -188,6 +191,7 @@
 [#141]: https://github.com/TerminalStudio/dartssh2/pull/141
 [#140]: https://github.com/TerminalStudio/dartssh2/pull/140
 [#145]: https://github.com/TerminalStudio/dartssh2/pull/145
+[#121]: https://github.com/TerminalStudio/dartssh2/issues/121
 [#139]: https://github.com/TerminalStudio/dartssh2/pull/139
 [#132]: https://github.com/TerminalStudio/dartssh2/pull/132
 [#133]: https://github.com/TerminalStudio/dartssh2/pull/133
@@ -218,5 +222,6 @@
 [@alexander-irion]: https://github.com/alexander-irion
 [@Remulic]: https://github.com/Remulic
 [@james-thorpe]: https://github.com/james-thorpe
+[@bradmartin333]: https://github.com/bradmartin333
 [@Wackymax]: https://github.com/Wackymax
 [@vicajilau]: https://github.com/vicajilau
