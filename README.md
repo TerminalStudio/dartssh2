@@ -142,14 +142,24 @@ void main() async {
 ```dart
 void main() async {
   final shell = await client.shell();
-  stdout.addStream(shell.stdout); // listening for stdout
-  stderr.addStream(shell.stderr); // listening for stderr
-  stdin.cast<Uint8List>().listen(shell.write); // writing to stdin
+
+  // Attach local terminal streams only when a terminal is available.
+  // GUI apps on Windows may not have stdin/stdout/stderr attached.
+  final hasTerminal = stdin.hasTerminal && stdout.hasTerminal && stderr.hasTerminal;
+  if (hasTerminal) {
+    stdout.addStream(shell.stdout); // listening for stdout
+    stderr.addStream(shell.stderr); // listening for stderr
+    stdin.cast<Uint8List>().listen(shell.write); // writing to stdin
+  }
 
   await shell.done; // wait for shell to exit
   client.close();
 }
 ```
+
+> Note: The stdin/stdout bridging above is for CLI apps. If your app is launched
+> without a terminal (for example, double-clicking a Windows `.exe`), skip the
+> local stdio wiring and use your own UI/input pipeline.
 
 ### Execute a command on remote host
 
