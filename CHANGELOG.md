@@ -1,6 +1,7 @@
 ## [2.16.0] - 2026-03-22
 - **BREAKING**: Changed `SSHChannelController.sendEnv()` from `void` to `Future<bool>` to properly await environment variable setup responses and avoid race conditions with PTY requests [#102]. Thanks [@itzhoujun] and [@vicajilau].
 - Clarified shell stdio wiring for CLI-only usage and guarded `example/shell.dart` against missing local terminal handles (for example GUI-launched Windows `.exe`) [#121]. Thanks [@bradmartin333] and [@vicajilau].
+- Added support for parsing legacy unencrypted `EC PRIVATE KEY` PEM format in `SSHKeyPair.fromPem` [#109]. Thanks [@jooy2] and [@vicajilau].
 
 ## [2.15.0] - 2026-03-20
 - Updated `pointycastle` dependency to `^4.0.0` [#131]. Thanks [@vicajilau].
@@ -193,6 +194,7 @@
 [#140]: https://github.com/TerminalStudio/dartssh2/pull/140
 [#145]: https://github.com/TerminalStudio/dartssh2/pull/145
 [#102]: https://github.com/TerminalStudio/dartssh2/issues/102
+[#109]: https://github.com/TerminalStudio/dartssh2/issues/109
 [#121]: https://github.com/TerminalStudio/dartssh2/issues/121
 [#139]: https://github.com/TerminalStudio/dartssh2/pull/139
 [#132]: https://github.com/TerminalStudio/dartssh2/pull/132
@@ -225,6 +227,7 @@
 [@Remulic]: https://github.com/Remulic
 [@james-thorpe]: https://github.com/james-thorpe
 [@itzhoujun]: https://github.com/itzhoujun
+[@jooy2]: https://github.com/jooy2
 [@bradmartin333]: https://github.com/bradmartin333
 [@Wackymax]: https://github.com/Wackymax
 [@vicajilau]: https://github.com/vicajilau

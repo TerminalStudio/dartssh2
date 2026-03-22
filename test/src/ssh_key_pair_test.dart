@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
+import 'package:dartssh2/src/hostkey/hostkey_ecdsa.dart';
 import 'package:test/test.dart';
 
 import '../test_utils.dart';
@@ -24,6 +26,20 @@ void main() {
   final ed25519PrivateEncrypted = fixture('ssh-ed25519-passphrase/id_ed25519');
   final ed25519PrivatePassphrase = fixture('ssh-ed25519-passphrase/passphrase');
 
+  const legacyEcPrivateKey = '''-----BEGIN EC PRIVATE KEY-----
+MIIBaAIBAQQg7TXJD04t4e/CrwIdaxF1FJ+PSF0kTzMQs5TOp9L0MvKggfowgfcC
+AQEwLAYHKoZIzj0BAQIhAP////8AAAABAAAAAAAAAAAAAAAA////////////////
+MFsEIP////8AAAABAAAAAAAAAAAAAAAA///////////////8BCBaxjXYqjqT57Pr
+vVV2mIa8ZR0GsMxTsPY7zjw+J9JgSwMVAMSdNgiG5wSTamZ44ROdJreBn36QBEEE
+axfR8uEsQkf4vOblY6RA8ncDfYEt6zOg9KE5RdiYwpZP40Li/hp/m47n60p8D54W
+K84zV2sxXs7LtkBoN79R9QIhAP////8AAAAA//////////+85vqtpxeehPO5ysL8
+YyVRAgEBoUQDQgAEQ3EUZAOS4yK43BKX5gl1BPUWPN3CsU0xrptfxnItUD34jPc0
+ybMM3pZ6HeBa89ariwVsl/wCYzZfgR64JAC1nQ==
+-----END EC PRIVATE KEY-----''';
+
+  const legacyEcPublicKey =
+      'ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBENxFGQDkuMiuNwSl+YJdQT1FjzdwrFNMa6bX8ZyLVA9+Iz3NMmzDN6Weh3gWvPWq4sFbJf8AmM2X4EeuCQAtZ0= ecdsa 256-083024';
+
   test('SSHKeyPair.fromPem works with RSA private key', () async {
     final pem = rsaPrivate;
     final keypair = SSHKeyPair.fromPem(pem);
@@ -43,6 +59,19 @@ void main() {
     final keypairs = SSHKeyPair.fromPem(pem);
     expect(keypairs.length, 1);
     expect(keypairs.single, isA<OpenSSHEd25519KeyPair>());
+  });
+
+  test('SSHKeyPair.fromPem works with legacy EC PRIVATE KEY format', () async {
+    final keypairs = SSHKeyPair.fromPem(legacyEcPrivateKey);
+    expect(keypairs.length, 1);
+    final keypair = keypairs.single as OpenSSHEcdsaKeyPair;
+
+    expect(keypair.curveId, 'nistp256');
+
+    final publicBlob = base64.decode(legacyEcPublicKey.split(' ')[1]);
+    final publicKey = SSHEcdsaPublicKey.decode(Uint8List.fromList(publicBlob));
+
+    expect(keypair.q, publicKey.q);
   });
 
   test('SSHKeyPair.isEncryptedPem works with RSA private key', () async {
