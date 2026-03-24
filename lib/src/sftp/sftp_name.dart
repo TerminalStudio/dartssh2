@@ -15,8 +15,8 @@ class SftpName {
   });
 
   factory SftpName.readFrom(SSHMessageReader reader) {
-    final filename = reader.readUtf8();
-    final longname = reader.readUtf8();
+    final filename = reader.readUtf8(allowMalformed: true);
+    final longname = reader.readUtf8(allowMalformed: true);
     final attr = SftpFileAttrs.readFrom(reader);
     return SftpName(
       filename: filename,
