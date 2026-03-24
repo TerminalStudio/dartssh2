@@ -179,7 +179,9 @@ void main() async {
 }
 ```
 
-> `client.run()` is a convenience method that wraps `client.execute()` for running non-interactive commands.
+> `client.run()` is a convenience method that returns combined output bytes.
+> Use `client.runWithResult()` when you need separate `stdout` / `stderr`
+> streams and command exit metadata (`exitCode` / `exitSignal`).
 
 To also access command exit metadata:
 
@@ -188,6 +190,7 @@ void main() async {
   final result = await client.runWithResult('echo hello');
   print('exitCode: ${result.exitCode}');
   print('stdout: ${utf8.decode(result.stdout)}');
+  print('stderr: ${utf8.decode(result.stderr)}');
 }
 ```
 

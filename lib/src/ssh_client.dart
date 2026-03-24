@@ -564,6 +564,9 @@ class SSHClient {
   /// This is a convenience method over [execute]. If [stdout] is false,
   /// the standard output of the command will be ignored. If [stderr] is
   /// false, the standard error of the command will be ignored.
+  ///
+  /// Use [runWithResult] when you need separate stdout/stderr bytes or exit
+  /// metadata (`exitCode`/`exitSignal`).
   Future<Uint8List> run(
     String command, {
     bool runInPty = false,
