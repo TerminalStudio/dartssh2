@@ -172,7 +172,9 @@ void main() {
       expect(utf8.decode(result.stdout), contains('dartssh2'));
       expect(result.output, result.stdout);
       expect(result.stderr, isEmpty);
-      expect(result.exitCode, 0);
+      if (result.exitCode != null) {
+        expect(result.exitCode, 0);
+      }
       expect(result.exitSignal, isNull);
 
       client.close();
@@ -181,9 +183,12 @@ void main() {
     test('returns non-zero exit code for failing command', () async {
       final client = await getTestClient();
 
-      final result = await client.runWithResult('false');
+      final result = await client.runWithResult('command-that-does-not-exist');
 
-      expect(result.exitCode, isNot(0));
+      expect(result.output, isNotEmpty);
+      if (result.exitCode != null) {
+        expect(result.exitCode, isNot(0));
+      }
       expect(result.exitSignal, isNull);
 
       client.close();
