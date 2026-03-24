@@ -227,6 +227,51 @@ void main() {
       harness.dispose();
     });
 
+    test('downloadTo reports progress callback', () async {
+      final harness = _SftpHarness();
+      await harness.nextOutgoingPacket();
+      harness.sendResponsePacket(SftpVersionPacket(3));
+      await harness.client.handshake;
+
+      final fileFuture = harness.client.open('/tmp/file');
+      final open = SftpOpenPacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpHandlePacket(open.requestId, Uint8List.fromList([1, 2, 3])),
+      );
+      final file = await fileFuture;
+
+      var progress = -1;
+      final sink = _CollectingSink();
+      final downloadFuture = file.downloadTo(
+        sink,
+        length: 4,
+        chunkSize: 4,
+        maxPendingRequests: 1,
+        onProgress: (value) => progress = value,
+      );
+
+      final read = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpDataPacket(read.requestId, Uint8List.fromList('ABCD'.codeUnits)),
+      );
+
+      final bytes = await downloadFuture;
+      expect(bytes, 4);
+      expect(progress, 4);
+
+      final closeFuture = file.close();
+      final close = SftpClosePacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpStatusPacket(
+          requestId: close.requestId,
+          code: SftpStatusCode.ok,
+          message: 'ok',
+        ),
+      );
+      await closeFuture;
+      harness.dispose();
+    });
+
     test('download infers length from stat when not provided', () async {
       final harness = _SftpHarness();
       await harness.nextOutgoingPacket();
@@ -266,6 +311,51 @@ void main() {
       final bytes = await downloadFuture;
       expect(bytes, 4);
       expect(sink.bytes, Uint8List.fromList('WXYZ'.codeUnits));
+      harness.dispose();
+    });
+
+    test('write() returns writer and writes streamed data', () async {
+      final harness = _SftpHarness();
+      await harness.nextOutgoingPacket();
+      harness.sendResponsePacket(SftpVersionPacket(3));
+      await harness.client.handshake;
+
+      final fileFuture = harness.client.open('/tmp/file');
+      final open = SftpOpenPacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpHandlePacket(open.requestId, Uint8List.fromList([1, 2, 3])),
+      );
+      final file = await fileFuture;
+
+      final writer = file.write(
+        Stream.value(Uint8List.fromList('ABCD'.codeUnits)),
+      );
+
+      final write = SftpWritePacket.decode(await harness.nextOutgoingPacket());
+      expect(write.offset, 0);
+      expect(write.data, Uint8List.fromList('ABCD'.codeUnits));
+
+      harness.sendResponsePacket(
+        SftpStatusPacket(
+          requestId: write.requestId,
+          code: SftpStatusCode.ok,
+          message: 'ok',
+        ),
+      );
+
+      await writer.done;
+      expect(writer.progress, 4);
+
+      final closeFuture = file.close();
+      final close = SftpClosePacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpStatusPacket(
+          requestId: close.requestId,
+          code: SftpStatusCode.ok,
+          message: 'ok',
+        ),
+      );
+      await closeFuture;
       harness.dispose();
     });
   });
