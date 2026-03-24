@@ -119,6 +119,18 @@ void main() async {
 
 > `SSHSocket` is an interface and it's possible to implement your own `SSHSocket` if you want to use a different underlying transport rather than standard TCP socket. For example WebSocket or Unix domain socket.
 
+### Web support
+
+Direct native TCP sockets are not available in browsers, so this will fail on
+Flutter Web / Dart Web:
+
+```dart
+await SSHSocket.connect('host', 22);
+```
+
+For web apps, use a custom `SSHSocket` transport over a browser-supported
+channel (for example, a WebSocket tunnel/proxy to your SSH endpoint).
+
 ### Customize client SSH identification
 
 If your jump host or SSH gateway restricts client versions, you can customize the
