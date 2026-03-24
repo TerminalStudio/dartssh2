@@ -97,7 +97,214 @@ void main() {
       await expectLater(openFuture, throwsA(isA<SftpAbortError>()));
       harness.dispose();
     });
+
+    test('download keeps chunk order with pipelined reads', () async {
+      final harness = _SftpHarness();
+      await harness.nextOutgoingPacket();
+      harness.sendResponsePacket(SftpVersionPacket(3));
+      await harness.client.handshake;
+
+      final sink = _CollectingSink();
+      final downloadFuture = harness.client.download(
+        '/tmp/file',
+        sink,
+        length: 8,
+        chunkSize: 4,
+        maxPendingRequests: 2,
+      );
+
+      final open = SftpOpenPacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpHandlePacket(open.requestId, Uint8List.fromList([1, 2, 3])),
+      );
+
+      final read1 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+      final read2 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+
+      expect(read1.offset, 0);
+      expect(read2.offset, 4);
+
+      harness.sendResponsePacket(
+        SftpDataPacket(read2.requestId, Uint8List.fromList('EFGH'.codeUnits)),
+      );
+      harness.sendResponsePacket(
+        SftpDataPacket(read1.requestId, Uint8List.fromList('ABCD'.codeUnits)),
+      );
+
+      final close = SftpClosePacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpStatusPacket(
+          requestId: close.requestId,
+          code: SftpStatusCode.ok,
+          message: 'ok',
+        ),
+      );
+
+      final bytes = await downloadFuture;
+      expect(bytes, 8);
+      expect(sink.bytes, Uint8List.fromList('ABCDEFGH'.codeUnits));
+
+      harness.dispose();
+    });
+
+    test('read rejects invalid pipeline settings', () async {
+      final harness = _SftpHarness();
+      await harness.nextOutgoingPacket();
+      harness.sendResponsePacket(SftpVersionPacket(3));
+      await harness.client.handshake;
+
+      final fileFuture = harness.client.open('/tmp/file');
+      final open = SftpOpenPacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpHandlePacket(open.requestId, Uint8List.fromList([1, 2, 3])),
+      );
+      final file = await fileFuture;
+
+      await expectLater(
+        file.read(chunkSize: 0).toList(),
+        throwsA(isA<ArgumentError>()),
+      );
+      await expectLater(
+        file.read(maxPendingRequests: 0).toList(),
+        throwsA(isA<ArgumentError>()),
+      );
+
+      final closeFuture = file.close();
+      final close = SftpClosePacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpStatusPacket(
+          requestId: close.requestId,
+          code: SftpStatusCode.ok,
+          message: 'ok',
+        ),
+      );
+      await closeFuture;
+      harness.dispose();
+    });
+
+    test('downloadTo can close destination sink', () async {
+      final harness = _SftpHarness();
+      await harness.nextOutgoingPacket();
+      harness.sendResponsePacket(SftpVersionPacket(3));
+      await harness.client.handshake;
+
+      final fileFuture = harness.client.open('/tmp/file');
+      final open = SftpOpenPacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpHandlePacket(open.requestId, Uint8List.fromList([1, 2, 3])),
+      );
+      final file = await fileFuture;
+
+      final sink = _CollectingSink();
+      final downloadFuture = file.downloadTo(
+        sink,
+        length: 4,
+        chunkSize: 4,
+        maxPendingRequests: 1,
+        closeDestination: true,
+      );
+
+      final read = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpDataPacket(read.requestId, Uint8List.fromList('ABCD'.codeUnits)),
+      );
+
+      final bytes = await downloadFuture;
+      expect(bytes, 4);
+      expect(sink.bytes, Uint8List.fromList('ABCD'.codeUnits));
+      expect(sink.isClosed, isTrue);
+
+      final closeFuture = file.close();
+      final close = SftpClosePacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpStatusPacket(
+          requestId: close.requestId,
+          code: SftpStatusCode.ok,
+          message: 'ok',
+        ),
+      );
+      await closeFuture;
+      harness.dispose();
+    });
+
+    test('download infers length from stat when not provided', () async {
+      final harness = _SftpHarness();
+      await harness.nextOutgoingPacket();
+      harness.sendResponsePacket(SftpVersionPacket(3));
+      await harness.client.handshake;
+
+      final sink = _CollectingSink();
+      final downloadFuture = harness.client.download('/tmp/file', sink);
+
+      final open = SftpOpenPacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpHandlePacket(open.requestId, Uint8List.fromList([1, 2, 3])),
+      );
+
+      final fstat = SftpFStatPacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpAttrsPacket(
+          fstat.requestId,
+          SftpFileAttrs(size: 4, mode: const SftpFileMode.value(1 << 15)),
+        ),
+      );
+
+      final read = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpDataPacket(read.requestId, Uint8List.fromList('WXYZ'.codeUnits)),
+      );
+
+      final close = SftpClosePacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpStatusPacket(
+          requestId: close.requestId,
+          code: SftpStatusCode.ok,
+          message: 'ok',
+        ),
+      );
+
+      final bytes = await downloadFuture;
+      expect(bytes, 4);
+      expect(sink.bytes, Uint8List.fromList('WXYZ'.codeUnits));
+      harness.dispose();
+    });
   });
+}
+
+class _CollectingSink implements StreamSink<List<int>> {
+  final BytesBuilder _builder = BytesBuilder(copy: false);
+  final Completer<void> _done = Completer<void>();
+  var _isClosed = false;
+
+  Uint8List get bytes => _builder.toBytes();
+
+  bool get isClosed => _isClosed;
+
+  @override
+  void add(List<int> event) {
+    _builder.add(event);
+  }
+
+  @override
+  void addError(Object error, [StackTrace? stackTrace]) {}
+
+  @override
+  Future<void> addStream(Stream<List<int>> stream) async {
+    await for (final chunk in stream) {
+      add(chunk);
+    }
+  }
+
+  @override
+  Future<void> close() async {
+    _isClosed = true;
+    if (!_done.isCompleted) {
+      _done.complete();
+    }
+  }
+
+  @override
+  Future<void> get done => _done.future;
 }
 
 class _SftpHarness {

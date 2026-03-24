@@ -375,6 +375,71 @@ void main() async {
 }
 ```
 
+### Download remote file (high-level API)
+```dart
+void main() async {
+  final sftp = await client.sftp();
+  final output = File('local_file.txt').openWrite();
+
+  final bytes = await sftp.download(
+    '/remote/file.txt',
+    output,
+    onProgress: (bytesRead) => print('downloaded: $bytesRead bytes'),
+    closeDestination: true,
+  );
+
+  print('download complete: $bytes bytes');
+}
+```
+
+`download()` and `downloadTo()` are opt-in convenience APIs built on top of the
+existing stream-based behavior, so existing code remains fully compatible.
+
+When to use each API:
+
+- Use `sftp.download(path, sink)` when you only have a remote path and want the
+  simplest one-liner flow. It opens and closes the remote file for you.
+- Use `file.downloadTo(sink)` when you already have an open `SftpFile` (for
+  example you want partial downloads with `offset`/`length` or want to reuse the
+  same handle).
+
+```dart
+void main() async {
+  final sftp = await client.sftp();
+  final file = await sftp.open('/remote/file.txt');
+  final output = File('local_partial.bin').openWrite();
+
+  try {
+    // Download bytes [1024, 1024 + 4096) using an existing open handle.
+    await file.downloadTo(
+      output,
+      offset: 1024,
+      length: 4096,
+      closeDestination: true,
+    );
+  } finally {
+    await file.close();
+  }
+}
+```
+
+For high-latency links or large files, you can tune pipelining:
+
+```dart
+void main() async {
+  final sftp = await client.sftp();
+  final output = File('local_file.txt').openWrite();
+
+  await sftp.download(
+    '/remote/file.txt',
+    output,
+    chunkSize: 64 * 1024,
+    maxPendingRequests: 128,
+    closeDestination: true,
+  );
+}
+```
+
 ### Write remote file
 ```dart
 void main() async {
