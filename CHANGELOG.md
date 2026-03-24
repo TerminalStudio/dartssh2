@@ -3,6 +3,7 @@
 - Clarified shell stdio wiring for CLI-only usage and guarded `example/shell.dart` against missing local terminal handles (for example GUI-launched Windows `.exe`) [#121]. Thanks [@bradmartin333] and [@vicajilau].
 - Added support for parsing legacy unencrypted `EC PRIVATE KEY` PEM format in `SSHKeyPair.fromPem` [#109]. Thanks [@jooy2] and [@vicajilau].
 - Added `SSHClient.runWithResult()` to expose command output together with `exitCode` and `exitSignal` while keeping `run()` as a convenience API [#99]. Thanks [@falrom] and [@vicajilau].
+- Added non-breaking high-level SFTP `download()` / `downloadTo()` APIs and read pipeline tuning knobs (`chunkSize`, `maxPendingRequests`) for improved large-file throughput while preserving stream compatibility [#124]. Thanks [@vicajilau].
 
 ## [2.15.0] - 2026-03-20
 - Updated `pointycastle` dependency to `^4.0.0` [#131]. Thanks [@vicajilau].
@@ -198,6 +199,7 @@
 [#99]: https://github.com/TerminalStudio/dartssh2/issues/99
 [#109]: https://github.com/TerminalStudio/dartssh2/issues/109
 [#121]: https://github.com/TerminalStudio/dartssh2/issues/121
+[#124]: https://github.com/TerminalStudio/dartssh2/issues/124
 [#139]: https://github.com/TerminalStudio/dartssh2/pull/139
 [#132]: https://github.com/TerminalStudio/dartssh2/pull/132
 [#133]: https://github.com/TerminalStudio/dartssh2/pull/133
