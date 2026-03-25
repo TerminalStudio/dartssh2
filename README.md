@@ -28,7 +28,7 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
 -  **Pure Dart**: Working with both Dart VM and Flutter.
 -  **SSH Session**: Executing commands, spawning shells, setting environment variables, pseudo terminals, etc.
 -  **Authentication**: Supports password, private key and interactive authentication method.
--  **Forwarding**: Supports local forwarding and remote forwarding.
+-  **Forwarding**: Supports local forwarding, remote forwarding, and dynamic forwarding (SOCKS5 CONNECT).
 -  **SFTP**: Supports all operations defined in [SFTPv3 protocol](https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02) including upload, download, list, link, remove, rename, etc.
 
 ## 🧬 Built with dartssh2
@@ -295,6 +295,40 @@ void main() async {
   }
 }
 ```
+
+### Start a local SOCKS5 proxy through SSH (`ssh -D` style)
+
+```dart
+void main() async {
+  final dynamicForward = await client.forwardDynamic(
+    bindHost: '127.0.0.1',
+    bindPort: 1080,
+    options: const SSHDynamicForwardOptions(
+      handshakeTimeout: Duration(seconds: 10),
+      connectTimeout: Duration(seconds: 15),
+      maxConnections: 128,
+    ),
+    filter: (host, port) {
+      // Optional allow/deny policy.
+      return true;
+    },
+  );
+
+  print('SOCKS5 proxy at ${dynamicForward.host}:${dynamicForward.port}');
+}
+```
+
+This currently supports SOCKS5 `NO AUTH` + `CONNECT`.
+It requires `dart:io` and is not available on web runtimes.
+
+Quick verification from your terminal:
+
+```sh
+curl --proxy socks5h://127.0.0.1:1080 https://ifconfig.me
+```
+
+If the proxy is working, this command returns the public egress IP seen through
+the SSH tunnel.
 
 ### Authenticate with public keys
 
