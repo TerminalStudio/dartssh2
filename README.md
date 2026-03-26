@@ -629,6 +629,33 @@ void main() async {
 - `aes[128|192|256]-ctr`
 - `aes[128|192|256]-cbc`
 
+AES-GCM is currently available as opt-in via `SSHAlgorithms(cipher: ...)`, and is not enabled in the default cipher preference list yet.
+
+Example (opt-in AES-GCM with explicit fallback ciphers):
+
+```dart
+void main() async {
+  final client = SSHClient(
+    await SSHSocket.connect('localhost', 22),
+    username: '<username>',
+    onPasswordRequest: () => '<password>',
+    algorithms: const SSHAlgorithms(
+      cipher: [
+        SSHCipherType.aes256gcm,
+        SSHCipherType.aes128gcm,
+        SSHCipherType.aes256ctr,
+        SSHCipherType.aes128ctr,
+        SSHCipherType.aes256cbc,
+        SSHCipherType.aes128cbc,
+      ],
+    ),
+  );
+
+  // Use the client...
+  client.close();
+}
+```
+
 `chacha20-poly1305@openssh.com` is not supported yet.
 
 **Integrity**: 
