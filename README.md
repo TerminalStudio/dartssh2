@@ -625,8 +625,11 @@ void main() async {
 - `diffie-hellman-group1-sha1 `
   
 **Cipher**: 
+- `aes[128|256]-gcm@openssh.com`
 - `aes[128|192|256]-ctr`
 - `aes[128|192|256]-cbc`
+
+`chacha20-poly1305@openssh.com` is not supported yet.
 
 **Integrity**: 
 - `hmac-md5`
