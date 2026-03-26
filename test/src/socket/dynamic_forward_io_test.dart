@@ -165,6 +165,210 @@ void main() {
       expect(reply[0], 0x05);
       expect(reply[1], 0x06); // ttl expired
     });
+
+    test('forwards pending bytes sent with CONNECT request', () async {
+      late _DialedTunnel dialed;
+
+      final forward = await startDynamicForward(
+        bindHost: '127.0.0.1',
+        bindPort: 0,
+        options: const SSHDynamicForwardOptions(),
+        dial: (_, __) async {
+          dialed = _DialedTunnel.create();
+          return dialed.channel;
+        },
+      );
+
+      final client = await Socket.connect(forward.host, forward.port);
+      final incoming = client.asBroadcastStream();
+      addTearDown(() async {
+        await client.close();
+        await forward.close();
+        dialed.dispose();
+      });
+
+      await _sendGreeting(client, incoming);
+
+      final hostBytes = utf8.encode('pending.test');
+      client.add([
+        0x05,
+        0x01,
+        0x00,
+        0x03,
+        hostBytes.length,
+        ...hostBytes,
+        0x00,
+        0x50,
+        ...utf8.encode('EXTRA'),
+      ]);
+
+      final reply = await _readAtLeast(incoming, 10);
+      expect(reply[1], 0x00);
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(utf8.decode(dialed.sentToRemote), 'EXTRA');
+    });
+
+    test('rejects unsupported greeting version', () async {
+      final forward = await startDynamicForward(
+        bindHost: '127.0.0.1',
+        bindPort: 0,
+        options: const SSHDynamicForwardOptions(),
+        dial: (_, __) async => _DialedTunnel.create().channel,
+      );
+      addTearDown(() => forward.close());
+
+      final client = await Socket.connect(forward.host, forward.port);
+      final incoming = client.asBroadcastStream();
+      addTearDown(() => client.close());
+
+      client.add([0x04, 0x01, 0x00]);
+      final reply = await _readAtLeast(incoming, 2);
+      expect(reply[0], 0x05);
+      expect(reply[1], 0xFF);
+    });
+
+    test('rejects unsupported authentication method', () async {
+      final forward = await startDynamicForward(
+        bindHost: '127.0.0.1',
+        bindPort: 0,
+        options: const SSHDynamicForwardOptions(),
+        dial: (_, __) async => _DialedTunnel.create().channel,
+      );
+      addTearDown(() => forward.close());
+
+      final client = await Socket.connect(forward.host, forward.port);
+      final incoming = client.asBroadcastStream();
+      addTearDown(() => client.close());
+
+      client.add([0x05, 0x01, 0x02]);
+      final reply = await _readAtLeast(incoming, 2);
+      expect(reply[0], 0x05);
+      expect(reply[1], 0xFF);
+    });
+
+    test('rejects unsupported request version', () async {
+      final forward = await startDynamicForward(
+        bindHost: '127.0.0.1',
+        bindPort: 0,
+        options: const SSHDynamicForwardOptions(),
+        dial: (_, __) async => _DialedTunnel.create().channel,
+      );
+      addTearDown(() => forward.close());
+
+      final client = await Socket.connect(forward.host, forward.port);
+      final incoming = client.asBroadcastStream();
+      addTearDown(() => client.close());
+
+      await _sendGreeting(client, incoming);
+      client.add([0x04, 0x01, 0x00, 0x01, 127, 0, 0, 1, 0, 22]);
+      final reply = await _readAtLeast(incoming, 10);
+      expect(reply[1], 0x01);
+    });
+
+    test('rejects unsupported request command', () async {
+      final forward = await startDynamicForward(
+        bindHost: '127.0.0.1',
+        bindPort: 0,
+        options: const SSHDynamicForwardOptions(),
+        dial: (_, __) async => _DialedTunnel.create().channel,
+      );
+      addTearDown(() => forward.close());
+
+      final client = await Socket.connect(forward.host, forward.port);
+      final incoming = client.asBroadcastStream();
+      addTearDown(() => client.close());
+
+      await _sendGreeting(client, incoming);
+      client.add([0x05, 0x02, 0x00, 0x01, 127, 0, 0, 1, 0, 22]);
+      final reply = await _readAtLeast(incoming, 10);
+      expect(reply[1], 0x07);
+    });
+
+    test('rejects unsupported address type', () async {
+      final forward = await startDynamicForward(
+        bindHost: '127.0.0.1',
+        bindPort: 0,
+        options: const SSHDynamicForwardOptions(),
+        dial: (_, __) async => _DialedTunnel.create().channel,
+      );
+      addTearDown(() => forward.close());
+
+      final client = await Socket.connect(forward.host, forward.port);
+      final incoming = client.asBroadcastStream();
+      addTearDown(() => client.close());
+
+      await _sendGreeting(client, incoming);
+      client.add([0x05, 0x01, 0x00, 0x7F, 0x00, 0x00]);
+      final reply = await _readAtLeast(incoming, 10);
+      expect(reply[1], 0x08);
+    });
+
+    test('supports IPv4 and IPv6 target addresses', () async {
+      final tunnels = <_DialedTunnel>[];
+      final dialedHosts = <String>[];
+
+      final forward = await startDynamicForward(
+        bindHost: '127.0.0.1',
+        bindPort: 0,
+        options: const SSHDynamicForwardOptions(),
+        dial: (host, _) async {
+          dialedHosts.add(host);
+          final tunnel = _DialedTunnel.create();
+          tunnels.add(tunnel);
+          return tunnel.channel;
+        },
+      );
+      addTearDown(() async {
+        for (final tunnel in tunnels) {
+          tunnel.dispose();
+        }
+        await forward.close();
+      });
+
+      final ipv4 = await Socket.connect(forward.host, forward.port);
+      final ipv4Incoming = ipv4.asBroadcastStream();
+      addTearDown(() => ipv4.close());
+      await _sendGreeting(ipv4, ipv4Incoming);
+      ipv4.add([0x05, 0x01, 0x00, 0x01, 192, 168, 1, 2, 0, 80]);
+      final ipv4Reply = await _readAtLeast(ipv4Incoming, 10);
+      expect(ipv4Reply[1], 0x00);
+
+      final ipv6 = await Socket.connect(forward.host, forward.port);
+      final ipv6Incoming = ipv6.asBroadcastStream();
+      addTearDown(() => ipv6.close());
+      await _sendGreeting(ipv6, ipv6Incoming);
+      ipv6.add([
+        0x05,
+        0x01,
+        0x00,
+        0x04,
+        0x20,
+        0x01,
+        0x0d,
+        0xb8,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        22,
+      ]);
+      final ipv6Reply = await _readAtLeast(ipv6Incoming, 10);
+      expect(ipv6Reply[1], 0x00);
+
+      expect(dialedHosts.length, 2);
+      expect(dialedHosts[0], '192.168.1.2');
+      expect(dialedHosts[1], contains(':'));
+    });
   });
 }
 
