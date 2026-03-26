@@ -40,6 +40,26 @@ void main() {
     });
   });
 
+  group('AEAD cipher metadata', () {
+    test('AES-GCM ciphers are marked as AEAD', () {
+      expect(SSHCipherType.aes128gcm.isAead, isTrue);
+      expect(SSHCipherType.aes256gcm.isAead, isTrue);
+      expect(SSHCipherType.aes128gcm.ivSize, 12);
+      expect(SSHCipherType.aes128gcm.aeadTagSize, 16);
+    });
+
+    test('AEAD ciphers do not expose BlockCipher API', () {
+      expect(
+        () => SSHCipherType.aes128gcm.createCipher(
+          Uint8List(SSHCipherType.aes128gcm.keySize),
+          Uint8List(SSHCipherType.aes128gcm.ivSize),
+          forEncryption: true,
+        ),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+  });
+
   test('Default values are set correctly', () {
     final algorithms = SSHAlgorithms();
 
@@ -72,6 +92,8 @@ void main() {
     expect(
         algorithms.cipher,
         equals([
+          SSHCipherType.aes128gcm,
+          SSHCipherType.aes256gcm,
           SSHCipherType.aes128ctr,
           SSHCipherType.aes128cbc,
           SSHCipherType.aes256ctr,
