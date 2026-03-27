@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:mirrors';
 
 import 'package:dartssh2/dartssh2.dart';
 import 'package:dartssh2/src/ssh_algorithm.dart';
@@ -67,6 +68,33 @@ void main() {
       expect(
         SSHCipherType.fromName('aes256-gcm@openssh.com'),
         SSHCipherType.aes256gcm,
+      );
+    });
+
+    test('createCipher throws when cipher factory is missing', () {
+      final library = reflectClass(SSHCipherType).owner as LibraryMirror;
+      final ctor = MirrorSystem.getSymbol('_', library);
+      final dynamic custom = reflectClass(SSHCipherType).newInstance(
+        ctor,
+        const [],
+        {
+          #name: 'custom-null-factory',
+          #keySize: 16,
+          #ivSize: 16,
+          #blockSize: 16,
+          #isAead: false,
+          #aeadTagSize: 0,
+          #cipherFactory: null,
+        },
+      ).reflectee;
+
+      expect(
+        () => custom.createCipher(
+          Uint8List(16),
+          Uint8List(16),
+          forEncryption: true,
+        ),
+        throwsA(isA<StateError>()),
       );
     });
   });
@@ -140,6 +168,28 @@ void testCipher(SSHCipherType type) {
     final decrypted = decrypter.processAll(cipherText);
 
     expect(decrypted, plainText);
+  });
+
+  test('$type rejects invalid key length', () {
+    expect(
+      () => type.createCipher(
+        Uint8List(type.keySize - 1),
+        Uint8List(type.blockSize),
+        forEncryption: true,
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+  });
+
+  test('$type rejects invalid IV length', () {
+    expect(
+      () => type.createCipher(
+        Uint8List(type.keySize),
+        Uint8List(type.ivSize - 1),
+        forEncryption: true,
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
   });
 
   // test('$type needs init after reset', () {
