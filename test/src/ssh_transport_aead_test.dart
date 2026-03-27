@@ -3,10 +3,7 @@ import 'dart:mirrors';
 import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
-import 'package:dartssh2/src/ssh_algorithm.dart';
-import 'package:dartssh2/src/ssh_errors.dart';
 import 'package:dartssh2/src/ssh_packet.dart';
-import 'package:dartssh2/src/ssh_transport.dart';
 import 'package:test/test.dart';
 
 void main() {
