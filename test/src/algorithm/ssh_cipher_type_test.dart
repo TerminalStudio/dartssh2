@@ -58,6 +58,17 @@ void main() {
         throwsA(isA<UnsupportedError>()),
       );
     });
+
+    test('fromName resolves AES-GCM ciphers', () {
+      expect(
+        SSHCipherType.fromName('aes128-gcm@openssh.com'),
+        SSHCipherType.aes128gcm,
+      );
+      expect(
+        SSHCipherType.fromName('aes256-gcm@openssh.com'),
+        SSHCipherType.aes256gcm,
+      );
+    });
   });
 
   test('Default values are set correctly', () {
