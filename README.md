@@ -117,6 +117,10 @@ void main() async {
 }
 ```
 
+> Note: `SSHSocket.connect()` uses native TCP sockets (`dart:io`) and is not
+> available on Flutter Web / Dart Web. See [Web support](#web-support) below
+> for browser-compatible transport options.
+
 > `SSHSocket` is an interface and it's possible to implement your own `SSHSocket` if you want to use a different underlying transport rather than standard TCP socket. For example WebSocket or Unix domain socket.
 
 ### Web support
