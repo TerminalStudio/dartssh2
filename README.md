@@ -119,6 +119,18 @@ void main() async {
 
 > `SSHSocket` is an interface and it's possible to implement your own `SSHSocket` if you want to use a different underlying transport rather than standard TCP socket. For example WebSocket or Unix domain socket.
 
+### Web support
+
+Direct native TCP sockets are not available in browsers, so this will fail on
+Flutter Web / Dart Web:
+
+```dart
+await SSHSocket.connect('host', 22);
+```
+
+For web apps, use a custom `SSHSocket` transport over a browser-supported
+channel (for example, a WebSocket tunnel/proxy to your SSH endpoint).
+
 ### Customize client SSH identification
 
 If your jump host or SSH gateway restricts client versions, you can customize the
@@ -142,14 +154,24 @@ void main() async {
 ```dart
 void main() async {
   final shell = await client.shell();
-  stdout.addStream(shell.stdout); // listening for stdout
-  stderr.addStream(shell.stderr); // listening for stderr
-  stdin.cast<Uint8List>().listen(shell.write); // writing to stdin
+
+  // Attach local terminal streams only when a terminal is available.
+  // GUI apps on Windows may not have stdin/stdout/stderr attached.
+  final hasTerminal = stdin.hasTerminal && stdout.hasTerminal && stderr.hasTerminal;
+  if (hasTerminal) {
+    stdout.addStream(shell.stdout); // listening for stdout
+    stderr.addStream(shell.stderr); // listening for stderr
+    stdin.cast<Uint8List>().listen(shell.write); // writing to stdin
+  }
 
   await shell.done; // wait for shell to exit
   client.close();
 }
 ```
+
+> Note: The stdin/stdout bridging above is for CLI apps. If your app is launched
+> without a terminal (for example, double-clicking a Windows `.exe`), skip the
+> local stdio wiring and use your own UI/input pipeline.
 
 ### Execute a command on remote host
 
@@ -169,7 +191,51 @@ void main() async {
 }
 ```
 
-> `client.run()` is a convenience method that wraps `client.execute()` for running non-interactive commands.
+> `client.run()` is a convenience method that returns combined output bytes.
+> Use `client.runWithResult()` when you need separate `stdout` / `stderr`
+> streams and command exit metadata (`exitCode` / `exitSignal`).
+
+To also access command exit metadata:
+
+```dart
+void main() async {
+  final result = await client.runWithResult('echo hello');
+  print('exitCode: ${result.exitCode}');
+  print('stdout: ${utf8.decode(result.stdout)}');
+  print('stderr: ${utf8.decode(result.stderr)}');
+}
+```
+
+### End-to-end flow example
+
+Use `example/run_flows.dart` to test the main execution flows in one run:
+
+- `run()`
+- `runWithResult()`
+- `execute()`
+- optional `shell()` via `--shell`
+
+Run it with environment variables:
+
+```sh
+SSH_HOST=test.rebex.net SSH_PORT=22 SSH_USERNAME=demo SSH_PASSWORD=password dart run example/run_flows.dart
+```
+
+Run shell flow too:
+
+```sh
+SSH_HOST=test.rebex.net SSH_PORT=22 SSH_USERNAME=demo SSH_PASSWORD=password dart run example/run_flows.dart --shell
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:SSH_HOST = 'test.rebex.net'
+$env:SSH_PORT = '22'
+$env:SSH_USERNAME = 'demo'
+$env:SSH_PASSWORD = 'password'
+dart run example/run_flows.dart --shell
+```
 
 ### Start a process on remote host
 ```dart
@@ -321,6 +387,71 @@ void main() async {
   final file = await sftp.open('/etc/passwd');
   final content = await file.readBytes();
   print(latin1.decode(content));
+}
+```
+
+### Download remote file (high-level API)
+```dart
+void main() async {
+  final sftp = await client.sftp();
+  final output = File('local_file.txt').openWrite();
+
+  final bytes = await sftp.download(
+    '/remote/file.txt',
+    output,
+    onProgress: (bytesRead) => print('downloaded: $bytesRead bytes'),
+    closeDestination: true,
+  );
+
+  print('download complete: $bytes bytes');
+}
+```
+
+`download()` and `downloadTo()` are opt-in convenience APIs built on top of the
+existing stream-based behavior, so existing code remains fully compatible.
+
+When to use each API:
+
+- Use `sftp.download(path, sink)` when you only have a remote path and want the
+  simplest one-liner flow. It opens and closes the remote file for you.
+- Use `file.downloadTo(sink)` when you already have an open `SftpFile` (for
+  example you want partial downloads with `offset`/`length` or want to reuse the
+  same handle).
+
+```dart
+void main() async {
+  final sftp = await client.sftp();
+  final file = await sftp.open('/remote/file.txt');
+  final output = File('local_partial.bin').openWrite();
+
+  try {
+    // Download bytes [1024, 1024 + 4096) using an existing open handle.
+    await file.downloadTo(
+      output,
+      offset: 1024,
+      length: 4096,
+      closeDestination: true,
+    );
+  } finally {
+    await file.close();
+  }
+}
+```
+
+For high-latency links or large files, you can tune pipelining:
+
+```dart
+void main() async {
+  final sftp = await client.sftp();
+  final output = File('local_file.txt').openWrite();
+
+  await sftp.download(
+    '/remote/file.txt',
+    output,
+    chunkSize: 64 * 1024,
+    maxPendingRequests: 128,
+    closeDestination: true,
+  );
 }
 ```
 

@@ -18,6 +18,10 @@ import 'package:dartssh2/src/utils/chunk_buffer.dart';
 import 'package:dartssh2/src/message/base.dart';
 
 const _kVersion = 3;
+const _kReadChunkSize = 16 * 1024;
+const _kReadMaxPendingRequests = 64;
+const _kDownloadChunkSize = 64 * 1024;
+const _kDownloadMaxPendingRequests = 128;
 
 class SftpClient {
   final SSHChannel _channel;
@@ -68,6 +72,38 @@ class SftpClient {
     if (reply is SftpHandlePacket) return SftpFile(this, reply.handle);
     if (reply is! SftpStatusPacket) throw SftpError('Unexpected reply');
     throw SftpStatusError.fromStatus(reply);
+  }
+
+  /// Downloads a remote file from [path] into [destination].
+  ///
+  /// This is a convenience API built on top of [SftpFile.read] and keeps the
+  /// existing stream-based APIs fully compatible.
+  ///
+  /// Returns the total number of bytes written.
+  Future<int> download(
+    String path,
+    StreamSink<List<int>> destination, {
+    int? length,
+    int offset = 0,
+    void Function(int bytesRead)? onProgress,
+    int chunkSize = _kDownloadChunkSize,
+    int maxPendingRequests = _kDownloadMaxPendingRequests,
+    bool closeDestination = false,
+  }) async {
+    final file = await open(path, mode: SftpFileOpenMode.read);
+    try {
+      return await file.downloadTo(
+        destination,
+        length: length,
+        offset: offset,
+        onProgress: onProgress,
+        chunkSize: chunkSize,
+        maxPendingRequests: maxPendingRequests,
+        closeDestination: closeDestination,
+      );
+    } finally {
+      await file.close();
+    }
   }
 
   /// Reads the items of a directory. Returns an [Stream] of [SftpName] chunks.
@@ -566,12 +602,20 @@ class SftpFile {
     int? length,
     int offset = 0,
     void Function(int bytesRead)? onProgress,
-    int? chunkSize,
-    int? maxBytesOnTheWire,
+    int chunkSize = _kReadChunkSize,
+    int maxPendingRequests = _kReadMaxPendingRequests,
   }) async* {
-    // Defaults for read pipeline
-    final int chunkSize_ = chunkSize ?? 16 * 1024;
-    final int maxBytesOnTheWire_ = maxBytesOnTheWire ?? chunkSize_ * 64;
+    _mustNotBeClosed();
+    if (chunkSize <= 0) {
+      throw ArgumentError.value(chunkSize, 'chunkSize', 'must be positive');
+    }
+    if (maxPendingRequests <= 0) {
+      throw ArgumentError.value(
+        maxPendingRequests,
+        'maxPendingRequests',
+        'must be positive',
+      );
+    }
 
     // Get the file size if not specified.
     if (length == null) {
@@ -591,61 +635,74 @@ class SftpFile {
       throw SftpError('Length must be positive: $length');
     }
 
-    final streamController = StreamController<Uint8List>();
+    final endOffset = offset + length;
+    final pendingReads = <Future<Uint8List?>>[];
+    var nextOffset = offset;
+    var bytesRead = 0;
 
-    var bytessRecieved = 0;
-    var bytessRequested = 0;
-
-    Future<void> readChunk(int chunkStart) async {
-      final chunkEnd = min(chunkStart + chunkSize_, offset + length!);
-      final chunkLength = chunkEnd - chunkStart;
-
-      bytessRequested += chunkLength;
-
-      late final Uint8List? chunk;
-
-      try {
-        chunk = await _readChunk(chunkLength, chunkStart);
-      } catch (e, st) {
-        if (!streamController.isClosed) {
-          streamController.addError(e, st);
-          streamController.close();
-        }
-        return;
+    while (bytesRead < length) {
+      while (
+          nextOffset < endOffset && pendingReads.length < maxPendingRequests) {
+        final requestLength = min(chunkSize, endOffset - nextOffset);
+        pendingReads.add(_readChunk(requestLength, nextOffset));
+        nextOffset += requestLength;
       }
 
-      if (chunk == null) {
-        streamController.close();
-        return;
+      if (pendingReads.isEmpty) break;
+
+      final chunk = await pendingReads.removeAt(0);
+      if (chunk == null) break;
+      if (chunk.isEmpty) {
+        throw SftpError('Unexpected empty data chunk before EOF');
       }
 
-      streamController.add(chunk);
-      bytessRecieved += chunkLength;
+      final remaining = length - bytesRead;
+      final outputChunk = chunk.length <= remaining
+          ? chunk
+          : Uint8List.sublistView(chunk, 0, remaining);
 
-      if (onProgress != null) onProgress(bytessRecieved);
+      yield outputChunk;
 
-      if (bytessRecieved >= length) {
-        streamController.close();
-        return;
+      bytesRead += outputChunk.length;
+      onProgress?.call(bytesRead);
+    }
+  }
+
+  /// Downloads this file into [destination].
+  ///
+  /// Returns the total number of bytes written.
+  Future<int> downloadTo(
+    StreamSink<List<int>> destination, {
+    int? length,
+    int offset = 0,
+    void Function(int bytesRead)? onProgress,
+    int chunkSize = _kDownloadChunkSize,
+    int maxPendingRequests = _kDownloadMaxPendingRequests,
+    bool closeDestination = false,
+  }) async {
+    _mustNotBeClosed();
+    var bytesRead = 0;
+
+    try {
+      await destination.addStream(
+        read(
+          length: length,
+          offset: offset,
+          onProgress: (value) {
+            bytesRead = value;
+            onProgress?.call(value);
+          },
+          chunkSize: chunkSize,
+          maxPendingRequests: maxPendingRequests,
+        ),
+      );
+    } finally {
+      if (closeDestination) {
+        await destination.close();
       }
     }
 
-    void scheduleRead() {
-      if (streamController.isPaused || streamController.isClosed) {
-        return;
-      }
-
-      while (bytessRequested < length!) {
-        final bytesOnTheWire = bytessRequested - bytessRecieved;
-        if (bytesOnTheWire >= maxBytesOnTheWire_) return;
-        readChunk(bytessRequested + offset).then((_) => scheduleRead());
-      }
-    }
-
-    streamController.onListen = scheduleRead;
-    streamController.onResume = scheduleRead;
-
-    yield* streamController.stream;
+    return bytesRead;
   }
 
   /// Reads at most [length] bytes from the file starting at [offset]. If

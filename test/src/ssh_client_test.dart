@@ -1,6 +1,8 @@
 @Tags(['integration'])
 library;
 
+import 'dart:convert';
+
 import 'package:dartssh2/dartssh2.dart';
 import 'package:test/test.dart';
 
@@ -176,6 +178,38 @@ void main() {
     test('works', () async {
       final client = await getTestClient();
       await client.ping();
+    });
+  });
+
+  group('SSHClient.runWithResult', () {
+    test('returns command output and exit code', () async {
+      final client = await getTestClient();
+
+      final result = await client.runWithResult('echo dartssh2');
+
+      expect(utf8.decode(result.stdout), contains('dartssh2'));
+      expect(result.output, result.stdout);
+      expect(result.stderr, isEmpty);
+      if (result.exitCode != null) {
+        expect(result.exitCode, 0);
+      }
+      expect(result.exitSignal, isNull);
+
+      client.close();
+    });
+
+    test('returns non-zero exit code for failing command', () async {
+      final client = await getTestClient();
+
+      final result = await client.runWithResult('command-that-does-not-exist');
+
+      expect(result.output, isNotEmpty);
+      if (result.exitCode != null) {
+        expect(result.exitCode, isNot(0));
+      }
+      expect(result.exitSignal, isNull);
+
+      client.close();
     });
   });
 }

@@ -168,7 +168,7 @@ class SSHChannelController {
     return await _requestReplyQueue.next;
   }
 
-  void sendEnv(String name, String value) {
+  Future<bool> sendEnv(String name, String value) async {
     sendMessage(
       SSH_Message_Channel_Request.env(
         recipientChannel: remoteId,
@@ -177,6 +177,7 @@ class SSHChannelController {
         wantReply: true,
       ),
     );
+    return await _requestReplyQueue.next;
   }
 
   void sendSignal(String signal) {
