@@ -194,6 +194,12 @@ class _SocksConnection {
         return;
       }
 
+      if (_closed) {
+        _remote?.destroy();
+        _remote = null;
+        return;
+      }
+
       _remoteSub = _remote!.stream.listen(
         _client.add,
         onDone: close,

@@ -1037,11 +1037,13 @@ class SSHTransport {
           cipherType.keySize,
         );
         final iv = _deriveKey(
-          isClient ? SSHDeriveKeyType.clientIV : SSHDeriveKeyType.serverIV,
+          isClient ? SSHDeriveKeyType.clientIV : SSHDeriveKeyType.clientIV,
           cipherType.ivSize,
         );
         _localAeadKey = key;
         _localAeadFixedNonce = Uint8List.sublistView(iv, 0, 12);
+        _localCipherKey = key;
+        _localIV = iv;
       }
       _encryptCipher = null;
       _localMac = null; // AEAD provides integrity
@@ -1099,6 +1101,8 @@ class SSHTransport {
         );
         _remoteAeadKey = key;
         _remoteAeadFixedNonce = Uint8List.sublistView(iv, 0, 12);
+        _remoteCipherKey = key;
+        _remoteIV = iv;
       }
       _decryptCipher = null;
       _remoteMac = null; // AEAD provides integrity

@@ -15,6 +15,12 @@ Future<void> main() async {
     socket,
     username: username,
     onPasswordRequest: () => password,
+    onVerifyHostKey: (host, verifier) {
+      // WARNING: Accepting any host key for demonstration purposes only.
+      // In production, verify the host key against a known trusted value.
+      print('WARNING: Host key verification disabled for testing.');
+      return true;
+    },
   );
 
   final dynamicForward = await client.forwardDynamic(
@@ -30,23 +36,17 @@ Future<void> main() async {
   StreamSubscription<void>? sigintSub;
   StreamSubscription<void>? sigtermSub;
 
-  sigintSub = ProcessSignal.sigint.watch().listen((_) async {
+  Future<void> shutdown() async {
     await sigintSub?.cancel();
     await sigtermSub?.cancel();
     await dynamicForward.close();
     client.close();
     await client.done;
     exit(0);
-  });
+  }
 
-  sigtermSub = ProcessSignal.sigterm.watch().listen((_) async {
-    await sigintSub?.cancel();
-    await sigtermSub?.cancel();
-    await dynamicForward.close();
-    client.close();
-    await client.done;
-    exit(0);
-  });
+  sigintSub = ProcessSignal.sigint.watch().listen((_) => shutdown());
+  sigtermSub = ProcessSignal.sigterm.watch().listen((_) => shutdown());
 
-  await Future<void>.delayed(const Duration(days: 365));
+  await client.done;
 }
