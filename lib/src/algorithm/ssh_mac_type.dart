@@ -57,7 +57,6 @@ class SSHMacType extends SSHAlgorithm {
     macFactory: _hmacSha512Factory,
     isEtm: true,
   );
-  // end added by Rein
 
   const SSHMacType._({
     required this.name,
