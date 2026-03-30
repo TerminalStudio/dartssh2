@@ -10,7 +10,8 @@ void main() {
       longname: '-rw-r--r-- 1 user group 10 report.txt',
       attr: SftpFileAttrs(
         size: 10,
-        mode: const SftpFileMode.value((1 << 15) + 0x1A4),
+        mode: const SftpFileMode.value(
+            (1 << 15) + 0x1A4), // 0x1A4 = 0644 rw-r--r--
       ),
     );
 

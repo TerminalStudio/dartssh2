@@ -207,37 +207,38 @@ class SSHClient {
   /// true if the connection is closed normally or due to an error.
   bool get isClosed => _transport.isClosed;
 
-  SSHClient(this.socket,
-      {required this.username,
-      this.printDebug,
-      this.printTrace,
-      this.algorithms = const SSHAlgorithms(),
-      this.onVerifyHostKey,
-      this.identities,
-      this.hostbasedIdentities,
-      this.hostName,
-      this.userNameOnClientHost,
-      this.onPasswordRequest,
-      this.onChangePasswordRequest,
-      this.onUserInfoRequest,
-      this.onUserauthBanner,
-      this.onAuthenticated,
-      this.keepAliveInterval = const Duration(seconds: 10),
+  SSHClient(
+    this.socket, {
+    required this.username,
+    this.printDebug,
+    this.printTrace,
+    this.algorithms = const SSHAlgorithms(),
+    this.onVerifyHostKey,
+    this.identities,
+    this.hostbasedIdentities,
+    this.hostName,
+    this.userNameOnClientHost,
+    this.onPasswordRequest,
+    this.onChangePasswordRequest,
+    this.onUserInfoRequest,
+    this.onUserauthBanner,
+    this.onAuthenticated,
+    this.keepAliveInterval = const Duration(seconds: 10),
 
-      /// Authentication timeout period. RFC 4252 recommends 10 minutes.
-      this.authTimeout = defaultAuthTimeout,
+    /// Authentication timeout period. RFC 4252 recommends 10 minutes.
+    this.authTimeout = defaultAuthTimeout,
 
-      /// Handshake timeout period. Defaults to 30s.
-      this.handshakeTimeout = defaultHandshakeTimeout,
+    /// Handshake timeout period. Defaults to 30s.
+    this.handshakeTimeout = defaultHandshakeTimeout,
 
-      /// Maximum authentication attempts. RFC 4252 recommends 20 attempts.
-      this.maxAuthAttempts = defaultMaxAuthAttempts,
-      this.onHostKeys,
-      this.disableHostkeyVerification = false,
-      this.onX11Forward,
-      this.agentHandler,
-      String ident = 'DartSSH_2.0',
-      }) : _ident = _validateIdent(ident) {
+    /// Maximum authentication attempts. RFC 4252 recommends 20 attempts.
+    this.maxAuthAttempts = defaultMaxAuthAttempts,
+    this.onHostKeys,
+    this.disableHostkeyVerification = false,
+    this.onX11Forward,
+    this.agentHandler,
+    String ident = 'DartSSH_2.0',
+  }) : _ident = _validateIdent(ident) {
     _transport = SSHTransport(
       socket,
       isServer: false,
@@ -284,6 +285,14 @@ class SSHClient {
         ident,
         'ident',
         'must not be empty',
+      );
+    }
+
+    if (ident.startsWith('SSH-')) {
+      throw ArgumentError.value(
+        ident,
+        'ident',
+        'must not include SSH- prefix',
       );
     }
 
@@ -688,6 +697,16 @@ class SSHClient {
       }
     }
     _channelOpenReplyWaiters.clear();
+
+    // Fail any pending global request replies (e.g. ping, forwardRemote).
+    _globalRequestReplyQueue.failAll(SSHStateError(
+        'Connection closed while waiting for global request reply'));
+
+    // Fail pending request replies for each channel.
+    for (final controller in _channels.values) {
+      controller.failPendingRequestReplies(SSHStateError(
+          'Connection closed while waiting for channel request reply'));
+    }
 
     try {
       _closeChannels();
@@ -1111,11 +1130,11 @@ class SSHClient {
   void _handleChannelConfirmation(Uint8List payload) {
     final message = SSH_Message_Channel_Confirmation.decode(payload);
     printTrace?.call('<- $socket: $message');
-    // Register the channel synchronously BEFORE completing the future.
-    // CHANNEL_DATA for this channel may arrive in the same TCP segment as
-    // the CONFIRMATION. If we defer registration to the async continuation
-    // of _waitChannelOpen, that data hits _handleChannelData while
-    // _channels[id] is still null and is silently dropped.
+    if (_channels.containsKey(message.recipientChannel)) {
+      printDebug?.call(
+          '_handleChannelConfirmation: channel ${message.recipientChannel} already closed, discarding');
+      return;
+    }
     _acceptChannel(
       localChannelId: message.recipientChannel,
       remoteChannelId: message.senderChannel,

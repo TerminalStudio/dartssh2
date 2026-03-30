@@ -499,6 +499,10 @@ class SSHHttpClientResponse {
           return;
         }
         final separator = normalizedLine.indexOf(':');
+        if (separator <= 0) {
+          throw FormatException(
+              'Invalid header line: "$normalizedLine" - no colon separator found');
+        }
         final name =
             normalizedLine.substring(0, separator).toLowerCase().trim();
         final value = normalizedLine.substring(separator + 1).trim();

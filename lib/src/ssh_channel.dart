@@ -70,6 +70,11 @@ class SSHChannelController {
   /// An [AsyncQueue] of pending request replies from the remote side.
   final _requestReplyQueue = AsyncQueue<bool>();
 
+  /// Fails all pending request reply waiters.
+  void failPendingRequestReplies(Object error, [StackTrace? stackTrace]) {
+    _requestReplyQueue.failAll(error, stackTrace ?? StackTrace.current);
+  }
+
   /// true if we have sent an EOF message to the remote side.
   var _hasSentEOF = false;
 

@@ -95,7 +95,12 @@ class SSHKeyPairAgent implements SSHAgentHandler {
   ) {
     final key = _rsaKeyFrom(identity);
     if (key == null) {
-      return identity.sign(data) as SSHRsaSignature;
+      final signature = identity.sign(data);
+      if (signature is SSHRsaSignature) {
+        return signature;
+      }
+      throw StateError(
+          'RSA signing requested but identity produced non-RSA signature: ${signature.runtimeType}');
     }
 
     final signer = _rsaSignerFor(signatureType);

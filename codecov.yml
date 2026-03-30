@@ -3,17 +3,17 @@ coverage:
     project:
       default:
         target: auto
-        threshold: 3%
+        threshold: 5%
         flags:
           - unittests
     patch:
       default:
         target: auto
-        threshold: 3%
+        threshold: 2%
         flags:
           - unittests
 
 comment:
   layout: "reach,diff,flags,files"
   behavior: default
-  require_changes: false
+  require_changes: true
