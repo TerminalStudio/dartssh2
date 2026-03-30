@@ -672,6 +672,8 @@ class SSHClient {
     printDebug?.call('SSHClient._onTransportClosed');
     _handshakeTimeoutTimer?.cancel();
     _handshakeTimeoutTimer = null;
+    _authTimeoutTimer?.cancel();
+    _authTimeoutTimer = null;
     if (!_authenticated.isCompleted) {
       final currentMethod = _currentAuthMethod != null
           ? "Current method: ${_currentAuthMethod!.name}"
@@ -682,7 +684,8 @@ class SSHClient {
 
       _authenticated.completeError(
         SSHAuthAbortError(
-            'Connection closed before authentication. $currentMethod. $attempts'),
+            'Connection closed before authentication. $currentMethod. $attempts',
+            error),
       );
     }
     _keepAlive?.stop();
@@ -691,21 +694,22 @@ class SSHClient {
     // forwardLocalUnix) don't hang forever when the connection drops.
     for (final entry in _channelOpenReplyWaiters.entries) {
       if (!entry.value.isCompleted) {
-        entry.value.completeError(
-          SSHStateError('Connection closed while waiting for channel open'),
-        );
+        entry.value.completeError(error ??
+            SSHStateError('Connection closed while waiting for channel open'));
       }
     }
     _channelOpenReplyWaiters.clear();
 
     // Fail any pending global request replies (e.g. ping, forwardRemote).
-    _globalRequestReplyQueue.failAll(SSHStateError(
-        'Connection closed while waiting for global request reply'));
+    _globalRequestReplyQueue.failAll(error ??
+        SSHStateError(
+            'Connection closed while waiting for global request reply'));
 
     // Fail pending request replies for each channel.
     for (final controller in _channels.values) {
-      controller.failPendingRequestReplies(SSHStateError(
-          'Connection closed while waiting for channel request reply'));
+      controller.failPendingRequestReplies(error ??
+          SSHStateError(
+              'Connection closed while waiting for channel request reply'));
     }
 
     try {
@@ -1130,6 +1134,11 @@ class SSHClient {
   void _handleChannelConfirmation(Uint8List payload) {
     final message = SSH_Message_Channel_Confirmation.decode(payload);
     printTrace?.call('<- $socket: $message');
+    if (!_channelOpenReplyWaiters.containsKey(message.recipientChannel)) {
+      printDebug?.call(
+          '_handleChannelConfirmation: no pending open for local channel ${message.recipientChannel}, discarding');
+      return;
+    }
     if (_channels.containsKey(message.recipientChannel)) {
       printDebug?.call(
           '_handleChannelConfirmation: channel ${message.recipientChannel} already closed, discarding');
@@ -1533,8 +1542,12 @@ class SSHClient {
       throw SSHChannelOpenError(message.reasonCode, message.description);
     }
 
-    // Channel was already registered synchronously in _handleChannelConfirmation.
-    return _channels[localChannelId]!;
+    final controller = _channels[localChannelId];
+    if (controller == null) {
+      throw SSHStateError(
+          'Channel $localChannelId was closed before channel-open completed');
+    }
+    return controller;
   }
 
   SSHChannelController _acceptChannel({

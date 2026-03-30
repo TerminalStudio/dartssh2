@@ -159,6 +159,8 @@ class SSHKeyPairAgent implements SSHAgentHandler {
 }
 
 class SSHAgentChannel {
+  static const maxFrameSize = 256 * 1024;
+
   SSHAgentChannel(this._channel, this._handler, {this.printDebug}) {
     _subscription = _channel.stream.listen(
       _handleData,
@@ -193,6 +195,13 @@ class SSHAgentChannel {
   Future<void> _processQueue() async {
     while (_buffer.length >= 4) {
       final length = ByteData.sublistView(_buffer, 0, 4).getUint32(0);
+      if (length == 0 || length > maxFrameSize) {
+        printDebug?.call(
+            'SSH agent: invalid frame length $length, closing channel');
+        _channel.destroy();
+        _buffer = Uint8List(0);
+        return;
+      }
       if (_buffer.length < 4 + length) return;
       final payload = _buffer.sublist(4, 4 + length);
       _buffer = _buffer.sublist(4 + length);
