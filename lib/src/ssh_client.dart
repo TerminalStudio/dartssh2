@@ -357,6 +357,21 @@ class SSHClient {
     return SSHForwardChannel(channelController.channel);
   }
 
+  /// Forward local connections to a remote Unix domain socket at
+  /// [remoteSocketPath] on the remote side via a
+  /// `direct-streamlocal@openssh.com` channel.
+  ///
+  /// This is the equivalent of `ssh -L localPort:remoteSocketPath`.
+  Future<SSHForwardChannel> forwardLocalUnix(
+    String remoteSocketPath,
+  ) async {
+    await _authenticated.future;
+    final channelController = await _openForwardLocalUnixChannel(
+      remoteSocketPath,
+    );
+    return SSHForwardChannel(channelController.channel);
+  }
+
   /// Execute [command] on the remote side. Returns a [SSHChannel] that can be
   /// used to read and write to the remote side.
   Future<SSHSession> execute(
@@ -1259,6 +1274,22 @@ class SSHClient {
       port: remotePort,
       originatorIP: bindAddress,
       originatorPort: bindPort,
+    );
+    _sendMessage(request);
+
+    return await _waitChannelOpen(localChannelId);
+  }
+
+  Future<SSHChannelController> _openForwardLocalUnixChannel(
+    String socketPath,
+  ) async {
+    final localChannelId = _channelIdAllocator.allocate();
+
+    final request = SSH_Message_Channel_Open.directStreamLocal(
+      senderChannel: localChannelId,
+      initialWindowSize: _initialWindowSize,
+      maximumPacketSize: _maximumPacketSize,
+      socketPath: socketPath,
     );
     _sendMessage(request);
 

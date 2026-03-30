@@ -1,8 +1,13 @@
+## [2.14.0] - 2026-03-19
+- Fixed SSH connections through bastion hosts where the target server sends its version string immediately upon connection (which is standard behavior per RFC 4253) [#141]. Thanks @shihuili1218.
+- Adds a new forwardLocalUnix() function, which is an equivalent of ssh -L localPort:remoteSocketPath [#140]. Thanks @isegal.
+
+
 ## [2.13.0] - 2025-06-22
-- docs: Update NoPorts naming [`#115`]. [`@XavierChanth`].
-- Add parameter disableHostkeyVerification [`#123`]. Thanks [`@alexander-irion`].
-- Add support for server-initiated re-keying [`#125`]. Thanks [`@MarBazuz`].
-- Add support for new algorithms "mac-sha2-256-96", "hmac-sha2-512-96", "hmac-sha2-256-etm@openssh.com", "hmac-sha2-512-etm@openssh.com" [`#126`] [`#127`]. Thanks [`@reinbeumer`].
+- docs: Update NoPorts naming [#115]. [@XavierChanth].
+- Add parameter disableHostkeyVerification [#123]. Thanks [@alexander-irion].
+- Add support for server-initiated re-keying [#125]. Thanks [@MarBazuz].
+- Add support for new algorithms "mac-sha2-256-96", "hmac-sha2-512-96", "hmac-sha2-256-etm@openssh.com", "hmac-sha2-512-etm@openssh.com" [#126] [#127]. Thanks [@reinbeumer].
 
 ## [2.12.0] - 2025-02-08
 - Fixed streams and channel not closing after receiving SSH_Message_Channel_Close [#116]. [@cbenhagen].
@@ -171,12 +176,14 @@
 
 - Initial release.
 
-[`#127`]: https://github.com/TerminalStudio/dartssh2/pull/127
-[`#126`]: https://github.com/TerminalStudio/dartssh2/pull/126
-[`#125`]: https://github.com/TerminalStudio/dartssh2/pull/125
-[`#123`]: https://github.com/TerminalStudio/dartssh2/pull/123
-[`#116`]: https://github.com/TerminalStudio/dartssh2/pull/116
-[`#115`]: https://github.com/TerminalStudio/dartssh2/pull/115
+[#141]: https://github.com/TerminalStudio/dartssh2/pull/141
+[#140]: https://github.com/TerminalStudio/dartssh2/pull/140
+[#127]: https://github.com/TerminalStudio/dartssh2/pull/127
+[#126]: https://github.com/TerminalStudio/dartssh2/pull/126
+[#125]: https://github.com/TerminalStudio/dartssh2/pull/125
+[#123]: https://github.com/TerminalStudio/dartssh2/pull/123
+[#116]: https://github.com/TerminalStudio/dartssh2/pull/116
+[#115]: https://github.com/TerminalStudio/dartssh2/pull/115
 [#101]: https://github.com/TerminalStudio/dartssh2/pull/101
 [#100]: https://github.com/TerminalStudio/dartssh2/issues/100
 [#80]: https://github.com/TerminalStudio/dartssh2/issues/80
