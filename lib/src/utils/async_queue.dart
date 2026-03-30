@@ -33,4 +33,14 @@ class AsyncQueue<T> {
       _data.add(value);
     }
   }
+
+  /// Fails all pending waiters with the given error.
+  void failAll(Object error, [StackTrace? stackTrace]) {
+    for (final completer in _completers) {
+      if (!completer.isCompleted) {
+        completer.completeError(error, stackTrace ?? StackTrace.current);
+      }
+    }
+    _completers.clear();
+  }
 }

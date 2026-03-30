@@ -50,7 +50,17 @@ class SSHAuthAbortError with SSHMessageError implements SSHAuthError {
   @override
   final String message;
 
-  SSHAuthAbortError(this.message);
+  final SSHError? reason;
+
+  SSHAuthAbortError(this.message, [this.reason]);
+
+  @override
+  String toString() {
+    if (reason != null) {
+      return 'SSHAuthAbortError($message, reason: $reason)';
+    }
+    return 'SSHAuthAbortError($message)';
+  }
 }
 
 /// Errors that happen when the library receives an malformed packet.

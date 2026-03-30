@@ -423,8 +423,7 @@ class SSHHttpClientResponse {
     var currentChunkSize = 0;
 
     void processLine(String line, int bytesRead, LineDecoder decoder) {
-      if (finished) return;
-
+      final normalizedLine = line.trimRight();
       if (inBody) {
         if (chunked) {
           if (expectingChunkSize) {
@@ -482,7 +481,7 @@ class SSHHttpClientResponse {
           contentRead += bytesRead;
         }
       } else if (inHeader) {
-        if (line.trim().isEmpty) {
+        if (normalizedLine.trim().isEmpty) {
           inBody = true;
           // Decide body framing
           final te = headers[SSHHttpHeaders.transferEncodingHeader]
@@ -499,15 +498,17 @@ class SSHHttpClientResponse {
           }
           return;
         }
-        final separator = line.indexOf(':');
-        final name = line.substring(0, separator).toLowerCase().trim();
-        final value = line.substring(separator + 1).trim();
-        if (name == SSHHttpHeaders.transferEncodingHeader) {
-          // Allow only identity or chunked; others unsupported
-          final v = value.toLowerCase();
-          if (!(v == 'identity' || v.contains('chunked'))) {
-            throw UnsupportedError('unsupported transfer encoding: $value');
-          }
+        final separator = normalizedLine.indexOf(':');
+        if (separator <= 0) {
+          throw FormatException(
+              'Invalid header line: "$normalizedLine" - no colon separator found');
+        }
+        final name =
+            normalizedLine.substring(0, separator).toLowerCase().trim();
+        final value = normalizedLine.substring(separator + 1).trim();
+        if (name == SSHHttpHeaders.transferEncodingHeader &&
+            value.toLowerCase() != 'identity') {
+          throw UnsupportedError('only identity transfer encoding is accepted');
         }
         if (name == SSHHttpHeaders.contentLengthHeader) {
           contentLength = int.parse(value);
@@ -516,11 +517,12 @@ class SSHHttpClientResponse {
           headers[name] = [];
         }
         headers[name]!.add(value);
-      } else if (line.startsWith('HTTP/1.1') || line.startsWith('HTTP/1.0')) {
+      } else if (normalizedLine.startsWith('HTTP/1.1') ||
+          normalizedLine.startsWith('HTTP/1.0')) {
         statusCode = int.parse(
-          line.substring('HTTP/1.x '.length, 'HTTP/1.x xxx'.length),
+          normalizedLine.substring('HTTP/1.x '.length, 'HTTP/1.x xxx'.length),
         );
-        reasonPhrase = line.substring('HTTP/1.x xxx '.length);
+        reasonPhrase = normalizedLine.substring('HTTP/1.x xxx '.length);
         inHeader = true;
       } else {
         throw UnsupportedError('unsupported http response format');

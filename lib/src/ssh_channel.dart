@@ -70,6 +70,11 @@ class SSHChannelController {
   /// An [AsyncQueue] of pending request replies from the remote side.
   final _requestReplyQueue = AsyncQueue<bool>();
 
+  /// Fails all pending request reply waiters.
+  void failPendingRequestReplies(Object error, [StackTrace? stackTrace]) {
+    _requestReplyQueue.failAll(error, stackTrace ?? StackTrace.current);
+  }
+
   /// true if we have sent an EOF message to the remote side.
   var _hasSentEOF = false;
 
@@ -116,6 +121,36 @@ class SSHChannelController {
     sendMessage(
       SSH_Message_Channel_Request.shell(
         recipientChannel: remoteId,
+        wantReply: true,
+      ),
+    );
+    return await _requestReplyQueue.next;
+  }
+
+  Future<bool> sendX11Req({
+    bool singleConnection = false,
+    String authenticationProtocol = 'MIT-MAGIC-COOKIE-1',
+    required String authenticationCookie,
+    int screenNumber = 0,
+  }) async {
+    sendMessage(
+      SSH_Message_Channel_Request.x11(
+        recipientChannel: remoteId,
+        wantReply: true,
+        singleConnection: singleConnection,
+        x11AuthenticationProtocol: authenticationProtocol,
+        x11AuthenticationCookie: authenticationCookie,
+        x11ScreenNumber: screenNumber.toString(),
+      ),
+    );
+    return await _requestReplyQueue.next;
+  }
+
+  Future<bool> sendAgentForwardingRequest() async {
+    sendMessage(
+      SSH_Message_Channel_Request(
+        recipientChannel: remoteId,
+        requestType: SSHChannelRequestType.authAgent,
         wantReply: true,
       ),
     );
@@ -451,6 +486,20 @@ class SSHChannel {
 
   Future<bool> sendShell() async {
     return await _controller.sendShell();
+  }
+
+  Future<bool> sendX11Req({
+    bool singleConnection = false,
+    String authenticationProtocol = 'MIT-MAGIC-COOKIE-1',
+    required String authenticationCookie,
+    int screenNumber = 0,
+  }) async {
+    return await _controller.sendX11Req(
+      singleConnection: singleConnection,
+      authenticationProtocol: authenticationProtocol,
+      authenticationCookie: authenticationCookie,
+      screenNumber: screenNumber,
+    );
   }
 
   void sendTerminalWindowChange({

@@ -119,6 +119,24 @@ void main() async {
 
 > `SSHSocket` is an interface and it's possible to implement your own `SSHSocket` if you want to use a different underlying transport rather than standard TCP socket. For example WebSocket or Unix domain socket.
 
+### Customize client SSH identification
+
+If your jump host or SSH gateway restricts client versions, you can customize the
+software version part of the identification string (`SSH-2.0-<ident>`):
+
+```dart
+void main() async {
+  final client = SSHClient(
+    await SSHSocket.connect('localhost', 22),
+    username: '<username>',
+    onPasswordRequest: () => '<password>',
+    ident: 'MyClient_1.0',
+  );
+}
+```
+
+`ident` defaults to `DartSSH_2.0`.
+
 ### Spawn a shell on remote host
 
 ```dart
