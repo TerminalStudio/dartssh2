@@ -97,6 +97,10 @@ class SSHKeyPairAgent implements SSHAgentHandler {
     if (key == null) {
       final signature = identity.sign(data);
       if (signature is SSHRsaSignature) {
+        if (signature.type != signatureType) {
+          throw StateError(
+              'RSA signature type mismatch: requested $signatureType but identity produced ${signature.type}');
+        }
         return signature;
       }
       throw StateError(

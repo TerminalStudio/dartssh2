@@ -140,7 +140,7 @@ class SSHChannelController {
         singleConnection: singleConnection,
         x11AuthenticationProtocol: authenticationProtocol,
         x11AuthenticationCookie: authenticationCookie,
-        x11ScreenNumber: screenNumber.toString(),
+        x11ScreenNumber: screenNumber,
       ),
     );
     return await _requestReplyQueue.next;
