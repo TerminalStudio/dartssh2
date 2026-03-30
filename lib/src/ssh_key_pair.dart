@@ -772,10 +772,21 @@ class EcKeyPair {
     final d = decodeBigIntWithSign(1, privateKeyOctets);
 
     Uint8List? publicPoint;
+    String? curveId;
 
     for (var i = 2; i < sequence.elements.length; i++) {
       final element = sequence.elements[i];
-      if (element.tag == 0xA1) {
+      if (element.tag == 0xA0) {
+        final inner = ASN1Parser(element.valueBytes()).nextObject();
+        if (inner is ASN1ObjectIdentifier && inner.identifier != null) {
+          final oid = inner.identifier!;
+          curveId = _curveIdFromOid(oid);
+          if (curveId == null) {
+            throw UnsupportedError(
+                'Unsupported EC PRIVATE KEY curve OID: $oid');
+          }
+        }
+      } else if (element.tag == 0xA1) {
         final inner = ASN1Parser(element.valueBytes()).nextObject();
         if (inner is ASN1BitString) {
           publicPoint = inner.contentBytes();
@@ -783,8 +794,7 @@ class EcKeyPair {
       }
     }
 
-    final curveId =
-        _inferCurveId(publicPoint?.length ?? 0, privateKeyOctets.length);
+    curveId ??= _inferCurveId(publicPoint?.length ?? 0, privateKeyOctets.length);
     if (curveId == null) {
       throw UnsupportedError('Unsupported EC PRIVATE KEY curve');
     }
@@ -792,6 +802,13 @@ class EcKeyPair {
     final q = publicPoint ?? _derivePublicPoint(curveId, d);
 
     return OpenSSHEcdsaKeyPair(curveId, q, d, '');
+  }
+
+  String? _curveIdFromOid(String oid) {
+    if (oid == '1.2.840.10045.3.1.7') return 'nistp256';
+    if (oid == '1.3.132.0.34') return 'nistp384';
+    if (oid == '1.3.132.0.35') return 'nistp521';
+    return null;
   }
 
   String? _inferCurveId(int publicPointLength, int privateKeyLength) {

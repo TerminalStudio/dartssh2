@@ -636,21 +636,22 @@ class SftpFile {
     }
 
     final endOffset = offset + length;
-    final pendingReads = <Future<Uint8List?>>[];
-    var nextOffset = offset;
+    final pendingReads = <(int startOffset, Future<Uint8List?>)>[];
+    var reservedOffset = offset;
     var bytesRead = 0;
 
     while (bytesRead < length) {
       while (
-          nextOffset < endOffset && pendingReads.length < maxPendingRequests) {
-        final requestLength = min(chunkSize, endOffset - nextOffset);
-        pendingReads.add(_readChunk(requestLength, nextOffset));
-        nextOffset += requestLength;
+          reservedOffset < endOffset && pendingReads.length < maxPendingRequests) {
+        final requestLength = min(chunkSize, endOffset - reservedOffset);
+        pendingReads.add((reservedOffset, _readChunk(requestLength, reservedOffset)));
+        reservedOffset += requestLength;
       }
 
       if (pendingReads.isEmpty) break;
 
-      final chunk = await pendingReads.removeAt(0);
+      final (startOffset, readFuture) = pendingReads.removeAt(0);
+      final chunk = await readFuture;
       if (chunk == null) break;
       if (chunk.isEmpty) {
         throw SftpError('Unexpected empty data chunk before EOF');

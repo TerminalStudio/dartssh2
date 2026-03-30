@@ -35,16 +35,17 @@ Future<void> main(List<String> args) async {
       }
 
       stdout.write('Password for $username@$host:$port: ');
-      stdin.echoMode = false;
-      final password = stdin.readLineSync();
-      stdin.echoMode = true;
-      stdout.writeln();
-
-      if (password == null || password.isEmpty) {
-        throw StateError('Empty password');
+      try {
+        stdin.echoMode = false;
+        final password = stdin.readLineSync();
+        if (password == null || password.isEmpty) {
+          throw StateError('Empty password');
+        }
+        return password;
+      } finally {
+        stdin.echoMode = true;
+        stdout.writeln();
       }
-
-      return password;
     },
   );
 

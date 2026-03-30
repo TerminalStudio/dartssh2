@@ -686,7 +686,7 @@ class SSHClient {
             }
           : (_) {},
       onDone: stdoutDone.complete,
-      onError: stderrDone.completeError,
+      onError: stdoutDone.completeError,
     );
 
     session.stderr.listen(

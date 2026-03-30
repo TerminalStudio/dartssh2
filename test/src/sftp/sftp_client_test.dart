@@ -52,6 +52,7 @@ void main() {
       final firstFile = items.firstWhere(
         (item) =>
             item.filename != '.' && item.filename != '..' && item.attr.isFile,
+        orElse: () => throw StateError('No regular file found in /'),
       );
 
       final remotePath = '/${firstFile.filename}';
@@ -89,6 +90,7 @@ void main() {
       final firstFile = items.firstWhere(
         (item) =>
             item.filename != '.' && item.filename != '..' && item.attr.isFile,
+        orElse: () => throw StateError('No regular file found in /'),
       );
 
       final remotePath = '/${firstFile.filename}';
