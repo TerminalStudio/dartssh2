@@ -538,6 +538,8 @@ class RsaKeyPair {
 
     try {
       return RsaPrivateKey.decode(keyBlob);
+    } on UnsupportedError {
+      rethrow;
     } catch (e) {
       throw SSHKeyDecodeError('Failed to decode private key', e);
     }
@@ -755,6 +757,8 @@ class EcKeyPair {
 
     try {
       return _decodeLegacyEcPrivateKey(keyBlob);
+    } on UnsupportedError {
+      rethrow;
     } catch (e) {
       throw SSHKeyDecodeError('Failed to decode private key', e);
     }
@@ -797,6 +801,15 @@ class EcKeyPair {
     curveId ??= _inferCurveId(publicPoint?.length ?? 0, privateKeyOctets.length);
     if (curveId == null) {
       throw UnsupportedError('Unsupported EC PRIVATE KEY curve');
+    }
+
+    if (publicPoint != null) {
+      final expectedPublicPoint = _derivePublicPoint(curveId, d);
+      if (publicPoint.length != expectedPublicPoint.length ||
+          !publicPoint.equals(expectedPublicPoint)) {
+        throw UnsupportedError(
+            'EC PRIVATE KEY public point does not match curve $curveId');
+      }
     }
 
     final q = publicPoint ?? _derivePublicPoint(curveId, d);

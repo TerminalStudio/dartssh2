@@ -87,17 +87,21 @@ void main() {
     test('supports offset and length for partial downloads', () async {
       final sftp = await client.sftp();
       final items = await sftp.listdir('/');
+      const offset = 5;
+      const length = 16;
       final firstFile = items.firstWhere(
         (item) =>
-            item.filename != '.' && item.filename != '..' && item.attr.isFile,
-        orElse: () => throw StateError('No regular file found in /'),
+            item.filename != '.' &&
+            item.filename != '..' &&
+            item.attr.isFile &&
+            (item.attr.size ?? 0) >= offset + length,
+        orElse: () => throw StateError(
+            'No regular file found in / with size >= ${offset + length}'),
       );
 
       final remotePath = '/${firstFile.filename}';
       final file = await sftp.open(remotePath);
 
-      const offset = 5;
-      const length = 16;
       final expected = await file.readBytes(length: length, offset: offset);
 
       final outputFile = File(
