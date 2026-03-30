@@ -412,7 +412,15 @@ class SSHTransport {
       ..add(aad)
       ..add(encrypted);
 
-    socket.sink.add(buffer.takeBytes());
+    final bytes = buffer.takeBytes();
+    _bytesSent += bytes.length;
+    socket.sink.add(bytes);
+
+    if (_bytesSent >= _dataLimitForRekey) {
+      _reKeyTimer?.cancel();
+      _sendKexInit();
+      _bytesSent = 0;
+    }
   }
 
   int _alignedPaddingLength(int payloadLength, int align) {
@@ -1037,7 +1045,7 @@ class SSHTransport {
           cipherType.keySize,
         );
         final iv = _deriveKey(
-          isClient ? SSHDeriveKeyType.clientIV : SSHDeriveKeyType.clientIV,
+          isClient ? SSHDeriveKeyType.clientIV : SSHDeriveKeyType.serverIV,
           cipherType.ivSize,
         );
         _localAeadKey = key;
@@ -1721,11 +1729,13 @@ class SSHTransport {
 
   /// Returns true if integrity protection is provided.
   ///
-  /// This is true when AEAD ciphers (GCM, ChaCha20-Poly1305) are used,
-  /// or when traditional MAC algorithms are in use.
+  /// This is true when AEAD keys are initialized (GCM, ChaCha20-Poly1305),
+  /// or when traditional MAC algorithms are initialized.
   bool get hasIntegrityProtection {
-    final usingAead = (_clientCipherType?.isAead == true) ||
-        (_serverCipherType?.isAead == true);
+    final usingAead = (_localAeadKey != null ||
+        _localChaChaEncKey != null ||
+        _remoteAeadKey != null ||
+        _remoteChaChaEncKey != null);
     if (usingAead) return true;
     return _localMac != null && _remoteMac != null;
   }

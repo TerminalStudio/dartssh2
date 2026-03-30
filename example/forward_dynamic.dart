@@ -16,8 +16,6 @@ Future<void> main() async {
     username: username,
     onPasswordRequest: () => password,
     onVerifyHostKey: (host, verifier) {
-      // WARNING: Accepting any host key for demonstration purposes only.
-      // In production, verify the host key against a known trusted value.
       print('WARNING: Host key verification disabled for testing.');
       return true;
     },
@@ -35,8 +33,12 @@ Future<void> main() async {
 
   StreamSubscription<void>? sigintSub;
   StreamSubscription<void>? sigtermSub;
+  var isShuttingDown = false;
 
   Future<void> shutdown() async {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+
     await sigintSub?.cancel();
     await sigtermSub?.cancel();
     await dynamicForward.close();
@@ -49,4 +51,5 @@ Future<void> main() async {
   sigtermSub = ProcessSignal.sigterm.watch().listen((_) => shutdown());
 
   await client.done;
+  await shutdown();
 }

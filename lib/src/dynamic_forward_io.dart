@@ -69,8 +69,8 @@ class _SSHDynamicForwardImpl implements SSHDynamicForward {
       onClosed: () => _connections.remove(connection),
     );
 
-    _connections.add(connection);
     connection.start();
+    _connections.add(connection);
   }
 
   @override
@@ -119,7 +119,10 @@ class _SocksConnection {
   void start() {
     _clientSub = _client.listen(
       _onClientData,
-      onDone: close,
+      onDone: () {
+        _remote?.sink.close();
+        _client.destroy();
+      },
       onError: (_, __) => close(),
       cancelOnError: true,
     );
@@ -184,6 +187,9 @@ class _SocksConnection {
         return;
       }
 
+      _handshakeTimer?.cancel();
+      _handshakeTimer = null;
+
       try {
         _remote = await dial(target.host, target.port).timeout(
           options.connectTimeout,
@@ -202,14 +208,15 @@ class _SocksConnection {
 
       _remoteSub = _remote!.stream.listen(
         _client.add,
-        onDone: close,
+        onDone: () {
+          _client.destroy();
+          _remote?.destroy();
+        },
         onError: (_, __) => close(),
         cancelOnError: true,
       );
 
       _sendReply(_SocksReply.succeeded);
-      _handshakeTimer?.cancel();
-      _handshakeTimer = null;
       _state = _SocksState.streaming;
 
       final pending = _buffer.takeAll();
