@@ -10,6 +10,7 @@ import 'package:dartssh2/src/hostkey/hostkey_ed25519.dart';
 import 'package:dartssh2/src/hostkey/hostkey_rsa.dart';
 import 'package:dartssh2/src/ssh_hostkey.dart';
 import 'package:dartssh2/src/message/base.dart';
+import 'package:dartssh2/src/utils/bigint.dart';
 import 'package:dartssh2/src/utils/bcrypt.dart';
 import 'package:dartssh2/src/utils/cipher_ext.dart';
 import 'package:dartssh2/src/utils/list.dart';
@@ -26,6 +27,9 @@ abstract class SSHKeyPair {
       case 'RSA PRIVATE KEY':
         final pair = RsaKeyPair.decode(pem);
         return [pair.getPrivateKeys(passphrase)];
+      case 'EC PRIVATE KEY':
+        final pair = EcKeyPair.decode(pem);
+        return [pair.getPrivateKeys(passphrase)];
       default:
         throw UnsupportedError('Unsupported key type: ${pem.type}');
     }
@@ -39,6 +43,9 @@ abstract class SSHKeyPair {
         return pairs.isEncrypted;
       case 'RSA PRIVATE KEY':
         final pair = RsaKeyPair.decode(pem);
+        return pair.isEncrypted;
+      case 'EC PRIVATE KEY':
+        final pair = EcKeyPair.decode(pem);
         return pair.isEncrypted;
       default:
         throw UnsupportedError('Unsupported key type: ${pem.type}');
@@ -531,6 +538,8 @@ class RsaKeyPair {
 
     try {
       return RsaPrivateKey.decode(keyBlob);
+    } on UnsupportedError {
+      rethrow;
     } catch (e) {
       throw SSHKeyDecodeError('Failed to decode private key', e);
     }
@@ -712,5 +721,141 @@ class RsaPrivateKey implements SSHKeyPair {
   @override
   String toString() {
     return '$runtimeType(version: $version)';
+  }
+}
+
+class EcKeyPair {
+  final RsaKeyPairDEKInfo? dekInfo;
+
+  final Uint8List keyBlob;
+
+  const EcKeyPair(this.dekInfo, this.keyBlob);
+
+  factory EcKeyPair.decode(SSHPem pem) {
+    final dekInfoHeader = pem.headers['DEK-Info'];
+
+    final dekInfo =
+        dekInfoHeader != null ? RsaKeyPairDEKInfo.parse(dekInfoHeader) : null;
+
+    final keyBlob = pem.content;
+
+    return EcKeyPair(dekInfo, keyBlob);
+  }
+
+  bool get isEncrypted => dekInfo != null;
+
+  OpenSSHEcdsaKeyPair getPrivateKeys([String? passphrase]) {
+    if (isEncrypted) {
+      throw UnsupportedError(
+        'Encrypted EC PRIVATE KEY is not supported yet',
+      );
+    }
+
+    if (passphrase != null) {
+      throw ArgumentError('Passphrase is not required for unencrypted keys');
+    }
+
+    try {
+      return _decodeLegacyEcPrivateKey(keyBlob);
+    } on UnsupportedError {
+      rethrow;
+    } catch (e) {
+      throw SSHKeyDecodeError('Failed to decode private key', e);
+    }
+  }
+
+  OpenSSHEcdsaKeyPair _decodeLegacyEcPrivateKey(Uint8List keyBlob) {
+    final parser = ASN1Parser(keyBlob);
+    final sequence = parser.nextObject() as ASN1Sequence;
+
+    if (sequence.elements.length < 2) {
+      throw FormatException('Invalid EC private key sequence');
+    }
+
+    final privateKeyOctets = (sequence.elements[1] as ASN1OctetString).octets;
+    final d = decodeBigIntWithSign(1, privateKeyOctets);
+
+    Uint8List? publicPoint;
+    String? curveId;
+
+    for (var i = 2; i < sequence.elements.length; i++) {
+      final element = sequence.elements[i];
+      if (element.tag == 0xA0) {
+        final inner = ASN1Parser(element.valueBytes()).nextObject();
+        if (inner is ASN1ObjectIdentifier && inner.identifier != null) {
+          final oid = inner.identifier!;
+          curveId = _curveIdFromOid(oid);
+          if (curveId == null) {
+            throw UnsupportedError(
+                'Unsupported EC PRIVATE KEY curve OID: $oid');
+          }
+        }
+      } else if (element.tag == 0xA1) {
+        final inner = ASN1Parser(element.valueBytes()).nextObject();
+        if (inner is ASN1BitString) {
+          publicPoint = inner.contentBytes();
+        }
+      }
+    }
+
+    curveId ??= _inferCurveId(publicPoint?.length ?? 0, privateKeyOctets.length);
+    if (curveId == null) {
+      throw UnsupportedError('Unsupported EC PRIVATE KEY curve');
+    }
+
+    if (publicPoint != null) {
+      final expectedPublicPoint = _derivePublicPoint(curveId, d);
+      if (publicPoint.length != expectedPublicPoint.length ||
+          !publicPoint.equals(expectedPublicPoint)) {
+        throw UnsupportedError(
+            'EC PRIVATE KEY public point does not match curve $curveId');
+      }
+    }
+
+    final q = publicPoint ?? _derivePublicPoint(curveId, d);
+
+    return OpenSSHEcdsaKeyPair(curveId, q, d, '');
+  }
+
+  String? _curveIdFromOid(String oid) {
+    if (oid == '1.2.840.10045.3.1.7') return 'nistp256';
+    if (oid == '1.3.132.0.34') return 'nistp384';
+    if (oid == '1.3.132.0.35') return 'nistp521';
+    return null;
+  }
+
+  String? _inferCurveId(int publicPointLength, int privateKeyLength) {
+    if (publicPointLength == 65 || privateKeyLength == 32) {
+      return 'nistp256';
+    }
+    if (publicPointLength == 97 || privateKeyLength == 48) {
+      return 'nistp384';
+    }
+    if (publicPointLength == 133 || privateKeyLength == 66) {
+      return 'nistp521';
+    }
+    return null;
+  }
+
+  Uint8List _derivePublicPoint(String curveId, BigInt d) {
+    final curve = _curveForId(curveId);
+    final point = curve.G * d;
+    if (point == null) {
+      throw FormatException('Failed to derive public EC point');
+    }
+    return point.getEncoded(false);
+  }
+
+  ECDomainParameters _curveForId(String curveId) {
+    switch (curveId) {
+      case 'nistp256':
+        return ECCurve_secp256r1();
+      case 'nistp384':
+        return ECCurve_secp384r1();
+      case 'nistp521':
+        return ECCurve_secp521r1();
+      default:
+        throw UnsupportedError('Unsupported curve: $curveId');
+    }
   }
 }

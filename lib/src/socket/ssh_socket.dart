@@ -5,6 +5,10 @@ import 'package:dartssh2/src/socket/ssh_socket_io.dart'
     if (dart.library.js) 'package:dartssh2/src/socket/ssh_socket_js.dart';
 
 abstract class SSHSocket {
+  /// Connects using the platform native socket transport.
+  ///
+  /// On web platforms this throws [UnsupportedError] because browsers do not
+  /// provide raw TCP sockets.
   static Future<SSHSocket> connect(
     String host,
     int port, {

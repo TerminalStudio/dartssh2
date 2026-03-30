@@ -4,6 +4,13 @@ import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 
 void main(List<String> args) async {
+  final hasTerminal =
+      stdin.hasTerminal && stdout.hasTerminal && stderr.hasTerminal;
+  if (!hasTerminal) {
+    stderr.writeln('No terminal attached. Exiting.');
+    exit(1);
+  }
+
   final socket = await SSHSocket.connect('localhost', 22);
 
   final client = SSHClient(
@@ -17,6 +24,7 @@ void main(List<String> args) async {
   );
 
   final shell = await client.shell();
+
   stdout.addStream(shell.stdout);
   stderr.addStream(shell.stderr);
   stdin.cast<Uint8List>().listen(shell.write);

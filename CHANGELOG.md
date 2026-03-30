@@ -1,4 +1,12 @@
-## [2.15.0] - 2026-03-30
+## [2.16.0] - 2026-03-24
+- **BREAKING**: Changed `SSHChannelController.sendEnv()` from `void` to `Future<bool>` to properly await environment variable setup responses and avoid race conditions with PTY requests [#102]. Thanks [@itzhoujun] and [@vicajilau].
+- Clarified shell stdio wiring for CLI-only usage and guarded `example/shell.dart` against missing local terminal handles (for example GUI-launched Windows `.exe`) [#121]. Thanks [@bradmartin333] and [@vicajilau].
+- Added support for parsing legacy unencrypted `EC PRIVATE KEY` PEM format in `SSHKeyPair.fromPem` [#109]. Thanks [@jooy2] and [@vicajilau].
+- Added `SSHClient.runWithResult()` to expose command output together with `exitCode` and `exitSignal` while keeping `run()` as a convenience API [#99]. Thanks [@falrom] and [@vicajilau].
+- Added non-breaking high-level SFTP `download()` / `downloadTo()` APIs and read pipeline tuning knobs (`chunkSize`, `maxPendingRequests`) for improved large-file throughput while preserving stream compatibility [#124]. Thanks [@vicajilau].
+- Made SFTP directory/file name parsing tolerant to malformed UTF-8 bytes to avoid `FormatException` on non-UTF-8 server filenames [#95]. Thanks [@vicajilau].
+
+## [2.15.0] - 2026-03-20
 - Updated `pointycastle` dependency to `^4.0.0` [#131]. Thanks [@vicajilau].
 - Added foundational X11 forwarding support with session x11-req API, incoming x11 channel handling, and protocol tests [#1]. Thanks [@vicajilau].
 - Exposed SSH ident configuration from `SSHClient` [#135]. Thanks [@Remulic] and [@vicajilau].
@@ -188,6 +196,12 @@
 [#145]: https://github.com/TerminalStudio/dartssh2/pull/145
 [#141]: https://github.com/TerminalStudio/dartssh2/pull/141
 [#140]: https://github.com/TerminalStudio/dartssh2/pull/140
+[#102]: https://github.com/TerminalStudio/dartssh2/issues/102
+[#99]: https://github.com/TerminalStudio/dartssh2/issues/99
+[#109]: https://github.com/TerminalStudio/dartssh2/issues/109
+[#121]: https://github.com/TerminalStudio/dartssh2/issues/121
+[#124]: https://github.com/TerminalStudio/dartssh2/issues/124
+[#95]: https://github.com/TerminalStudio/dartssh2/issues/95
 [#139]: https://github.com/TerminalStudio/dartssh2/pull/139
 [#133]: https://github.com/TerminalStudio/dartssh2/pull/133
 [#132]: https://github.com/TerminalStudio/dartssh2/pull/132
@@ -219,7 +233,9 @@
 [@alexander-irion]: https://github.com/alexander-irion
 [@Remulic]: https://github.com/Remulic
 [@james-thorpe]: https://github.com/james-thorpe
+[@itzhoujun]: https://github.com/itzhoujun
+[@jooy2]: https://github.com/jooy2
+[@falrom]: https://github.com/falrom
+[@bradmartin333]: https://github.com/bradmartin333
 [@Wackymax]: https://github.com/Wackymax
 [@vicajilau]: https://github.com/vicajilau
-[@shihuili1218]: https://github.com/shihuili1218
-[@isegal]: https://github.com/isegal
