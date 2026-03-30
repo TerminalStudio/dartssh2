@@ -159,6 +159,14 @@ class SSHCipherType extends SSHAlgorithm {
       throw ArgumentError.value(key, 'key', 'Key must be $keySize bytes long');
     }
 
+    if (nonce.length != ivSize) {
+      throw ArgumentError.value(
+        nonce,
+        'nonce',
+        'Nonce must be $ivSize bytes long',
+      );
+    }
+
     final factory = cipherFactory;
     if (factory == null) {
       throw StateError('No AEAD cipher factory configured for $name');

@@ -206,6 +206,8 @@ class SSHTransport {
 
   final _remotePacketSN = SSHPacketSN.fromZero();
 
+  final _paddingRandom = Random.secure();
+
   /// Whether a key exchange is currently in progress (initial or re-key).
   bool _kexInProgress = false;
 
@@ -394,8 +396,7 @@ class SSHTransport {
       ..setRange(1, 1 + data.length, data);
 
     for (var i = 0; i < paddingLength; i++) {
-      plaintext[1 + data.length + i] =
-          (DateTime.now().microsecondsSinceEpoch + i) & 0xff;
+      plaintext[1 + data.length + i] = _paddingRandom.nextInt(256);
     }
 
     final encrypted = _processAead(
@@ -1706,7 +1707,19 @@ class SSHTransport {
   }
 
   /// Returns true if both MACs are initialized (MAC protection is provided).
+  ///
+  /// This only checks if [_localMac] and [_remoteMac] are non-null.
+  /// For AEAD ciphers, these will be null even though integrity is provided.
+  @Deprecated('Use hasIntegrityProtection instead')
   bool get hasMacProtection {
+    return _localMac != null && _remoteMac != null;
+  }
+
+  /// Returns true if integrity protection is provided.
+  ///
+  /// This is true when AEAD ciphers (GCM, ChaCha20-Poly1305) are used,
+  /// or when traditional MAC algorithms are in use.
+  bool get hasIntegrityProtection {
     final usingAead = (_clientCipherType?.isAead == true) ||
         (_serverCipherType?.isAead == true);
     if (usingAead) return true;

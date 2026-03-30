@@ -64,7 +64,7 @@ class _SSHDynamicForwardImpl implements SSHDynamicForward {
       client,
       options: options,
       filter: filter,
-      canOpenTunnel: () => _connections.length <= options.maxConnections,
+      canOpenTunnel: () => _connections.length < options.maxConnections,
       dial: dial,
       onClosed: () => _connections.remove(connection),
     );
@@ -117,17 +117,17 @@ class _SocksConnection {
   _SocksState _state = _SocksState.greeting;
 
   void start() {
-    _handshakeTimer = Timer(options.handshakeTimeout, () async {
-      _sendReply(_SocksReply.ttlExpired);
-      await close();
-    });
-
     _clientSub = _client.listen(
       _onClientData,
       onDone: close,
       onError: (_, __) => close(),
       cancelOnError: true,
     );
+
+    _handshakeTimer = Timer(options.handshakeTimeout, () async {
+      _sendReply(_SocksReply.ttlExpired);
+      await close();
+    });
   }
 
   Future<void> close() async {
@@ -288,7 +288,7 @@ class _SocksConnection {
     if (atyp == 0x03) {
       final length = request[4];
       final bytes = request.sublist(5, 5 + length);
-      return utf8.decode(bytes);
+      return utf8.decode(bytes, allowMalformed: true);
     }
 
     final raw = request.sublist(4, 20);

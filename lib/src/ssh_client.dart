@@ -1732,7 +1732,7 @@ extension on SSHClient {
 
   /// Check if the transport layer provides MAC protection
   bool get _hasMacProtection {
-    return _transport.hasMacProtection;
+    return _transport.hasIntegrityProtection;
   }
 }
 

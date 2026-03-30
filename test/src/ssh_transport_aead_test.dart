@@ -74,8 +74,8 @@ void main() {
 
       setPrivate(receiver, '_remoteVersion', 'SSH-2.0-test');
       setPrivate(receiver, '_serverCipherType', SSHCipherType.aes128gcm);
-      setPrivate(receiver, '_remoteCipherKey', key);
-      setPrivate(receiver, '_remoteIV', iv);
+      setPrivate(receiver, '_remoteAeadKey', key);
+      setPrivate(receiver, '_remoteAeadFixedNonce', iv);
       setSequenceValue(receiver, '_remotePacketSN', 0);
 
       receiverSocket.addIncomingBytes(encryptedPacket);
@@ -127,8 +127,8 @@ void main() {
 
       setPrivate(receiver, '_remoteVersion', 'SSH-2.0-test');
       setPrivate(receiver, '_serverCipherType', SSHCipherType.aes128gcm);
-      setPrivate(receiver, '_remoteCipherKey', key);
-      setPrivate(receiver, '_remoteIV', iv);
+      setPrivate(receiver, '_remoteAeadKey', key);
+      setPrivate(receiver, '_remoteAeadFixedNonce', iv);
       setSequenceValue(receiver, '_remotePacketSN', 0);
 
       receiverSocket.addIncomingBytes(tampered);
@@ -169,8 +169,8 @@ void main() {
 
       setPrivate(transport, '_remoteVersion', 'SSH-2.0-test');
       setPrivate(transport, '_serverCipherType', SSHCipherType.aes128gcm);
-      setPrivate(transport, '_remoteCipherKey', Uint8List(16));
-      setPrivate(transport, '_remoteIV', Uint8List(12));
+      setPrivate(transport, '_remoteAeadKey', Uint8List(16));
+      setPrivate(transport, '_remoteAeadFixedNonce', Uint8List(12));
       setSequenceValue(transport, '_remotePacketSN', 0);
 
       final resultNoHeader = reflect(transport).invoke(
