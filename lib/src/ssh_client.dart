@@ -4,8 +4,9 @@ import 'dart:typed_data';
 
 import 'package:dartssh2/src/http/http_client.dart';
 import 'package:dartssh2/src/sftp/sftp_client.dart';
-import 'package:dartssh2/src/ssh_agent.dart';
+import 'package:dartssh2/src/dynamic_forward.dart';
 import 'package:dartssh2/src/ssh_algorithm.dart';
+import 'package:dartssh2/src/ssh_agent.dart';
 import 'package:dartssh2/src/ssh_channel.dart';
 import 'package:dartssh2/src/message/base.dart';
 import 'package:dartssh2/src/ssh_channel_id.dart';
@@ -451,6 +452,30 @@ class SSHClient {
       remotePort,
     );
     return SSHForwardChannel(channelController.channel);
+  }
+
+  /// Start a local SOCKS5 server that forwards outbound `CONNECT` requests
+  /// through this SSH connection.
+  ///
+  /// This is similar to `ssh -D`. Only SOCKS5 with `NO AUTH` and `CONNECT`
+  /// is supported. Use [filter] to optionally deny specific target
+  /// destinations. Use [options] to tune timeouts and connection limits.
+  ///
+  /// Not supported on platforms without `dart:io`.
+  Future<SSHDynamicForward> forwardDynamic({
+    String bindHost = '127.0.0.1',
+    int? bindPort,
+    SSHDynamicForwardOptions options = const SSHDynamicForwardOptions(),
+    SSHDynamicConnectionFilter? filter,
+  }) async {
+    await _authenticated.future;
+    return startDynamicForward(
+      bindHost: bindHost,
+      bindPort: bindPort,
+      options: options,
+      filter: filter,
+      dial: forwardLocal,
+    );
   }
 
   /// Forward local connections to a remote Unix domain socket at

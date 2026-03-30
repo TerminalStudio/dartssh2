@@ -188,6 +188,14 @@ class SSHTransport {
   Uint8List? _remoteChaChaEncKey; // payload decryption / poly1305 key generator
   Uint8List? _remoteChaChaLenKey; // length field decryption key
 
+  Uint8List? _localCipherKey;
+
+  Uint8List? _remoteCipherKey;
+
+  Uint8List? _localIV;
+
+  Uint8List? _remoteIV;
+
   /// A [Mac] used to authenticate data sent to the other side.
   Mac? _localMac;
 
@@ -227,10 +235,21 @@ class SSHTransport {
     final clientMacType = _clientMacType;
     final serverMacType = _serverMacType;
     final macType = isClient ? clientMacType : serverMacType;
+    final localCipherType = isClient ? _clientCipherType : _serverCipherType;
+
+    if (localCipherType != null &&
+        localCipherType.isAead &&
+        _localCipherKey != null &&
+        _localIV != null) {
+      _sendAeadPacket(data, localCipherType);
+      _localPacketSN.increase();
+      return;
+    }
+
     final isEtm = _encryptCipher != null && macType != null && macType.isEtm;
 
     final ctLocal = isClient ? _clientCipherType : _serverCipherType;
-    final usingAead = ctLocal?.isAEAD ?? false;
+    final usingAead = ctLocal?.isAead ?? false;
     final isChaCha = ctLocal?.name == 'chacha20-poly1305@openssh.com';
     final aeadReady = isChaCha
         ? (_localChaChaEncKey != null && _localChaChaLenKey != null)
@@ -291,7 +310,7 @@ class SSHTransport {
         }
         final out =
             _encryptChaChaOpenSSH(packet, encKey, lenKey, _localPacketSN.value);
-        _bytesSent += packet.length + cipherType.tagSize;
+        _bytesSent += packet.length + cipherType.aeadTagSize;
         socket.sink.add(out);
       } else {
         final key = _localAeadKey!;
@@ -319,7 +338,7 @@ class SSHTransport {
               Uint8List.sublistView(encryptedWithTag, 0, written);
         }
 
-        _bytesSent += packet.length + cipherType.tagSize;
+        _bytesSent += packet.length + cipherType.aeadTagSize;
 
         final out = BytesBuilder(copy: false)
           ..add(lenBytes)
@@ -361,6 +380,72 @@ class SSHTransport {
     if (_encryptCipher != null && (Random().nextInt(10) == 0)) {
       _sendIgnoreMessageIfNeeded();
     }
+  }
+
+  void _sendAeadPacket(Uint8List data, SSHCipherType cipherType) {
+    final paddingLength =
+        _alignedPaddingLength(data.length, cipherType.blockSize);
+    final packetLength = 1 + data.length + paddingLength;
+
+    final aad = Uint8List(4)..buffer.asByteData().setUint32(0, packetLength);
+
+    final plaintext = Uint8List(packetLength)
+      ..[0] = paddingLength
+      ..setRange(1, 1 + data.length, data);
+
+    for (var i = 0; i < paddingLength; i++) {
+      plaintext[1 + data.length + i] =
+          (DateTime.now().microsecondsSinceEpoch + i) & 0xff;
+    }
+
+    final encrypted = _processAead(
+      key: _localCipherKey!,
+      iv: _localIV!,
+      sequence: _localPacketSN.value,
+      aad: aad,
+      input: plaintext,
+      forEncryption: true,
+    );
+
+    final buffer = BytesBuilder(copy: false)
+      ..add(aad)
+      ..add(encrypted);
+
+    socket.sink.add(buffer.takeBytes());
+  }
+
+  int _alignedPaddingLength(int payloadLength, int align) {
+    final paddingLength = align - ((payloadLength + 1) % align);
+    return paddingLength < 4 ? paddingLength + align : paddingLength;
+  }
+
+  Uint8List _processAead({
+    required Uint8List key,
+    required Uint8List iv,
+    required int sequence,
+    required Uint8List aad,
+    required Uint8List input,
+    required bool forEncryption,
+  }) {
+    final cipher = GCMBlockCipher(AESEngine());
+    final nonce = _nonceForSequence(iv, sequence);
+    cipher.init(
+      forEncryption,
+      AEADParameters(KeyParameter(key), 128, nonce, aad),
+    );
+    return cipher.process(input);
+  }
+
+  Uint8List _nonceForSequence(Uint8List iv, int sequence) {
+    if (iv.length != 12) {
+      throw ArgumentError.value(iv, 'iv', 'AEAD IV must be 12 bytes long');
+    }
+
+    final nonce = Uint8List.fromList(iv);
+    final view = ByteData.sublistView(nonce);
+    final counter = view.getUint64(4);
+    view.setUint64(4, counter + sequence);
+    return nonce;
   }
 
   void close() {
@@ -488,17 +573,17 @@ class SSHTransport {
   /// `null` if there is not enough data in the buffer to read the packet.
   Uint8List? _consumePacket() {
     final ct = isClient ? _serverCipherType : _clientCipherType;
-    final usingAead = ct?.isAEAD ?? false;
+    final usingAead = ct?.isAead ?? false;
     if (usingAead) {
       final isChaCha = ct?.name == 'chacha20-poly1305@openssh.com';
       final aeadReady = isChaCha
           ? (_remoteChaChaEncKey != null && _remoteChaChaLenKey != null)
           : (_remoteAeadKey != null && _remoteAeadFixedNonce != null);
       if (aeadReady) {
-        return _consumeAeadPacket();
+        return _consumeAeadPacket(ct!);
       }
     }
-    return _decryptCipher == null
+    return (_decryptCipher == null && _remoteCipherKey == null)
         ? _consumeClearTextPacket()
         : _consumeEncryptedPacket();
   }
@@ -527,6 +612,14 @@ class SSHTransport {
 
   Uint8List? _consumeEncryptedPacket() {
     printDebug?.call('SSHTransport._consumeEncryptedPacket');
+
+    final remoteCipherType = isClient ? _serverCipherType : _clientCipherType;
+    if (remoteCipherType != null &&
+        remoteCipherType.isAead &&
+        _remoteCipherKey != null &&
+        _remoteIV != null) {
+      return _consumeAeadPacket(remoteCipherType);
+    }
 
     final blockSize = _decryptCipher!.blockSize;
     if (_buffer.length < blockSize) {
@@ -639,76 +732,52 @@ class SSHTransport {
   /// Layout:
   ///  - 4-byte packet length (plaintext, used as AAD)
   ///  - encrypted (padding_length + payload + padding)
-  ///  - authentication tag (cipherType.tagSize)
-  Uint8List? _consumeAeadPacket() {
+  ///  - authentication tag (cipherType.aeadTagSize)
+  Uint8List? _consumeAeadPacket(SSHCipherType cipherType) {
     printDebug?.call('SSHTransport._consumeAeadPacket');
 
     if (_buffer.length < 4) {
       return null;
     }
 
-    final cipherType = isClient ? _serverCipherType! : _clientCipherType!;
-    final tagSize = cipherType.tagSize;
-
     if (cipherType.name == 'chacha20-poly1305@openssh.com') {
       return _consumeChaChaOpenSSHPacket();
     }
 
-    final len = SSHPacket.readPacketLength(_buffer.data);
-    _verifyPacketLength(len);
+    final packetLength = SSHPacket.readPacketLength(_buffer.data);
+    _verifyPacketLength(packetLength);
 
-    final totalNeeded = 4 + len + tagSize;
-    if (_buffer.length < totalNeeded) {
+    final tagLength = cipherType.aeadTagSize;
+    if (_buffer.length < 4 + packetLength + tagLength) {
       return null;
     }
 
-    final lenBytes = _buffer.consume(4);
-    final ciphertext = _buffer.consume(len);
-    final tag = _buffer.consume(tagSize);
+    final aad = _buffer.consume(4);
+    final ciphertext = _buffer.consume(packetLength);
+    final tag = _buffer.consume(tagLength);
 
-    final key = _remoteAeadKey!;
-    final fixedNonce = _remoteAeadFixedNonce!; // 12 bytes
-    final nonce = _composeAeadNonce(fixedNonce, _remotePacketSN.value);
+    final encryptedInput = Uint8List(packetLength + tagLength)
+      ..setRange(0, packetLength, ciphertext)
+      ..setRange(packetLength, packetLength + tagLength, tag);
 
-    final aead = cipherType.createAEADCipher(
-      key,
-      nonce,
-      forEncryption: false,
-      aad: lenBytes,
-    );
-
-    // Concatenate ciphertext + tag for processing
-    final encWithTagBuilder = BytesBuilder(copy: false)
-      ..add(ciphertext)
-      ..add(tag);
-    final encWithTag = encWithTagBuilder.takeBytes();
-
-    // Decrypt and authenticate
-    Uint8List decrypted;
+    late Uint8List plaintext;
     try {
-      final outLen = aead.getOutputSize(encWithTag.length);
-      decrypted = Uint8List(outLen);
-      var written =
-          aead.processBytes(encWithTag, 0, encWithTag.length, decrypted, 0);
-      written += aead.doFinal(decrypted, written);
-      if (written != decrypted.length) {
-        decrypted = Uint8List.sublistView(decrypted, 0, written);
-      }
-    } on Exception catch (e) {
-      // Normalize AEAD auth/tag failures to SSHPacketError
-      throw SSHPacketError('AEAD decrypt/authentication failed: $e');
+      plaintext = _processAead(
+        key: _remoteAeadKey!,
+        iv: _remoteAeadFixedNonce!,
+        sequence: _remotePacketSN.value,
+        aad: aad,
+        input: encryptedInput,
+        forEncryption: false,
+      );
+    } on InvalidCipherTextException {
+      throw SSHPacketError('AEAD authentication failed');
     }
 
-    // decrypted = [padding_length | payload | padding]
-    if (decrypted.isEmpty) {
-      throw SSHPacketError('AEAD decrypted empty packet body');
-    }
-
-    final paddingLength = ByteData.sublistView(decrypted).getUint8(0);
-    final payloadLength = len - paddingLength - 1;
+    final paddingLength = plaintext[0];
+    final payloadLength = packetLength - paddingLength - 1;
     _verifyPacketPadding(payloadLength, paddingLength);
-
-    return Uint8List.sublistView(decrypted, 1, 1 + payloadLength);
+    return Uint8List.sublistView(plaintext, 1, 1 + payloadLength);
   }
 
   void _verifyPacketLength(int packetLength) {
@@ -859,7 +928,7 @@ class SSHTransport {
     _verifyPacketLength(len);
 
     final cipherType = isClient ? _serverCipherType! : _clientCipherType!;
-    final tagSize = cipherType.tagSize;
+    final tagSize = cipherType.aeadTagSize;
     final totalNeeded = 4 + len + tagSize;
     if (_buffer.length < totalNeeded) {
       return null;
@@ -948,7 +1017,7 @@ class SSHTransport {
     final cipherType = isClient ? _clientCipherType : _serverCipherType;
     if (cipherType == null) throw StateError('No cipher type selected');
 
-    if (cipherType.isAEAD) {
+    if (cipherType.isAead) {
       if (cipherType.name == 'chacha20-poly1305@openssh.com') {
         // OpenSSH Chacha20-Poly1305 derives 64 bytes per direction.
         final rawKey = _deriveKey(
@@ -1006,7 +1075,7 @@ class SSHTransport {
     final cipherType = isClient ? _serverCipherType : _clientCipherType;
     if (cipherType == null) throw StateError('No cipher type selected');
 
-    if (cipherType.isAEAD) {
+    if (cipherType.isAead) {
       if (cipherType.name == 'chacha20-poly1305@openssh.com') {
         // Derive 64 bytes per direction and split according to OpenSSH spec.
         final rawKey = _deriveKey(
@@ -1396,10 +1465,10 @@ class SSHTransport {
     if (_serverCipherType == null) {
       throw StateError('No matching server cipher algorithm');
     }
-    if (_clientMacType == null) {
+    if (_clientMacType == null && !_clientCipherType!.isAead) {
       throw StateError('No matching client MAC algorithm');
     }
-    if (_serverMacType == null) {
+    if (_serverMacType == null && !_serverCipherType!.isAead) {
       throw StateError('No matching server MAC algorithm');
     }
 
@@ -1638,8 +1707,8 @@ class SSHTransport {
 
   /// Returns true if both MACs are initialized (MAC protection is provided).
   bool get hasMacProtection {
-    final usingAead = (_clientCipherType?.isAEAD == true) ||
-        (_serverCipherType?.isAEAD == true);
+    final usingAead = (_clientCipherType?.isAead == true) ||
+        (_serverCipherType?.isAead == true);
     if (usingAead) return true;
     return _localMac != null && _remoteMac != null;
   }
