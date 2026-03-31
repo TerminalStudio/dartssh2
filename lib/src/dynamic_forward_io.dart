@@ -119,7 +119,7 @@ class _SocksConnection {
   void start() {
     _clientSub = _client.listen(
       _onClientData,
-      onDone: () => close(),
+      onDone: _handleClientEOF,
       onError: (_, __) => close(),
       cancelOnError: true,
     );
@@ -128,6 +128,25 @@ class _SocksConnection {
       _sendReply(_SocksReply.ttlExpired);
       await close();
     });
+  }
+
+  void _handleClientEOF() {
+    if (_state == _SocksState.streaming) {
+      _remote?.sink.close();
+      _clientSub?.cancel();
+    } else {
+      close();
+    }
+  }
+
+  void _handleRemoteEOF() {
+    if (_state == _SocksState.streaming) {
+      _client.destroy();
+      _remoteSub?.cancel();
+      onClosed();
+    } else {
+      close();
+    }
   }
 
   Future<void> close() async {
@@ -205,7 +224,7 @@ class _SocksConnection {
 
       _remoteSub = _remote!.stream.listen(
         _client.add,
-        onDone: () => close(),
+        onDone: _handleRemoteEOF,
         onError: (_, __) => close(),
         cancelOnError: true,
       );
@@ -323,12 +342,18 @@ class _SocksConnection {
 }
 
 class _ByteBuffer {
+  static const kMaxHandshakeSize = 32768;
+
   final _data = <int>[];
   int _offset = 0;
 
   int get length => _data.length - _offset;
 
   void add(List<int> chunk) {
+    if (length + chunk.length > kMaxHandshakeSize) {
+      throw StateError(
+          'Handshake buffer overflow: $length + ${chunk.length} > $kMaxHandshakeSize');
+    }
     _data.addAll(chunk);
   }
 

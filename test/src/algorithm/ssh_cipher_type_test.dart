@@ -230,7 +230,8 @@ void testAEADCipher(SSHCipherType type) {
     if (type.name.contains('gcm')) {
       // GCM supports one-shot process returning ciphertext+tag
       encryptedWithTag = encrypter.process(plainText);
-      expect(encryptedWithTag.length, equals(plainText.length + type.aeadTagSize));
+      expect(
+          encryptedWithTag.length, equals(plainText.length + type.aeadTagSize));
     } else {
       // ChaCha20-Poly1305 requires doFinal to append tag
       final outLen = encrypter.getOutputSize(plainText.length);

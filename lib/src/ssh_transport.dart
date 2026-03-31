@@ -253,7 +253,8 @@ class SSHTransport {
         final lenKey = _localChaChaLenKey!;
         final packetAlign = max(SSHPacket.minAlign, 8);
         final packet = SSHPacket.pack(data, align: packetAlign);
-        final out = _encryptChaChaOpenSSH(packet, encKey, lenKey, _localPacketSN.value);
+        final out =
+            _encryptChaChaOpenSSH(packet, encKey, lenKey, _localPacketSN.value);
         _bytesSent += packet.length + localCipherType!.aeadTagSize;
         socket.sink.add(out);
       } else {

@@ -641,10 +641,11 @@ class SftpFile {
     var bytesRead = 0;
 
     while (bytesRead < length) {
-      while (
-          reservedOffset < endOffset && pendingReads.length < maxPendingRequests) {
+      while (reservedOffset < endOffset &&
+          pendingReads.length < maxPendingRequests) {
         final requestLength = min(chunkSize, endOffset - reservedOffset);
-        pendingReads.add((reservedOffset, _readChunk(requestLength, reservedOffset)));
+        pendingReads
+            .add((reservedOffset, _readChunk(requestLength, reservedOffset)));
         reservedOffset += requestLength;
       }
 
