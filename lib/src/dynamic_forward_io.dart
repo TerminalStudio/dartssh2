@@ -64,7 +64,7 @@ class _SSHDynamicForwardImpl implements SSHDynamicForward {
       client,
       options: options,
       filter: filter,
-      canOpenTunnel: () => _connections.length < options.maxConnections,
+      canOpenTunnel: () => _connections.length <= options.maxConnections,
       dial: dial,
       onClosed: () => _connections.remove(connection),
     );
@@ -114,6 +114,7 @@ class _SocksConnection {
   StreamSubscription<Uint8List>? _remoteSub;
   Timer? _handshakeTimer;
   bool _closed = false;
+  bool _dialing = false;
   _SocksState _state = _SocksState.greeting;
 
   void start() {
@@ -187,6 +188,9 @@ class _SocksConnection {
     }
 
     if (_state == _SocksState.request) {
+      if (_dialing) return;
+      _dialing = true;
+
       final target = _parseConnectRequest();
       if (target == null) return;
 
@@ -198,6 +202,7 @@ class _SocksConnection {
 
       if (!canOpenTunnel()) {
         _sendReply(_SocksReply.connectionRefused);
+        _dialing = false;
         await close();
         return;
       }
@@ -211,9 +216,12 @@ class _SocksConnection {
         );
       } catch (_) {
         _sendReply(_SocksReply.hostUnreachable);
+        _dialing = false;
         await close();
         return;
       }
+
+      _dialing = false;
 
       if (_closed) {
         _remote?.destroy();
