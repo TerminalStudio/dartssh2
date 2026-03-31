@@ -1699,7 +1699,8 @@ class SSHTransport {
   /// initialized in both directions.
   bool get hasIntegrityProtection {
     final usingAeadLocal = _localAeadKey != null || _localChaChaEncKey != null;
-    final usingAeadRemote = _remoteAeadKey != null || _remoteChaChaEncKey != null;
+    final usingAeadRemote =
+        _remoteAeadKey != null || _remoteChaChaEncKey != null;
     if (usingAeadLocal && usingAeadRemote) return true;
     return _localMac != null && _remoteMac != null;
   }
