@@ -18,6 +18,13 @@ extension BlockCipherX on BlockCipher {
   }
 }
 
+extension AEADCipherX on AEADCipher {
+  Uint8List processAll(Uint8List data) {
+    final cipher = this as dynamic;
+    return cipher.process(data) as Uint8List;
+  }
+}
+
 extension MacX on Mac {
   void updateAll(Uint8List data) {
     update(data, 0, data.length);
