@@ -175,8 +175,7 @@ class SSHTransport {
 
   // AEAD (GCM / ChaCha20-Poly1305) keys and nonces (per direction)
   Uint8List? _localAeadKey; // key for data we send
-  Uint8List?
-      _localAeadFixedNonce; // 12-byte fixed part of nonce for data we send
+// 12-byte fixed part of nonce for data we send
   Uint8List? _remoteAeadKey; // key for data we receive
   Uint8List?
       _remoteAeadFixedNonce; // 12-byte fixed part of nonce for data we receive
@@ -313,54 +312,6 @@ class SSHTransport {
           packetLengthBytes.length + encryptedPayload.length + macBytes.length;
 
       socket.sink.add(buffer.takeBytes());
-    } else if (usingAead && aeadReady) {
-      final packetAlign = max(SSHPacket.minAlign, 8);
-      final packet = SSHPacket.pack(data, align: packetAlign);
-
-      final cipherType = isClient ? _clientCipherType! : _serverCipherType!;
-      if (cipherType.name == 'chacha20-poly1305@openssh.com') {
-        final encKey = _localChaChaEncKey;
-        final lenKey = _localChaChaLenKey;
-        if (encKey == null || lenKey == null) {
-          throw StateError('ChaCha20-Poly1305 keys not initialized');
-        }
-        final out =
-            _encryptChaChaOpenSSH(packet, encKey, lenKey, _localPacketSN.value);
-        _bytesSent += packet.length + cipherType.aeadTagSize;
-        socket.sink.add(out);
-      } else {
-        final key = _localAeadKey!;
-        final fixedNonce = _localAeadFixedNonce!;
-
-        final lenBytes = Uint8List.sublistView(packet, 0, 4);
-        final body = Uint8List.sublistView(packet, 4);
-
-        final nonce = _composeAeadNonce(fixedNonce, _localPacketSN.value);
-
-        final aead = cipherType.createAEADCipher(
-          key,
-          nonce,
-          forEncryption: true,
-          aad: lenBytes,
-        );
-
-        final outLen = aead.getOutputSize(body.length);
-        var encryptedWithTag = Uint8List(outLen);
-        var written =
-            aead.processBytes(body, 0, body.length, encryptedWithTag, 0);
-        written += aead.doFinal(encryptedWithTag, written);
-        if (written != encryptedWithTag.length) {
-          encryptedWithTag =
-              Uint8List.sublistView(encryptedWithTag, 0, written);
-        }
-
-        _bytesSent += packet.length + cipherType.aeadTagSize;
-
-        final out = BytesBuilder(copy: false)
-          ..add(lenBytes)
-          ..add(encryptedWithTag);
-        socket.sink.add(out.takeBytes());
-      }
     } else if (_encryptCipher == null) {
       final packet = SSHPacket.pack(data, align: SSHPacket.minAlign);
       _bytesSent += packet.length;
@@ -1045,7 +996,6 @@ class SSHTransport {
         _localChaChaLenKey = lenKey;
         _localChaChaEncKey = encKey;
         _localAeadKey = null;
-        _localAeadFixedNonce = null;
       } else {
         // AEAD: derive key and fixed nonce (12 bytes) for sender direction
         final key = _deriveKey(
@@ -1057,7 +1007,6 @@ class SSHTransport {
           cipherType.ivSize,
         );
         _localAeadKey = key;
-        _localAeadFixedNonce = Uint8List.sublistView(iv, 0, 12);
         _localCipherKey = key;
         _localIV = iv;
       }
@@ -1087,6 +1036,10 @@ class SSHTransport {
       );
 
       _localMac = macType.createMac(macKey);
+
+      _localAeadKey = null;
+      _localCipherKey = null;
+      _localIV = null;
     }
   }
 
@@ -1145,6 +1098,10 @@ class SSHTransport {
         macType.keySize,
       );
       _remoteMac = macType.createMac(macKey);
+
+      _remoteAeadKey = null;
+      _remoteCipherKey = null;
+      _remoteIV = null;
     }
   }
 
@@ -1737,29 +1694,14 @@ class SSHTransport {
 
   /// Returns true if integrity protection is provided.
   ///
-  /// This is true when AEAD keys are initialized (GCM, ChaCha20-Poly1305),
-  /// or when traditional MAC algorithms are initialized.
+  /// This is true when AEAD keys are initialized in both directions
+  /// (GCM, ChaCha20-Poly1305), or when traditional MAC algorithms are
+  /// initialized in both directions.
   bool get hasIntegrityProtection {
-    final usingAead = (_localAeadKey != null ||
-        _localChaChaEncKey != null ||
-        _remoteAeadKey != null ||
-        _remoteChaChaEncKey != null);
-    if (usingAead) return true;
+    final usingAeadLocal = _localAeadKey != null || _localChaChaEncKey != null;
+    final usingAeadRemote = _remoteAeadKey != null || _remoteChaChaEncKey != null;
+    if (usingAeadLocal && usingAeadRemote) return true;
     return _localMac != null && _remoteMac != null;
-  }
-
-  /// Compose 12-byte AEAD nonce from 8-byte fixed IV and 32-bit sequence number.
-  Uint8List _composeAeadNonce(Uint8List fixed, int seq) {
-    if (fixed.length < 12) {
-      throw StateError('AEAD fixed nonce must be at least 12 bytes');
-    }
-    final nonce = Uint8List(12);
-    nonce[0] = (seq >>> 24) & 0xff;
-    nonce[1] = (seq >>> 16) & 0xff;
-    nonce[2] = (seq >>> 8) & 0xff;
-    nonce[3] = (seq) & 0xff;
-    nonce.setRange(4, 12, fixed);
-    return nonce;
   }
 
   /// Initiates a client-side re-key operation. This can be called

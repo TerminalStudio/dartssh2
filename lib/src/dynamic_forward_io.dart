@@ -143,7 +143,6 @@ class _SocksConnection {
     if (_state == _SocksState.streaming) {
       _client.destroy();
       _remoteSub?.cancel();
-      onClosed();
     } else {
       close();
     }
