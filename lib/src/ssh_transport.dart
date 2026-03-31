@@ -239,23 +239,36 @@ class SSHTransport {
     final macType = isClient ? clientMacType : serverMacType;
     final localCipherType = isClient ? _clientCipherType : _serverCipherType;
 
-    if (localCipherType != null &&
-        localCipherType.isAead &&
-        _localCipherKey != null &&
-        _localIV != null) {
-      _sendAeadPacket(data, localCipherType);
+    final usingAead = localCipherType?.isAead ?? false;
+    final isChaCha = localCipherType?.name == 'chacha20-poly1305@openssh.com';
+    final aeadReady = isChaCha
+        ? (_localChaChaEncKey != null && _localChaChaLenKey != null)
+        : (localCipherType != null &&
+            _localCipherKey != null &&
+            _localIV != null);
+
+    if (usingAead && aeadReady) {
+      if (isChaCha) {
+        final encKey = _localChaChaEncKey!;
+        final lenKey = _localChaChaLenKey!;
+        final packetAlign = max(SSHPacket.minAlign, 8);
+        final packet = SSHPacket.pack(data, align: packetAlign);
+        final out = _encryptChaChaOpenSSH(packet, encKey, lenKey, _localPacketSN.value);
+        _bytesSent += packet.length + localCipherType!.aeadTagSize;
+        socket.sink.add(out);
+      } else {
+        _sendAeadPacket(data, localCipherType!);
+      }
       _localPacketSN.increase();
+      if (_bytesSent >= _dataLimitForRekey) {
+        _reKeyTimer?.cancel();
+        _sendKexInit();
+        _bytesSent = 0;
+      }
       return;
     }
 
     final isEtm = _encryptCipher != null && macType != null && macType.isEtm;
-
-    final ctLocal = isClient ? _clientCipherType : _serverCipherType;
-    final usingAead = ctLocal?.isAead ?? false;
-    final isChaCha = ctLocal?.name == 'chacha20-poly1305@openssh.com';
-    final aeadReady = isChaCha
-        ? (_localChaChaEncKey != null && _localChaChaLenKey != null)
-        : (_localAeadKey != null && _localAeadFixedNonce != null);
 
     if (isEtm) {
       final blockSize = _encryptCipher!.blockSize;
@@ -415,12 +428,6 @@ class SSHTransport {
     final bytes = buffer.takeBytes();
     _bytesSent += bytes.length;
     socket.sink.add(bytes);
-
-    if (_bytesSent >= _dataLimitForRekey) {
-      _reKeyTimer?.cancel();
-      _sendKexInit();
-      _bytesSent = 0;
-    }
   }
 
   int _alignedPaddingLength(int payloadLength, int align) {

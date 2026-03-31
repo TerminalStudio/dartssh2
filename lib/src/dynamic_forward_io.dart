@@ -119,10 +119,7 @@ class _SocksConnection {
   void start() {
     _clientSub = _client.listen(
       _onClientData,
-      onDone: () {
-        _remote?.sink.close();
-        _client.destroy();
-      },
+      onDone: () => close(),
       onError: (_, __) => close(),
       cancelOnError: true,
     );
@@ -208,10 +205,7 @@ class _SocksConnection {
 
       _remoteSub = _remote!.stream.listen(
         _client.add,
-        onDone: () {
-          _client.destroy();
-          _remote?.destroy();
-        },
+        onDone: () => close(),
         onError: (_, __) => close(),
         cancelOnError: true,
       );
