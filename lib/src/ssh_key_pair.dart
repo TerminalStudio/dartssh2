@@ -798,7 +798,8 @@ class EcKeyPair {
       }
     }
 
-    curveId ??= _inferCurveId(publicPoint?.length ?? 0, privateKeyOctets.length);
+    curveId ??=
+        _inferCurveId(publicPoint?.length ?? 0, privateKeyOctets.length);
     if (curveId == null) {
       throw UnsupportedError('Unsupported EC PRIVATE KEY curve');
     }

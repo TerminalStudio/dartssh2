@@ -200,8 +200,8 @@ class SSHAgentChannel {
     while (_buffer.length >= 4) {
       final length = ByteData.sublistView(_buffer, 0, 4).getUint32(0);
       if (length == 0 || length > maxFrameSize) {
-        printDebug?.call(
-            'SSH agent: invalid frame length $length, closing channel');
+        printDebug
+            ?.call('SSH agent: invalid frame length $length, closing channel');
         _channel.destroy();
         _buffer = Uint8List(0);
         return;

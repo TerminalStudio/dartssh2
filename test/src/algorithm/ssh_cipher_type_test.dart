@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:mirrors';
 
 import 'package:dartssh2/dartssh2.dart';
 import 'package:dartssh2/src/ssh_algorithm.dart';
@@ -40,6 +41,64 @@ void main() {
       final algorithms = [SSHKexType.x25519, SSHKexType.nistp521];
       final algorithm = algorithms.getByName('nonexistent');
       expect(algorithm, isNull);
+    });
+  });
+
+  group('AEAD cipher metadata', () {
+    test('AES-GCM ciphers are marked as AEAD', () {
+      expect(SSHCipherType.aes128gcm.isAead, isTrue);
+      expect(SSHCipherType.aes256gcm.isAead, isTrue);
+      expect(SSHCipherType.aes128gcm.ivSize, 12);
+      expect(SSHCipherType.aes128gcm.aeadTagSize, 16);
+    });
+
+    test('AEAD ciphers do not expose BlockCipher API', () {
+      expect(
+        () => SSHCipherType.aes128gcm.createCipher(
+          Uint8List(SSHCipherType.aes128gcm.keySize),
+          Uint8List(SSHCipherType.aes128gcm.ivSize),
+          forEncryption: true,
+        ),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+
+    test('fromName resolves AES-GCM ciphers', () {
+      expect(
+        SSHCipherType.fromName('aes128-gcm@openssh.com'),
+        SSHCipherType.aes128gcm,
+      );
+      expect(
+        SSHCipherType.fromName('aes256-gcm@openssh.com'),
+        SSHCipherType.aes256gcm,
+      );
+    });
+
+    test('createCipher throws when cipher factory is missing', () {
+      final library = reflectClass(SSHCipherType).owner as LibraryMirror;
+      final ctor = MirrorSystem.getSymbol('_', library);
+      final dynamic custom = reflectClass(SSHCipherType).newInstance(
+        ctor,
+        const [],
+        {
+          #name: 'custom-null-factory',
+          #keySize: 16,
+          #ivSize: 16,
+          #blockSize: 16,
+          #isAead: false,
+          #aeadTagSize: 0,
+          #cipherFactory: null,
+        },
+      ).reflectee;
+
+      expect(
+        () => custom.createCipher(
+          Uint8List(16),
+          Uint8List(16),
+          forEncryption: true,
+        ),
+        throwsA(isA<StateError>()),
+      );
     });
   });
 
@@ -118,6 +177,28 @@ void testCipher(SSHCipherType type) {
     expect(decrypted, plainText);
   });
 
+  test('$type rejects invalid key length', () {
+    expect(
+      () => type.createCipher(
+        Uint8List(type.keySize - 1),
+        Uint8List(type.blockSize),
+        forEncryption: true,
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+  });
+
+  test('$type rejects invalid IV length', () {
+    expect(
+      () => type.createCipher(
+        Uint8List(type.keySize),
+        Uint8List(type.ivSize - 1),
+        forEncryption: true,
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+  });
+
   // test('$type needs init after reset', () {
   //   final key = Uint8List(type.keySize);
   //   final iv = Uint8List(type.blockSize);
@@ -133,7 +214,7 @@ void testCipher(SSHCipherType type) {
 
 void testAEADCipher(SSHCipherType type) {
   test('$type AEAD encrypt/decrypt', () {
-    expect(type.isAEAD, isTrue, reason: 'Expected AEAD cipher');
+    expect(type.isAead, isTrue, reason: 'Expected AEAD cipher');
 
     final key = Uint8List(type.keySize);
     final nonce = Uint8List(
@@ -149,7 +230,8 @@ void testAEADCipher(SSHCipherType type) {
     if (type.name.contains('gcm')) {
       // GCM supports one-shot process returning ciphertext+tag
       encryptedWithTag = encrypter.process(plainText);
-      expect(encryptedWithTag.length, equals(plainText.length + type.tagSize));
+      expect(
+          encryptedWithTag.length, equals(plainText.length + type.aeadTagSize));
     } else {
       // ChaCha20-Poly1305 requires doFinal to append tag
       final outLen = encrypter.getOutputSize(plainText.length);
@@ -157,7 +239,7 @@ void testAEADCipher(SSHCipherType type) {
       var written = encrypter.processBytes(
           plainText, 0, plainText.length, encryptedWithTag, 0);
       written += encrypter.doFinal(encryptedWithTag, written);
-      expect(written, equals(plainText.length + type.tagSize));
+      expect(written, equals(plainText.length + type.aeadTagSize));
       // Trim if underlying allocated larger buffer
       if (written != encryptedWithTag.length) {
         encryptedWithTag = Uint8List.sublistView(encryptedWithTag, 0, written);

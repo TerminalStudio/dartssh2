@@ -181,6 +181,25 @@ void main() {
     });
   });
 
+  group('SSHClient.forwardDynamic', () {
+    test('starts and closes local dynamic forward', () async {
+      final client = await getTestClient();
+
+      final dynamicForward = await client.forwardDynamic(
+        bindHost: '127.0.0.1',
+        bindPort: 0,
+      );
+
+      expect(dynamicForward.port, greaterThan(0));
+      expect(dynamicForward.isClosed, isFalse);
+
+      await dynamicForward.close();
+      expect(dynamicForward.isClosed, isTrue);
+
+      client.close();
+    });
+  });
+
   group('SSHClient.runWithResult', () {
     test('returns command output and exit code', () async {
       final client = await getTestClient();

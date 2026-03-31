@@ -1,3 +1,8 @@
+## [2.17.0] - 2026-03-28
+- Improved Web/WASM compatibility by updating `SSHSocket` conditional imports so web runtimes consistently use the web socket shim and avoid incorrect native socket selection [#88]. Thanks [@vicajilau].
+- Added local dynamic forwarding (`SSHClient.forwardDynamic`) with SOCKS5 `NO AUTH` + `CONNECT`, including configurable handshake/connect timeouts and connection limits [#153].
+- Added AES-GCM (`aes128-gcm@openssh.com`, `aes256-gcm@openssh.com`) AEAD groundwork in transport and cipher negotiation; currently opt-in (not enabled by default yet). `chacha20-poly1305@openssh.com` remains pending [#26]. Thanks [@vicajilau].
+
 ## [2.16.0] - 2026-03-24
 - **BREAKING**: Changed `SSHChannelController.sendEnv()` from `void` to `Future<bool>` to properly await environment variable setup responses and avoid race conditions with PTY requests [#102]. Thanks [@itzhoujun] and [@vicajilau].
 - Clarified shell stdio wiring for CLI-only usage and guarded `example/shell.dart` against missing local terminal handles (for example GUI-launched Windows `.exe`) [#121]. Thanks [@bradmartin333] and [@vicajilau].
@@ -196,12 +201,15 @@
 [#145]: https://github.com/TerminalStudio/dartssh2/pull/145
 [#141]: https://github.com/TerminalStudio/dartssh2/pull/141
 [#140]: https://github.com/TerminalStudio/dartssh2/pull/140
+[#153]: https://github.com/TerminalStudio/dartssh2/pull/153
 [#102]: https://github.com/TerminalStudio/dartssh2/issues/102
 [#99]: https://github.com/TerminalStudio/dartssh2/issues/99
 [#109]: https://github.com/TerminalStudio/dartssh2/issues/109
 [#121]: https://github.com/TerminalStudio/dartssh2/issues/121
 [#124]: https://github.com/TerminalStudio/dartssh2/issues/124
 [#95]: https://github.com/TerminalStudio/dartssh2/issues/95
+[#88]: https://github.com/TerminalStudio/dartssh2/issues/88
+[#26]: https://github.com/TerminalStudio/dartssh2/issues/26
 [#139]: https://github.com/TerminalStudio/dartssh2/pull/139
 [#133]: https://github.com/TerminalStudio/dartssh2/pull/133
 [#132]: https://github.com/TerminalStudio/dartssh2/pull/132
