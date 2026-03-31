@@ -239,8 +239,14 @@ class OpenSSHKeyPairs {
 
     final key = Uint8List.view(kdfHash.buffer, 0, cipher.keySize);
     final iv = Uint8List.view(kdfHash.buffer, cipher.keySize, cipher.ivSize);
-    final decryptCipher = cipher.createCipher(key, iv, forEncryption: false);
-    return decryptCipher.processAll(blob);
+
+    if (cipher.isAead) {
+      final decryptCipher = cipher.createAEADCipher(key, iv, forEncryption: false);
+      return decryptCipher.processAll(blob);
+    } else {
+      final decryptCipher = cipher.createCipher(key, iv, forEncryption: false);
+      return decryptCipher.processAll(blob);
+    }
   }
 
   @override
