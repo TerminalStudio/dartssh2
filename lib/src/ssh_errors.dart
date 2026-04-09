@@ -50,7 +50,9 @@ class SSHAuthAbortError with SSHMessageError implements SSHAuthError {
   @override
   final String message;
 
-  SSHAuthAbortError(this.message);
+  final SSHError? reason;
+
+  SSHAuthAbortError(this.message, [this.reason]);
 }
 
 /// Errors that happen when the library receives an malformed packet.
@@ -86,7 +88,7 @@ class SSHKeyDecodeError with SSHMessageError implements SSHError {
 
 /// Errors that happen when the library fails to decrypt the host key.
 class SSHKeyDecryptError extends SSHKeyDecodeError {
-  SSHKeyDecryptError(String message, [Object? error]) : super(message, error);
+  SSHKeyDecryptError(super.message, [super.error]);
 }
 
 /// Errors that happen when the library fails to open a channel.

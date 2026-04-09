@@ -71,8 +71,8 @@ class SSHMessageReader {
     return value;
   }
 
-  String readUtf8() {
-    return utf8.decode(readString());
+  String readUtf8({bool allowMalformed = false}) {
+    return utf8.decode(readString(), allowMalformed: allowMalformed);
   }
 
   List<String> readNameList() {

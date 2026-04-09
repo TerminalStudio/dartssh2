@@ -90,6 +90,14 @@ class SftpFileWriter with DoneFuture {
     _subscription.resume();
   }
 
+  /// Handles the incoming data chunks from the stream.
+  ///
+  /// This function manages the flow control by pausing the stream if the
+  /// amount of unacknowledged data (`_bytesOnTheWire`) exceeds the
+  /// `maxBytesOnTheWire` limit. It then writes the data chunk to the remote file
+  /// at the appropriate offset, updates the counters, and triggers the
+  /// progress callback. Finally, it checks if all data has been acknowledged
+  /// and completes the operation if done.
   Future<void> _handleLocalData(Uint8List chunk) async {
     if (_bytesOnTheWire >= maxBytesOnTheWire) {
       _subscription.pause();
@@ -108,19 +116,30 @@ class SftpFileWriter with DoneFuture {
       _subscription.resume();
     }
 
-    if (_streamDone && _bytesSent == _bytesAcked) {
+    if (_streamDone &&
+        _bytesSent == _bytesAcked &&
+        !_doneCompleter.isCompleted) {
       _doneCompleter.complete();
     }
   }
 
+  /// Handles the completion of the data stream.
+  ///
+  /// This function is triggered when the stream has finished emitting all its
+  /// data. It checks if all data has been successfully acknowledged and
+  /// marks the operation as complete by calling `_doneCompleter.complete()`
+  /// if no more data remains to be processed.
   void _handleLocalDone() {
     _streamDone = true;
+    if (_bytesSent == _bytesAcked) {
+      _doneCompleter.complete();
+    }
   }
 }
 
 /// Implements [Future] interface for [SftpFileWriter].
 ///
-/// This is for compatibility with earlier versions of dartssh2.
+/// This is for compatibility with earlier versions of dartssh2 and dartssh2.
 mixin DoneFuture implements Future {
   Future<void> get done;
 

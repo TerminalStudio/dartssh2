@@ -1,23 +1,23 @@
 name: dartssh2
-version: 2.9.1-atsignfork-1
+version: 2.17.0-atsignfork
 description: SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as easy to use.
 homepage: https://github.com/TerminalStudio/dartssh2
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: ">=2.17.0 <4.0.0"
 
 dependencies:
-  asn1lib: ^1.0.0
-  convert: ^3.0.0
-  meta: ^1.1.6
-  pointycastle: ^3.0.0
+  asn1lib: ^1.5.8
+  convert: ^3.1.2
+  meta: ^1.16.0
+  pointycastle: ^4.0.0
   pinenacl: ^0.6.0
 
 dev_dependencies:
-  build_runner: ^2.1.1
-  dart_code_metrics: ^4.16.0
-  lints: ^2.0.0
-  test: ^1.6.5
+  build_runner: ^2.4.12
+  dart_code_metrics_presets: ^2.20.0
+  lints: ">=4.0.0 <6.0.0"
+  test: ^1.25.15
 
 false_secrets:
   - test

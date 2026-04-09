@@ -2,9 +2,11 @@ name: Dart
 
 on:
   push:
-    branches: [master]
+    branches:
+      - master
   pull_request:
-    branches: [master]
+    branches:
+      - master
 
 jobs:
   test:
@@ -13,11 +15,10 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        # sdk: [stable, beta, dev, 2.10.3, 2.12.0-29.10.beta]
-        sdk: [stable, dev]
+        sdk: [stable]
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v6
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: ${{ matrix.sdk }}
@@ -39,8 +40,22 @@ jobs:
       - name: Activate coverage tool
         run: dart pub global activate coverage
 
-      - name: Run tests
-        run: dart pub global run coverage:test_with_coverage
+      - name: Run unit tests with coverage
+        run: dart test --exclude-tags=integration --coverage=coverage
+
+      - name: Build LCOV report
+        run: dart pub global run coverage:format_coverage --lcov --in=coverage/test --out=coverage/lcov.info --packages=.dart_tool/package_config.json --report-on=lib
+
+      - name: Run integration tests
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
+        run: dart test --tags=integration
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
+        with:
+          fail_ci_if_error: true # optional (default = false)
+          files: ./coverage/lcov.info # optional
+          flags: unittests # optional
+          name: codecov-umbrella # optional
+          token: ${{ secrets.CODECOV_TOKEN }} # required
+          verbose: true # optional (default = false)

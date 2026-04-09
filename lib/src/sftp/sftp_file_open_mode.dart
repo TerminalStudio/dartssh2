@@ -24,9 +24,34 @@ class SftpFileOpenMode {
   /// [create] MUST also be specified if this flag is used.
   static const exclusive = SftpFileOpenMode._(1 << 5);
 
+  /// Internal integer flag representing the file open mode.
   final int flag;
 
+  /// Private constructor used to create instances of [SftpFileOpenMode] with specific flags.
+  ///
+  /// This constructor is marked as private (`._`) to restrict direct instantiation and ensure
+  /// that only predefined modes like [read], [write], etc., can be used.
   const SftpFileOpenMode._(this.flag);
 
-  operator |(SftpFileOpenMode other) => SftpFileOpenMode._(flag | other.flag);
+  /// Overloads the bitwise OR operator `|` for the `SftpFileOpenMode` class.
+  ///
+  /// This operator allows combining two `SftpFileOpenMode` instances by performing
+  /// a bitwise OR operation on their respective flags. The result is a new
+  /// `SftpFileOpenMode` instance that represents the combined flags of both modes.
+  ///
+  /// Example:
+  /// ```dart
+  /// SftpFileOpenMode readMode = SftpFileOpenMode.read;
+  /// SftpFileOpenMode writeMode = SftpFileOpenMode.write;
+  ///
+  /// SftpFileOpenMode combinedMode = readMode | writeMode;
+  /// ```
+  ///
+  /// In the example above, the `combinedMode` will contain the flags of both
+  /// `readMode` and `writeMode`.
+  ///
+  /// - Parameter [other]: Another instance of `SftpFileOpenMode` to combine with.
+  /// - Returns: A new `SftpFileOpenMode` instance containing the combined flags.
+  SftpFileOpenMode operator |(SftpFileOpenMode other) =>
+      SftpFileOpenMode._(flag | other.flag);
 }

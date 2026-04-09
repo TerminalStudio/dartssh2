@@ -3,7 +3,9 @@ import 'dart:typed_data';
 import 'package:dartssh2/src/ssh_algorithm.dart';
 import 'package:pointycastle/export.dart';
 
-class SSHMacType with SSHAlgorithm {
+import '../utils/truncated_hmac.dart';
+
+class SSHMacType extends SSHAlgorithm {
   static const hmacMd5 = SSHMacType._(
     name: 'hmac-md5',
     keySize: 16,
@@ -28,21 +30,49 @@ class SSHMacType with SSHAlgorithm {
     macFactory: _hmacSha512Factory,
   );
 
+  // added by Rein
+  static const hmacSha256_96 = SSHMacType._(
+    name: 'hmac-sha2-256-96',
+    keySize: 32,
+    macFactory: _hmacSha256_96Factory,
+  );
+
+  static const hmacSha512_96 = SSHMacType._(
+    name: 'hmac-sha2-512-96',
+    keySize: 64,
+    macFactory: _hmacSha512_96Factory,
+  );
+
+  static const hmacSha256Etm = SSHMacType._(
+    name: 'hmac-sha2-256-etm@openssh.com',
+    keySize: 32,
+    macFactory: _hmacSha256Factory,
+    isEtm: true,
+  );
+
+  static const hmacSha512Etm = SSHMacType._(
+    name: 'hmac-sha2-512-etm@openssh.com',
+    keySize: 64,
+    macFactory: _hmacSha512Factory,
+    isEtm: true,
+  );
+  // end added by Rein
   const SSHMacType._({
     required this.name,
     required this.keySize,
     required this.macFactory,
+    this.isEtm = false,
   });
 
-  /// The name of the algorithm. For example, `"aes256-ctr`"`.
   @override
   final String name;
 
-  /// The length of the key in bytes. This is the same as the length of the
-  /// output of the MAC algorithm.
   final int keySize;
 
   final Mac Function() macFactory;
+
+  /// Whether this MAC algorithm is an ETM (Encrypt-Then-MAC) variant.
+  final bool isEtm;
 
   Mac createMac(Uint8List key) {
     if (key.length != keySize) {
@@ -69,4 +99,12 @@ Mac _hmacSha256Factory() {
 
 Mac _hmacSha512Factory() {
   return HMac(SHA512Digest(), 128);
+}
+
+Mac _hmacSha256_96Factory() {
+  return TruncatedHMac(SHA256Digest(), 64, 12);
+}
+
+Mac _hmacSha512_96Factory() {
+  return TruncatedHMac(SHA512Digest(), 128, 12);
 }

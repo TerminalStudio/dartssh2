@@ -1,6 +1,6 @@
 import 'package:dartssh2/src/ssh_algorithm.dart';
 
-class SSHHostkeyType with SSHAlgorithm {
+class SSHHostkeyType extends SSHAlgorithm {
   static const rsaSha1 = SSHHostkeyType._('ssh-rsa');
   static const rsaSha256 = SSHHostkeyType._('rsa-sha2-256');
   static const rsaSha512 = SSHHostkeyType._('rsa-sha2-512');

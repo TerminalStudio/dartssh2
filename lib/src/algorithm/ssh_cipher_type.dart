@@ -3,8 +3,10 @@ import 'dart:typed_data';
 import 'package:dartssh2/src/ssh_algorithm.dart';
 import 'package:pointycastle/export.dart';
 
-class SSHCipherType with SSHAlgorithm {
+class SSHCipherType extends SSHAlgorithm {
   static const values = [
+    aes128gcm,
+    aes256gcm,
     aes128cbc,
     aes192cbc,
     aes256cbc,
@@ -29,6 +31,24 @@ class SSHCipherType with SSHAlgorithm {
     name: 'aes256-ctr',
     keySize: 32,
     cipherFactory: _aesCtrFactory,
+  );
+
+  static const aes128gcm = SSHCipherType._(
+    name: 'aes128-gcm@openssh.com',
+    keySize: 16,
+    isAead: true,
+    ivSize: 12,
+    blockSize: 16,
+    aeadTagSize: 16,
+  );
+
+  static const aes256gcm = SSHCipherType._(
+    name: 'aes256-gcm@openssh.com',
+    keySize: 32,
+    isAead: true,
+    ivSize: 12,
+    blockSize: 16,
+    aeadTagSize: 16,
   );
 
   static const aes128cbc = SSHCipherType._(
@@ -61,7 +81,11 @@ class SSHCipherType with SSHAlgorithm {
   const SSHCipherType._({
     required this.name,
     required this.keySize,
-    required this.cipherFactory,
+    this.cipherFactory,
+    this.isAead = false,
+    this.aeadTagSize = 0,
+    this.ivSize = 16,
+    this.blockSize = 16,
   });
 
   /// The name of the algorithm. For example, `"aes256-ctr`"`.
@@ -70,17 +94,29 @@ class SSHCipherType with SSHAlgorithm {
 
   final int keySize;
 
-  final int ivSize = 16;
+  /// Indicates whether this cipher is an AEAD mode (e.g. AES-GCM).
+  final bool isAead;
 
-  final int blockSize = 16;
+  /// Authentication tag size for AEAD ciphers.
+  final int aeadTagSize;
 
-  final BlockCipher Function() cipherFactory;
+  final int ivSize;
+
+  final int blockSize;
+
+  final BlockCipher Function()? cipherFactory;
 
   BlockCipher createCipher(
     Uint8List key,
     Uint8List iv, {
     required bool forEncryption,
   }) {
+    if (isAead) {
+      throw UnsupportedError(
+        'AEAD ciphers are packet-level and do not expose BlockCipher',
+      );
+    }
+
     if (key.length != keySize) {
       throw ArgumentError.value(key, 'key', 'Key must be $keySize bytes long');
     }
@@ -89,7 +125,11 @@ class SSHCipherType with SSHAlgorithm {
       throw ArgumentError.value(iv, 'iv', 'IV must be $ivSize bytes long');
     }
 
-    final cipher = cipherFactory();
+    final factory = cipherFactory;
+    if (factory == null) {
+      throw StateError('No block cipher factory configured for $name');
+    }
+    final cipher = factory();
     cipher.init(forEncryption, ParametersWithIV(KeyParameter(key), iv));
     return cipher;
   }

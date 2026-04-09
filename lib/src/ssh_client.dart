@@ -4,7 +4,9 @@ import 'dart:typed_data';
 
 import 'package:dartssh2/src/http/http_client.dart';
 import 'package:dartssh2/src/sftp/sftp_client.dart';
+import 'package:dartssh2/src/dynamic_forward.dart';
 import 'package:dartssh2/src/ssh_algorithm.dart';
+import 'package:dartssh2/src/ssh_agent.dart';
 import 'package:dartssh2/src/ssh_channel.dart';
 import 'package:dartssh2/src/ssh_channel_id.dart';
 import 'package:dartssh2/src/ssh_errors.dart';
@@ -21,6 +23,7 @@ import 'package:dartssh2/src/message/msg_userauth.dart';
 import 'package:dartssh2/src/ssh_message.dart';
 import 'package:dartssh2/src/socket/ssh_socket.dart';
 import 'package:dartssh2/src/ssh_userauth.dart';
+import 'package:meta/meta.dart';
 
 /// https://datatracker.ietf.org/doc/html/rfc4252#section-8
 typedef SSHPasswordRequestHandler = FutureOr<String?> Function();
@@ -39,6 +42,8 @@ typedef SSHUserauthBannerHandler = void Function(String banner);
 typedef SSHAuthenticatedHandler = void Function();
 
 typedef SSHRemoteConnectionFilter = bool Function(String host, int port);
+
+typedef SSHX11ForwardHandler = void Function(SSHX11Channel channel);
 
 // /// Function called when the host has sent additional host keys after the initial
 // /// key exchange.
@@ -70,6 +75,52 @@ class SSHPtyConfig {
     this.height = 24,
     this.pixelWidth = 0,
     this.pixelHeight = 0,
+  });
+}
+
+class SSHX11Config {
+  /// Whether only a single forwarded X11 connection should be accepted.
+  final bool singleConnection;
+
+  /// X11 authentication protocol name.
+  final String authenticationProtocol;
+
+  /// X11 authentication cookie value.
+  final String authenticationCookie;
+
+  /// X11 screen number.
+  final int screenNumber;
+
+  const SSHX11Config({
+    required this.authenticationCookie,
+    this.singleConnection = false,
+    this.authenticationProtocol = 'MIT-MAGIC-COOKIE-1',
+    this.screenNumber = 0,
+  });
+}
+
+class SSHRunResult {
+  /// Combined output stream based on [SSHClient.runWithResult] capture flags.
+  final Uint8List output;
+
+  /// Captured stdout bytes. Empty when stdout capture is disabled.
+  final Uint8List stdout;
+
+  /// Captured stderr bytes. Empty when stderr capture is disabled.
+  final Uint8List stderr;
+
+  /// Exit code reported by the remote process if available.
+  final int? exitCode;
+
+  /// Exit signal reported by the remote process if available.
+  final SSHSessionExitSignal? exitSignal;
+
+  const SSHRunResult({
+    required this.output,
+    required this.stdout,
+    required this.stderr,
+    required this.exitCode,
+    required this.exitSignal,
   });
 }
 
@@ -121,6 +172,12 @@ class SSHClient {
   /// Function called when authentication is complete.
   final SSHAuthenticatedHandler? onAuthenticated;
 
+  /// Function called when the server opens an incoming forwarded X11 channel.
+  final SSHX11ForwardHandler? onX11Forward;
+
+  /// Optional handler for SSH agent forwarding requests.
+  final SSHAgentHandler? agentHandler;
+
   /// The interval at which to send a keep-alive message through the [ping]
   /// method. Set this to null to disable automatic keep-alive messages.
   final Duration? keepAliveInterval;
@@ -128,6 +185,13 @@ class SSHClient {
   /// Function called when additional host keys are received. This is an OpenSSH
   /// extension. May not be called if the server does not support the extension.
   // final SSHHostKeysHandler? onHostKeys;
+
+  /// Allow to disable hostkey verification, which can be slow in debug mode.
+  final bool disableHostkeyVerification;
+
+  /// Identification string advertised during the SSH version exchange (the part
+  /// after `SSH-2.0-`). Defaults to `'DartSSH_2.0'`
+  final String ident;
 
   /// A [Future] that completes when the transport is closed, or when an error
   /// occurs. After this [Future] completes, [isClosed] will be true and no more
@@ -150,8 +214,12 @@ class SSHClient {
     this.onUserInfoRequest,
     this.onUserauthBanner,
     this.onAuthenticated,
+    this.onX11Forward,
+    this.agentHandler,
     this.keepAliveInterval = const Duration(seconds: 10),
-  }) {
+    this.disableHostkeyVerification = false,
+    String ident = 'DartSSH_2.0',
+  }) : ident = _validateIdent(ident) {
     _transport = SSHTransport(
       socket,
       isServer: false,
@@ -161,11 +229,15 @@ class SSHClient {
       onVerifyHostKey: onVerifyHostKey,
       onReady: _handleTransportReady,
       onPacket: _handlePacket,
+      disableHostkeyVerification: disableHostkeyVerification,
+      version: ident,
     );
 
     _transport.done.then(
-      (_) => _handleTransportClosed(),
-      onError: (_) => _handleTransportClosed(),
+      (_) => _handleTransportClosed(null),
+      onError: (e) => _handleTransportClosed(
+        e is SSHError ? e : SSHSocketError(e),
+      ),
     );
 
     _authenticated.future.catchError(
@@ -175,6 +247,26 @@ class SSHClient {
     if (identities != null) {
       _keyPairsLeft.addAll(identities!);
     }
+  }
+
+  static String _validateIdent(String ident) {
+    if (ident.isEmpty) {
+      throw ArgumentError.value(
+        ident,
+        'ident',
+        'must not be empty',
+      );
+    }
+
+    if (ident.contains('\r') || ident.contains('\n')) {
+      throw ArgumentError.value(
+        ident,
+        'ident',
+        'must not contain carriage return or newline characters',
+      );
+    }
+
+    return ident;
   }
 
   late final SSHTransport _transport;
@@ -291,11 +383,50 @@ class SSHClient {
     return SSHForwardChannel(channelController.channel);
   }
 
+  /// Start a local SOCKS5 server that forwards outbound `CONNECT` requests
+  /// through this SSH connection.
+  ///
+  /// This is similar to `ssh -D`. Only SOCKS5 with `NO AUTH` and `CONNECT`
+  /// is supported. Use [filter] to optionally deny specific target
+  /// destinations. Use [options] to tune timeouts and connection limits.
+  ///
+  /// Not supported on platforms without `dart:io`.
+  Future<SSHDynamicForward> forwardDynamic({
+    String bindHost = '127.0.0.1',
+    int? bindPort,
+    SSHDynamicForwardOptions options = const SSHDynamicForwardOptions(),
+    SSHDynamicConnectionFilter? filter,
+  }) async {
+    await _authenticated.future;
+    return startDynamicForward(
+      bindHost: bindHost,
+      bindPort: bindPort,
+      options: options,
+      filter: filter,
+      dial: forwardLocal,
+    );
+  }
+
+  /// Forward local connections to a remote Unix domain socket at [remoteSocketPath] on the
+  /// remote side via a `direct-streamlocal@openssh.com` channel.
+  ///
+  /// This is the equivalent of `ssh -L localPort:remoteSocketPath`.
+  Future<SSHForwardChannel> forwardLocalUnix(
+    String remoteSocketPath,
+  ) async {
+    await _authenticated.future;
+    final channelController = await _openForwardLocalUnixChannel(
+      remoteSocketPath,
+    );
+    return SSHForwardChannel(channelController.channel);
+  }
+
   /// Execute [command] on the remote side. Returns a [SSHChannel] that can be
   /// used to read and write to the remote side.
   Future<SSHSession> execute(
     String command, {
     SSHPtyConfig? pty,
+    SSHX11Config? x11,
     Map<String, String>? environment,
   }) async {
     await _authenticated.future;
@@ -304,7 +435,21 @@ class SSHClient {
 
     if (environment != null) {
       for (var pair in environment.entries) {
-        channelController.sendEnv(pair.key, pair.value);
+        final envOk = await channelController.sendEnv(pair.key, pair.value);
+        if (!envOk) {
+          channelController.close();
+          throw SSHChannelRequestError(
+            'Failed to set environment variable: ${pair.key}',
+          );
+        }
+      }
+    }
+
+    if (agentHandler != null) {
+      final agentOk = await channelController.sendAgentForwardingRequest();
+      if (!agentOk) {
+        channelController.close();
+        throw SSHChannelRequestError('Failed to request agent forwarding');
       }
     }
 
@@ -322,6 +467,19 @@ class SSHClient {
       }
     }
 
+    if (x11 != null) {
+      final x11Ok = await channelController.sendX11Req(
+        singleConnection: x11.singleConnection,
+        authenticationProtocol: x11.authenticationProtocol,
+        authenticationCookie: x11.authenticationCookie,
+        screenNumber: x11.screenNumber,
+      );
+      if (!x11Ok) {
+        channelController.close();
+        throw SSHChannelRequestError('Failed to request x11 forwarding');
+      }
+    }
+
     final success = await channelController.sendExec(command);
     if (!success) {
       channelController.close();
@@ -335,6 +493,7 @@ class SSHClient {
   /// used to read, write and control the pty on the remote side.
   Future<SSHSession> shell({
     SSHPtyConfig? pty = const SSHPtyConfig(),
+    SSHX11Config? x11,
     Map<String, String>? environment,
   }) async {
     await _authenticated.future;
@@ -343,7 +502,21 @@ class SSHClient {
 
     if (environment != null) {
       for (var pair in environment.entries) {
-        channelController.sendEnv(pair.key, pair.value);
+        final envOk = await channelController.sendEnv(pair.key, pair.value);
+        if (!envOk) {
+          channelController.close();
+          throw SSHChannelRequestError(
+            'Failed to set environment variable: ${pair.key}',
+          );
+        }
+      }
+    }
+
+    if (agentHandler != null) {
+      final agentOk = await channelController.sendAgentForwardingRequest();
+      if (!agentOk) {
+        channelController.close();
+        throw SSHChannelRequestError('Failed to request agent forwarding');
       }
     }
 
@@ -358,6 +531,19 @@ class SSHClient {
       if (!ok) {
         channelController.close();
         throw SSHChannelRequestError('Failed to start pty');
+      }
+    }
+
+    if (x11 != null) {
+      final x11Ok = await channelController.sendX11Req(
+        singleConnection: x11.singleConnection,
+        authenticationProtocol: x11.authenticationProtocol,
+        authenticationCookie: x11.authenticationCookie,
+        screenNumber: x11.screenNumber,
+      );
+      if (!x11Ok) {
+        channelController.close();
+        throw SSHChannelRequestError('Failed to request x11 forwarding');
       }
     }
 
@@ -399,11 +585,34 @@ class SSHClient {
   }
 
   /// Execute [command] on the remote side non-interactively. Returns a
-  /// [Future<String?>] that completes with the output of the command.
+  /// [Future<Uint8List>] that completes with the combined command output.
   /// This is a convenience method over [execute]. If [stdout] is false,
   /// the standard output of the command will be ignored. If [stderr] is
   /// false, the standard error of the command will be ignored.
+  ///
+  /// Use [runWithResult] when you need separate stdout/stderr bytes or exit
+  /// metadata (`exitCode`/`exitSignal`).
   Future<Uint8List> run(
+    String command, {
+    bool runInPty = false,
+    bool stdout = true,
+    bool stderr = true,
+    Map<String, String>? environment,
+  }) async {
+    final result = await runWithResult(
+      command,
+      runInPty: runInPty,
+      stdout: stdout,
+      stderr: stderr,
+      environment: environment,
+    );
+
+    return result.output;
+  }
+
+  /// Execute [command] on the remote side non-interactively and return
+  /// output together with exit metadata.
+  Future<SSHRunResult> runWithResult(
     String command, {
     bool runInPty = false,
     bool stdout = true,
@@ -416,26 +625,45 @@ class SSHClient {
       environment: environment,
     );
 
-    final result = BytesBuilder(copy: false);
+    final outputBuilder = BytesBuilder(copy: false);
+    final stdoutBuilder = BytesBuilder(copy: false);
+    final stderrBuilder = BytesBuilder(copy: false);
     final stdoutDone = Completer<void>();
     final stderrDone = Completer<void>();
 
     session.stdout.listen(
-      stdout ? result.add : (_) {},
+      stdout
+          ? (data) {
+              outputBuilder.add(data);
+              stdoutBuilder.add(data);
+            }
+          : (_) {},
       onDone: stdoutDone.complete,
       onError: stderrDone.completeError,
     );
 
     session.stderr.listen(
-      stderr ? result.add : (_) {},
+      stderr
+          ? (data) {
+              outputBuilder.add(data);
+              stderrBuilder.add(data);
+            }
+          : (_) {},
       onDone: stderrDone.complete,
       onError: stderrDone.completeError,
     );
 
     await stdoutDone.future;
     await stderrDone.future;
+    await session.done;
 
-    return result.takeBytes();
+    return SSHRunResult(
+      output: outputBuilder.takeBytes(),
+      stdout: stdoutBuilder.takeBytes(),
+      stderr: stderrBuilder.takeBytes(),
+      exitCode: session.exitCode,
+      exitSignal: session.exitSignal,
+    );
   }
 
   /// Send a empty message to the server to keep the connection alive.
@@ -467,15 +695,31 @@ class SSHClient {
     _requestAuthentication();
   }
 
-  void _handleTransportClosed() {
+  void _handleTransportClosed(SSHError? error) {
     printDebug?.call('SSHClient._onTransportClosed');
     if (!_authenticated.isCompleted) {
       _authenticated.completeError(
-        SSHAuthAbortError('Connection closed before authentication'),
+        SSHAuthAbortError('Connection closed before authentication', error),
       );
     }
     _keepAlive?.stop();
-    _closeChannels();
+
+    // Complete any pending channel-open waiters so callers (e.g.
+    // forwardLocalUnix) don't hang forever when the connection drops.
+    for (final entry in _channelOpenReplyWaiters.entries) {
+      if (!entry.value.isCompleted) {
+        entry.value.completeError(
+          SSHStateError('Connection closed while waiting for channel open'),
+        );
+      }
+    }
+    _channelOpenReplyWaiters.clear();
+
+    try {
+      _closeChannels();
+    } catch (e) {
+      printDebug?.call("SSHClient::_handleTransportClosed - error: $e");
+    }
   }
 
   void _handlePacket(Uint8List payload) {
@@ -485,6 +729,10 @@ class SSHClient {
       rethrow;
     }
   }
+
+  /// Handles a raw SSH packet. This method is only exposed for testing purposes.
+  @visibleForTesting
+  void handlePacket(Uint8List packet) => _handlePacket(packet);
 
   void _sendMessage(SSHMessage message) {
     printTrace?.call('-> $socket: $message');
@@ -661,6 +909,10 @@ class SSHClient {
     switch (message.channelType) {
       case 'forwarded-tcpip':
         return _handleForwardedTcpipChannelOpen(message);
+      case 'x11':
+        return _handleX11ChannelOpen(message);
+      case 'auth-agent@openssh.com':
+        return _handleAgentChannelOpen(message);
     }
 
     printDebug?.call('unknown channelType: ${message.channelType}');
@@ -725,6 +977,84 @@ class SSHClient {
     );
   }
 
+  void _handleX11ChannelOpen(SSH_Message_Channel_Open message) {
+    printDebug?.call('SSHClient._handleX11ChannelOpen');
+
+    if (onX11Forward == null) {
+      final reply = SSH_Message_Channel_Open_Failure(
+        recipientChannel: message.senderChannel,
+        reasonCode: 1, // SSH_OPEN_ADMINISTRATIVELY_PROHIBITED
+        description: 'x11 forwarding not enabled',
+      );
+      _sendMessage(reply);
+      return;
+    }
+
+    final localChannelId = _channelIdAllocator.allocate();
+
+    final confirmation = SSH_Message_Channel_Confirmation(
+      recipientChannel: message.senderChannel,
+      senderChannel: localChannelId,
+      initialWindowSize: _initialWindowSize,
+      maximumPacketSize: _maximumPacketSize,
+      data: Uint8List(0),
+    );
+
+    _sendMessage(confirmation);
+
+    final channelController = _acceptChannel(
+      localChannelId: localChannelId,
+      remoteChannelId: message.senderChannel,
+      remoteInitialWindowSize: message.initialWindowSize,
+      remoteMaximumPacketSize: message.maximumPacketSize,
+    );
+
+    onX11Forward!(
+      SSHX11Channel(
+        channelController.channel,
+        originatorIP: message.originatorIP ?? '',
+        originatorPort: message.originatorPort ?? 0,
+      ),
+    );
+  }
+
+  void _handleAgentChannelOpen(SSH_Message_Channel_Open message) {
+    final handler = agentHandler;
+    if (handler == null) {
+      final reply = SSH_Message_Channel_Open_Failure(
+        recipientChannel: message.senderChannel,
+        reasonCode:
+            SSH_Message_Channel_Open_Failure.codeAdministrativelyProhibited,
+        description: 'agent forwarding not enabled',
+      );
+      _sendMessage(reply);
+      return;
+    }
+
+    final localChannelId = _channelIdAllocator.allocate();
+    final confirmation = SSH_Message_Channel_Confirmation(
+      recipientChannel: message.senderChannel,
+      senderChannel: localChannelId,
+      initialWindowSize: _initialWindowSize,
+      maximumPacketSize: _maximumPacketSize,
+      data: Uint8List(0),
+    );
+    _sendMessage(confirmation);
+
+    final channelController = _acceptChannel(
+      localChannelId: localChannelId,
+      remoteChannelId: message.senderChannel,
+      remoteInitialWindowSize: message.initialWindowSize,
+      remoteMaximumPacketSize: message.maximumPacketSize,
+    );
+
+    SSHAgentChannel(
+      channelController.channel,
+      handler,
+      printDebug: printDebug,
+    );
+  }
+
   /// Finds a remote forward that matches the given host and port.
   SSHRemoteForward? _findRemoteForward(String host, int port) {
     final result = _remoteForwards.where(
@@ -736,6 +1066,17 @@ class SSHClient {
   void _handleChannelConfirmation(Uint8List payload) {
     final message = SSH_Message_Channel_Confirmation.decode(payload);
     printTrace?.call('<- $socket: $message');
+    // Register the channel synchronously BEFORE completing the future.
+    // CHANNEL_DATA for this channel may arrive in the same TCP segment as
+    // the CONFIRMATION. If we defer registration to the async continuation
+    // of _waitChannelOpen, that data hits _handleChannelData while
+    // _channels[id] is still null and is silently dropped.
+    _acceptChannel(
+      localChannelId: message.recipientChannel,
+      remoteChannelId: message.senderChannel,
+      remoteInitialWindowSize: message.initialWindowSize,
+      remoteMaximumPacketSize: message.maximumPacketSize,
+    );
     _dispatchChannelOpenReply(message.recipientChannel, message);
   }
 
@@ -792,7 +1133,7 @@ class SSHClient {
     printTrace?.call('<- $socket: $message');
     final channel = _channels[message.recipientChannel];
     if (channel != null) {
-      channel.close();
+      channel.handleMessage(message);
       _channels.remove(message.recipientChannel);
       _channelIdAllocator.release(message.recipientChannel);
     }
@@ -938,6 +1279,22 @@ class SSHClient {
     return await _waitChannelOpen(localChannelId);
   }
 
+  Future<SSHChannelController> _openForwardLocalUnixChannel(
+    String socketPath,
+  ) async {
+    final localChannelId = _channelIdAllocator.allocate();
+
+    final request = SSH_Message_Channel_Open.directStreamLocal(
+      senderChannel: localChannelId,
+      initialWindowSize: _initialWindowSize,
+      maximumPacketSize: _maximumPacketSize,
+      socketPath: socketPath,
+    );
+    _sendMessage(request);
+
+    return await _waitChannelOpen(localChannelId);
+  }
+
   Future<SSHChannelController> _waitChannelOpen(
     SSHChannelId localChannelId,
   ) async {
@@ -946,17 +1303,8 @@ class SSHClient {
       throw SSHChannelOpenError(message.reasonCode, message.description);
     }
 
-    final reply = message as SSH_Message_Channel_Confirmation;
-    if (reply.recipientChannel != localChannelId) {
-      throw SSHStateError('Unexpected channel confirmation');
-    }
-
-    return _acceptChannel(
-      localChannelId: localChannelId,
-      remoteChannelId: reply.senderChannel,
-      remoteInitialWindowSize: reply.initialWindowSize,
-      remoteMaximumPacketSize: reply.maximumPacketSize,
-    );
+    // Channel was already registered synchronously in _handleChannelConfirmation.
+    return _channels[localChannelId]!;
   }
 
   SSHChannelController _acceptChannel({

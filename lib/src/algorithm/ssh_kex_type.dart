@@ -1,7 +1,7 @@
 import 'package:dartssh2/src/ssh_algorithm.dart';
 import 'package:pointycastle/export.dart';
 
-class SSHKexType with SSHAlgorithm {
+class SSHKexType extends SSHAlgorithm {
   static const x25519 = SSHKexType._(
     name: 'curve25519-sha256@libssh.org',
     digestFactory: digestSha256,

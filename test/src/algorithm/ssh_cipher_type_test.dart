@@ -1,6 +1,8 @@
 import 'dart:typed_data';
+import 'dart:mirrors';
 
-import 'package:dartssh2/src/algorithm/ssh_cipher_type.dart';
+import 'package:dartssh2/dartssh2.dart';
+import 'package:dartssh2/src/ssh_algorithm.dart';
 import 'package:dartssh2/src/utils/cipher_ext.dart';
 import 'package:test/test.dart';
 
@@ -11,6 +13,143 @@ void main() {
   testCipher(SSHCipherType.aes128ctr);
   testCipher(SSHCipherType.aes192ctr);
   testCipher(SSHCipherType.aes256ctr);
+  group('SSHAlgorithm', () {
+    test('toString() returns correct format', () {
+      final algorithm = SSHKexType.x25519;
+      expect(algorithm.toString(), equals(SSHKexType.x25519.toString()));
+    });
+  });
+
+  group('SSHAlgorithmList extension', () {
+    test('toNameList() returns list of names', () {
+      final algorithms = [SSHKexType.x25519, SSHKexType.nistp521];
+      final names = algorithms.toNameList();
+      expect(names, equals([SSHKexType.x25519.name, SSHKexType.nistp521.name]));
+    });
+
+    test('getByName() returns correct algorithm', () {
+      final algorithms = [SSHKexType.x25519, SSHKexType.nistp521];
+      final algorithm = algorithms.getByName(SSHKexType.nistp521.name);
+      expect(algorithm, isNotNull);
+      expect(algorithm!.name, equals(SSHKexType.nistp521.name));
+    });
+
+    test('getByName() returns null when not found', () {
+      final algorithms = [SSHKexType.x25519, SSHKexType.nistp521];
+      final algorithm = algorithms.getByName('nonexistent');
+      expect(algorithm, isNull);
+    });
+  });
+
+  group('AEAD cipher metadata', () {
+    test('AES-GCM ciphers are marked as AEAD', () {
+      expect(SSHCipherType.aes128gcm.isAead, isTrue);
+      expect(SSHCipherType.aes256gcm.isAead, isTrue);
+      expect(SSHCipherType.aes128gcm.ivSize, 12);
+      expect(SSHCipherType.aes128gcm.aeadTagSize, 16);
+    });
+
+    test('AEAD ciphers do not expose BlockCipher API', () {
+      expect(
+        () => SSHCipherType.aes128gcm.createCipher(
+          Uint8List(SSHCipherType.aes128gcm.keySize),
+          Uint8List(SSHCipherType.aes128gcm.ivSize),
+          forEncryption: true,
+        ),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+
+    test('fromName resolves AES-GCM ciphers', () {
+      expect(
+        SSHCipherType.fromName('aes128-gcm@openssh.com'),
+        SSHCipherType.aes128gcm,
+      );
+      expect(
+        SSHCipherType.fromName('aes256-gcm@openssh.com'),
+        SSHCipherType.aes256gcm,
+      );
+    });
+
+    test('createCipher throws when cipher factory is missing', () {
+      final library = reflectClass(SSHCipherType).owner as LibraryMirror;
+      final ctor = MirrorSystem.getSymbol('_', library);
+      final dynamic custom = reflectClass(SSHCipherType).newInstance(
+        ctor,
+        const [],
+        {
+          #name: 'custom-null-factory',
+          #keySize: 16,
+          #ivSize: 16,
+          #blockSize: 16,
+          #isAead: false,
+          #aeadTagSize: 0,
+          #cipherFactory: null,
+        },
+      ).reflectee;
+
+      expect(
+        () => custom.createCipher(
+          Uint8List(16),
+          Uint8List(16),
+          forEncryption: true,
+        ),
+        throwsA(isA<StateError>()),
+      );
+    });
+  });
+
+  test('Default values are set correctly', () {
+    final algorithms = SSHAlgorithms();
+
+    expect(
+        algorithms.kex,
+        equals([
+          SSHKexType.x25519,
+          SSHKexType.nistp521,
+          SSHKexType.nistp384,
+          SSHKexType.nistp256,
+          SSHKexType.dhGexSha256,
+          SSHKexType.dh14Sha256,
+          SSHKexType.dh14Sha1,
+          SSHKexType.dhGexSha1,
+          SSHKexType.dh1Sha1,
+        ]));
+
+    expect(
+        algorithms.hostkey,
+        equals([
+          SSHHostkeyType.ed25519,
+          SSHHostkeyType.rsaSha512,
+          SSHHostkeyType.rsaSha256,
+          SSHHostkeyType.rsaSha1,
+          SSHHostkeyType.ecdsa521,
+          SSHHostkeyType.ecdsa384,
+          SSHHostkeyType.ecdsa256,
+        ]));
+
+    expect(
+        algorithms.cipher,
+        equals([
+          SSHCipherType.aes128ctr,
+          SSHCipherType.aes128cbc,
+          SSHCipherType.aes256ctr,
+          SSHCipherType.aes256cbc,
+        ]));
+
+    expect(
+        algorithms.mac,
+        equals([
+          SSHMacType.hmacSha256_96,
+          SSHMacType.hmacSha512_96,
+          SSHMacType.hmacSha256Etm,
+          SSHMacType.hmacSha512Etm,
+          SSHMacType.hmacSha1,
+          SSHMacType.hmacSha256,
+          SSHMacType.hmacSha512,
+          SSHMacType.hmacMd5,
+        ]));
+  });
 }
 
 void testCipher(SSHCipherType type) {
@@ -29,6 +168,28 @@ void testCipher(SSHCipherType type) {
     final decrypted = decrypter.processAll(cipherText);
 
     expect(decrypted, plainText);
+  });
+
+  test('$type rejects invalid key length', () {
+    expect(
+      () => type.createCipher(
+        Uint8List(type.keySize - 1),
+        Uint8List(type.blockSize),
+        forEncryption: true,
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+  });
+
+  test('$type rejects invalid IV length', () {
+    expect(
+      () => type.createCipher(
+        Uint8List(type.keySize),
+        Uint8List(type.ivSize - 1),
+        forEncryption: true,
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
   });
 
   // test('$type needs init after reset', () {
