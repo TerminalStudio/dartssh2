@@ -3,7 +3,7 @@ import 'package:dartssh2/src/algorithm/ssh_hostkey_type.dart';
 import 'package:dartssh2/src/algorithm/ssh_kex_type.dart';
 import 'package:dartssh2/src/algorithm/ssh_mac_type.dart';
 
-mixin SSHAlgorithm {
+abstract class SSHAlgorithm {
   /// The name of the algorithm.
   String get name;
 
