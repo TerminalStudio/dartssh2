@@ -1,3 +1,6 @@
+## [2.17.1] - 2026-04-12
+- Made `SSHPem.decode` accept CRLF (`\r\n`) line endings in addition to LF when parsing PEM content [#157]. Thanks [@gkc].
+
 ## [2.17.0] - 2026-03-28
 - Improved Web/WASM compatibility by updating `SSHSocket` conditional imports so web runtimes consistently use the web socket shim and avoid incorrect native socket selection [#88]. Thanks [@vicajilau].
 - Added local dynamic forwarding (`SSHClient.forwardDynamic`) with SOCKS5 `NO AUTH` + `CONNECT`, including configurable handshake/connect timeouts and connection limits.
@@ -202,6 +205,7 @@
 [#140]: https://github.com/TerminalStudio/dartssh2/pull/140
 [#145]: https://github.com/TerminalStudio/dartssh2/pull/145
 [#153]: https://github.com/TerminalStudio/dartssh2/pull/153
+[#157]: https://github.com/TerminalStudio/dartssh2/pull/157
 [#102]: https://github.com/TerminalStudio/dartssh2/issues/102
 [#99]: https://github.com/TerminalStudio/dartssh2/issues/99
 [#109]: https://github.com/TerminalStudio/dartssh2/issues/109
@@ -245,4 +249,5 @@
 [@falrom]: https://github.com/falrom
 [@bradmartin333]: https://github.com/bradmartin333
 [@Wackymax]: https://github.com/Wackymax
+[@gkc]: https://github.com/gkc
 [@vicajilau]: https://github.com/vicajilau
