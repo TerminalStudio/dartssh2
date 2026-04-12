@@ -54,6 +54,8 @@ class SSHAlgorithms {
       SSHKexType.dh14Sha1,
       SSHKexType.dhGexSha1,
       SSHKexType.dh1Sha1,
+      SSHKexType.dhGroup18Sha512,  // diffie-hellman-group18-sha512
+      SSHKexType.dhGroup16Sha512,  // diffie-hellman-group16-sha512
     ],
     this.hostkey = const [
       SSHHostkeyType.ed25519,
