@@ -15,6 +15,18 @@ g1O5wsVZjzX9a6/Zo4ikAAAAGWpmb3V0dHNAVVNBSkZPVVRUU00ubG9jYWwBAgME
     expect(pem.type, 'OPENSSH PRIVATE KEY');
   });
 
+  test('SSHPem.decode works with crlf not just lf', () {
+    final pem = SSHPem.decode('-----BEGIN OPENSSH PRIVATE KEY-----\r\n'
+        'b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\r\n'
+        'QyNTUxOQAAACBZnnnYZjFQ7Zt0gMyJ2YYmDINTucLFWY81/Wuv2aOIpAAAAKBQ6gOSUOoD\r\n'
+        'kgAAAAtzc2gtZWQyNTUxOQAAACBZnnnYZjFQ7Zt0gMyJ2YYmDINTucLFWY81/Wuv2aOIpA\r\n'
+        'AAAEAP8fq0hjlR3jhL7pg+26PSaMiC1V/RrinVbo/4eBMRNFmeedhmMVDtm3SAzInZhiYM\r\n'
+        'g1O5wsVZjzX9a6/Zo4ikAAAAGWpmb3V0dHNAVVNBSkZPVVRUU00ubG9jYWwBAgME\r\n'
+        '-----END OPENSSH PRIVATE KEY-----\r\n');
+
+    expect(pem.type, 'OPENSSH PRIVATE KEY');
+  });
+
   test('SSHPem.decode can parse header', () {
     final pem = SSHPem.decode(r'''-----BEGIN OPENSSH PRIVATE KEY-----
 Header1: Value1
