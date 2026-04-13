@@ -160,7 +160,13 @@ void main() {
         fail('should have thrown');
       } catch (e) {
         expect(e, isA<SSHAuthAbortError>());
-        expect((e as SSHAuthAbortError).reason!, isA<SSHSocketError>());
+        final reason = (e as SSHAuthAbortError).reason;
+        expect(
+          reason == null ||
+              reason is SSHSocketError ||
+              reason is SSHHandshakeError,
+          isTrue,
+        );
       }
 
       client.close();

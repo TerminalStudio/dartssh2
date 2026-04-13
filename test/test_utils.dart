@@ -53,7 +53,7 @@ Future<List<SSHKeyPair>> getTestKeyPairs() async {
 ///
 /// The path is relative to the test/fixtures directory.
 String fixture(String path) {
-  return File('test/fixtures/$path').readAsStringSync();
+  return File('test/fixtures/$path').readAsStringSync().replaceAll('\r\n', '\n');
 }
 
 /// Create a [SSH_Message_Channel_Close] message.

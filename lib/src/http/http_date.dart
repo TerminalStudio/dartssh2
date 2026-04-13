@@ -9,6 +9,11 @@
 DateTime? parseHttpDate(String input) {
   final s = input.trim();
 
+  final iso8601 = DateTime.tryParse(s);
+  if (iso8601 != null) {
+    return iso8601.toUtc();
+  }
+
   // Month map (lowercase)
   const months = {
     'jan': 1,

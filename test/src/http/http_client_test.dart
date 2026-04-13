@@ -41,10 +41,10 @@ void main() {
       expect(response.body, isEmpty);
     });
 
-    test('throws for non-identity transfer encoding', () async {
+    test('throws for unsupported transfer encoding', () async {
       final socket = _FakeSocket([
         'HTTP/1.1 200 OK\r\n',
-        'transfer-encoding: chunked\r\n',
+        'transfer-encoding: gzip\r\n',
         'content-length: 0\r\n',
         '\r\n',
       ]);
