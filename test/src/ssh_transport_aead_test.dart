@@ -283,7 +283,7 @@ void main() {
       transport.close();
     });
 
-    test('kexinit allows missing MAC when AEAD cipher is selected', () {
+    test('kexinit allows missing MAC when AEAD cipher is selected', () async {
       final socket = _CaptureSSHSocket();
       final transport = SSHTransport(
         socket,
@@ -308,11 +308,9 @@ void main() {
         firstKexPacketFollows: false,
       ).encode();
 
-      expect(
-        () => reflect(transport)
-            .invoke(privateSymbol('_handleMessageKexInit'), [payload]),
-        returnsNormally,
-      );
+      final result = reflect(transport)
+          .invoke(privateSymbol('_handleMessageKexInit'), [payload]).reflectee;
+      await expectLater(result, completes);
 
       transport.close();
     });
@@ -402,7 +400,8 @@ void main() {
       transport.close();
     });
 
-    test('kexinit requires client MAC when non-AEAD cipher is selected', () {
+    test('kexinit requires client MAC when non-AEAD cipher is selected',
+        () async {
       final socket = _CaptureSSHSocket();
       final transport = SSHTransport(
         socket,
@@ -427,16 +426,22 @@ void main() {
         firstKexPacketFollows: false,
       ).encode();
 
-      expect(
-        () => reflect(transport)
-            .invoke(privateSymbol('_handleMessageKexInit'), [payload]),
+      await expectLater(
+        () async {
+          final result = reflect(transport).invoke(
+              privateSymbol('_handleMessageKexInit'), [payload]).reflectee;
+          if (result is Future) {
+            await result;
+          }
+        },
         throwsA(isA<StateError>()),
       );
 
       transport.close();
     });
 
-    test('kexinit requires server MAC when non-AEAD cipher is selected', () {
+    test('kexinit requires server MAC when non-AEAD cipher is selected',
+        () async {
       final socket = _CaptureSSHSocket();
       final transport = SSHTransport(
         socket,
@@ -461,9 +466,14 @@ void main() {
         firstKexPacketFollows: false,
       ).encode();
 
-      expect(
-        () => reflect(transport)
-            .invoke(privateSymbol('_handleMessageKexInit'), [payload]),
+      await expectLater(
+        () async {
+          final result = reflect(transport).invoke(
+              privateSymbol('_handleMessageKexInit'), [payload]).reflectee;
+          if (result is Future) {
+            await result;
+          }
+        },
         throwsA(isA<StateError>()),
       );
 
