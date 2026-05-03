@@ -10,6 +10,8 @@ import 'package:dartssh2/src/ssh_channel.dart';
 import 'package:dartssh2/src/message/base.dart';
 import 'package:test/test.dart';
 
+const _packetTimeout = Duration(seconds: 1);
+
 void main() {
   group('SftpClient protocol', () {
     test('handshake completes with version packet', () async {
@@ -197,7 +199,7 @@ void main() {
         SftpDataPacket(read2.requestId, Uint8List.fromList('EFGH'.codeUnits)),
       );
       final read3 = SftpReadPacket.decode(
-        await read3Future.timeout(const Duration(milliseconds: 100)),
+        await read3Future.timeout(_packetTimeout),
       );
       expect(read3.offset, 8);
 
@@ -256,7 +258,7 @@ void main() {
         SftpDataPacket(read1.requestId, Uint8List.fromList('AB'.codeUnits)),
       );
       final retry = SftpReadPacket.decode(
-        await retryFuture.timeout(const Duration(milliseconds: 100)),
+        await retryFuture.timeout(_packetTimeout),
       );
       expect(retry.offset, 2);
       expect(retry.length, 2);

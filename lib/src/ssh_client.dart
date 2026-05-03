@@ -642,6 +642,9 @@ class SSHClient {
     final channelController = await _openSessionChannel();
     final success = await channelController.sendSubsystem('sftp');
     if (!success) {
+      channelController.close();
+      _channels.remove(channelController.localId);
+      _channelIdAllocator.release(channelController.localId);
       throw SSHChannelRequestError('sftp subsystem request failed');
     }
 
