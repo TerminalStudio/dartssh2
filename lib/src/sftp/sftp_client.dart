@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -281,22 +282,25 @@ class SftpClient {
     _channel.addData(writer.takeBytes());
   }
 
+  Future<SftpResponsePacket> _sendRequest(SftpRequestPacket request) async {
+    await handshake;
+    final reply = _waitReply(request.requestId);
+    _sendPacket(request);
+    return await reply;
+  }
+
   Future<SftpResponsePacket> _sendOpen(
     String path,
     SftpFileOpenMode mode,
     SftpFileAttrs attrs,
   ) async {
-    await handshake;
     final request = SftpOpenPacket(_requestId.next, path, mode.flag, attrs);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendClose(Uint8List handle) async {
-    await handshake;
     final request = SftpClosePacket(_requestId.next, handle);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendRead(
@@ -304,15 +308,13 @@ class SftpClient {
     int offset,
     int length,
   ) async {
-    await handshake;
     final request = SftpReadPacket(
       requestId: _requestId.next,
       handle: handle,
       offset: offset,
       length: length,
     );
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendWrite(
@@ -320,135 +322,103 @@ class SftpClient {
     int offset,
     Uint8List data,
   ) async {
-    await handshake;
     final request = SftpWritePacket(
       requestId: _requestId.next,
       handle: handle,
       offset: offset,
       data: data,
     );
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendLStat(String path) async {
-    await handshake;
     final request = SftpLStatPacket(_requestId.next, path);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendFStat(Uint8List handle) async {
-    await handshake;
     final request = SftpFStatPacket(_requestId.next, handle);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendSetStat(
     String path,
     SftpFileAttrs attrs,
   ) async {
-    await handshake;
     final request = SftpSetStatPacket(_requestId.next, path, attrs);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendFSetStat(
     Uint8List handle,
     SftpFileAttrs attrs,
   ) async {
-    await handshake;
     final request = SftpFSetStatPacket(_requestId.next, handle, attrs);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendOpenDir(String path) async {
-    await handshake;
     final request = SftpOpenDirPacket(_requestId.next, path);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendReadDir(Uint8List handle) async {
-    await handshake;
     final request = SftpReadDirPacket(_requestId.next, handle);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendRemove(String filename) async {
-    await handshake;
     final request = SftpRemovePacket(_requestId.next, filename);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendMakeDir(
     String path,
     SftpFileAttrs attrs,
   ) async {
-    await handshake;
     final request = SftpMkdirPacket(_requestId.next, path, attrs);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendRemoveDir(String path) async {
-    await handshake;
     final request = SftpRmdirPacket(_requestId.next, path);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendRealPath(String path) async {
-    await handshake;
     final request = SftpRealpathPacket(_requestId.next, path);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendStat(String path) async {
-    await handshake;
     final request = SftpStatPacket(_requestId.next, path);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendRename(
     String oldPath,
     String newPath,
   ) async {
-    await handshake;
     final request = SftpRenamePacket(_requestId.next, oldPath, newPath);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendReadLink(String path) async {
-    await handshake;
     final request = SftpReadlinkPacket(_requestId.next, path);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendSymlink(
     String linkPath,
     String targetPath,
   ) async {
-    await handshake;
     final request = SftpSymlinkPacket(_requestId.next, linkPath, targetPath);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendExtended(SftpExtendedRequest payload) async {
-    await handshake;
     final request = SftpExtendedPacket(_requestId.next, payload.encode());
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   void _dispatchReply(SftpResponsePacket packet) {
@@ -636,23 +606,98 @@ class SftpFile {
     }
 
     final endOffset = offset + length;
-    final pendingReads = <(int startOffset, Future<Uint8List?>)>[];
+    final completedReads = <int, Uint8List?>{};
+    final completionQueue = Queue<(int startOffset, Uint8List? chunk)>();
     var reservedOffset = offset;
     var bytesRead = 0;
+    var nextOutputOffset = offset;
+    var pendingReadCount = 0;
+    Object? pendingError;
+    StackTrace? pendingStackTrace;
+    Completer<void>? completionSignal;
+    var effectiveChunkSize = chunkSize;
 
-    while (bytesRead < length) {
+    void notifyReadComplete() {
+      final signal = completionSignal;
+      if (signal != null && !signal.isCompleted) {
+        signal.complete();
+      }
+    }
+
+    Future<void> waitForReadComplete() {
+      if (completionQueue.isNotEmpty || pendingError != null) {
+        return Future.value();
+      }
+      final signal = completionSignal = Completer<void>();
+      return signal.future.whenComplete(() {
+        if (identical(completionSignal, signal)) {
+          completionSignal = null;
+        }
+      });
+    }
+
+    void issueRead(int startOffset, int requestLength) {
+      pendingReadCount++;
+      _readChunk(requestLength, startOffset).then(
+        (chunk) {
+          pendingReadCount--;
+          completionQueue.add((startOffset, chunk));
+          if (chunk != null &&
+              chunk.isNotEmpty &&
+              chunk.length < requestLength &&
+              startOffset + chunk.length < endOffset) {
+            effectiveChunkSize = max(1, min(effectiveChunkSize, chunk.length));
+            issueRead(
+              startOffset + chunk.length,
+              min(
+                requestLength - chunk.length,
+                endOffset - startOffset - chunk.length,
+              ),
+            );
+          }
+          notifyReadComplete();
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          pendingReadCount--;
+          pendingError = error;
+          pendingStackTrace = stackTrace;
+          notifyReadComplete();
+        },
+      );
+    }
+
+    void scheduleReads() {
       while (reservedOffset < endOffset &&
-          pendingReads.length < maxPendingRequests) {
-        final requestLength = min(chunkSize, endOffset - reservedOffset);
-        pendingReads
-            .add((reservedOffset, _readChunk(requestLength, reservedOffset)));
+          pendingReadCount < maxPendingRequests &&
+          completedReads.length < maxPendingRequests) {
+        final startOffset = reservedOffset;
+        final requestLength =
+            min(effectiveChunkSize, endOffset - reservedOffset);
+        issueRead(startOffset, requestLength);
         reservedOffset += requestLength;
       }
+    }
 
-      if (pendingReads.isEmpty) break;
+    scheduleReads();
 
-      final (startOffset, readFuture) = pendingReads.removeAt(0);
-      final chunk = await readFuture;
+    while (bytesRead < length) {
+      while (completionQueue.isNotEmpty) {
+        final (startOffset, chunk) = completionQueue.removeFirst();
+        completedReads[startOffset] = chunk;
+      }
+
+      if (pendingError != null) {
+        Error.throwWithStackTrace(pendingError!, pendingStackTrace!);
+      }
+
+      if (!completedReads.containsKey(nextOutputOffset)) {
+        if (pendingReadCount == 0) break;
+        await waitForReadComplete();
+        scheduleReads();
+        continue;
+      }
+
+      final chunk = completedReads.remove(nextOutputOffset);
       if (chunk == null) break;
       if (chunk.isEmpty) {
         throw SftpError('Unexpected empty data chunk before EOF');
@@ -666,7 +711,9 @@ class SftpFile {
       yield outputChunk;
 
       bytesRead += outputChunk.length;
+      nextOutputOffset += outputChunk.length;
       onProgress?.call(bytesRead);
+      scheduleReads();
     }
   }
 
