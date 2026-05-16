@@ -23,6 +23,9 @@ const _kReadChunkSize = 16 * 1024;
 const _kReadMaxPendingRequests = 64;
 const _kDownloadChunkSize = 64 * 1024;
 const _kDownloadMaxPendingRequests = 128;
+// 16MB SFTP packet size limit (implementation DoS/safety limit, not protocol
+// requirement; RFC 4253 / SFTP has no fixed maximum but 16MB is reasonable).
+const _kMaxPacketSize = 16 * 1024 * 1024;
 
 class SftpClient {
   final SSHChannel _channel;
@@ -33,7 +36,33 @@ class SftpClient {
 
   SftpClient(this._channel, {this.printDebug, this.printTrace}) {
     _startHandshake();
-    _channel.stream.listen(_handleData);
+    _channel.stream.listen(
+      _handleData,
+      onError: (Object e, _) {
+        print('[SFTP] stream onError: $e');
+        for (var waiter in _replyWaiters.values) {
+          waiter.completeError(e);
+        }
+        _replyWaiters.clear();
+        try {
+          _done.completeError(e);
+        } on StateError {
+          // Ignore duplicate completion.
+        }
+      },
+      onDone: () {
+        final error = SftpError('Stream closed');
+        for (var waiter in _replyWaiters.values) {
+          waiter.completeError(error);
+        }
+        _replyWaiters.clear();
+        try {
+          _done.complete();
+        } on StateError {
+          // Ignore duplicate completion.
+        }
+      },
+    );
   }
 
   final _buffer = ChunkBuffer();
@@ -242,7 +271,13 @@ class SftpClient {
       waiter.completeError(error, stackTrace);
     }
     _replyWaiters.clear();
-    _done.completeError(error, stackTrace);
+    _buffer.clear();
+    if (!_handshake.isCompleted) {
+      _handshake.completeError(error, stackTrace);
+    }
+    if (!_done.isCompleted) {
+      _done.completeError(error, stackTrace);
+    }
   }
 
   void _startHandshake() {
@@ -444,18 +479,36 @@ class SftpClient {
   }
 
   void _handleData(SSHChannelData data) {
-    _buffer.add(data.bytes);
-    _handlePackets();
+    try {
+      _buffer.add(data.bytes);
+      _handlePackets();
+    } catch (e) {
+      _closeError(e);
+    }
   }
 
   void _handlePackets() {
     const lengthHeader = 4; // 4 bytes packet length header
     while (_buffer.length >= lengthHeader) {
-      final length = _buffer.byteData.getUint32(0);
-      if (_buffer.length < lengthHeader + length) break;
-      final packet = _buffer.consume(lengthHeader + length);
-      final payload = Uint8List.sublistView(packet, lengthHeader);
-      _handlePacket(payload);
+      try {
+        final length = _buffer.byteData.getUint32(0);
+        if (length > _kMaxPacketSize) {
+          _closeError(
+            SftpError(
+              'Packet too large: length=$length '
+              'bufferLen=${_buffer.length}',
+            ),
+          );
+          return;
+        }
+        if (_buffer.length < lengthHeader + length) break;
+        final packet = _buffer.consume(lengthHeader + length);
+        final payload = Uint8List.sublistView(packet, lengthHeader);
+        _handlePacket(payload);
+      } catch (e) {
+        _closeError(e);
+        return;
+      }
     }
   }
 

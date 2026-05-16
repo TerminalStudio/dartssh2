@@ -454,7 +454,7 @@ class SSHChannel {
   SSHChannelId get channelId => _controller.localId;
 
   /// The channel id on the remote side.
-  SSHChannelId get remoteChannelId => _controller.localId;
+  SSHChannelId get remoteChannelId => _controller.remoteId;
 
   /// The maximum packet size that the remote side can receive.
   int get maximumPacketSize => _controller.remoteMaximumPacketSize;
@@ -553,7 +553,11 @@ class SSHChannelExtendedDataType {
 
 class SSHChannelDataSplitter
     extends StreamTransformerBase<SSHChannelData, SSHChannelData> {
-  SSHChannelDataSplitter(this.maxSize);
+  SSHChannelDataSplitter(this.maxSize) {
+    if (maxSize <= 0) {
+      throw ArgumentError.value(maxSize, 'maxSize', 'must be positive');
+    }
+  }
 
   final int maxSize;
 
