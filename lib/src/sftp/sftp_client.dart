@@ -33,7 +33,20 @@ class SftpClient {
 
   SftpClient(this._channel, {this.printDebug, this.printTrace}) {
     _startHandshake();
-    _channel.stream.listen(_handleData);
+    _channel.stream.listen(
+      _handleData,
+      onError: (Object e, _) {
+        print('[SFTP] stream onError: $e');
+        if (!_done.isCompleted) {
+          _done.completeError(e);
+        }
+      },
+      onDone: () {
+        if (!_done.isCompleted) {
+          _done.complete();
+        }
+      },
+    );
   }
 
   final _buffer = ChunkBuffer();
@@ -444,18 +457,34 @@ class SftpClient {
   }
 
   void _handleData(SSHChannelData data) {
-    _buffer.add(data.bytes);
-    _handlePackets();
+    try {
+      _buffer.add(data.bytes);
+      _handlePackets();
+    } catch (e) {
+      print('[SFTP] _handleData ERROR: $e');
+    }
   }
 
   void _handlePackets() {
     const lengthHeader = 4; // 4 bytes packet length header
     while (_buffer.length >= lengthHeader) {
-      final length = _buffer.byteData.getUint32(0);
-      if (_buffer.length < lengthHeader + length) break;
-      final packet = _buffer.consume(lengthHeader + length);
-      final payload = Uint8List.sublistView(packet, lengthHeader);
-      _handlePacket(payload);
+      try {
+        final length = _buffer.byteData.getUint32(0);
+        // SFTP payload should not exceed a reasonable limit (16MB)
+        if (length > 16 * 1024 * 1024) {
+          print('[SFTP] _handlePackets suspicious length=$length bufferLen=${_buffer.length}');
+          _buffer.clear();
+          return;
+        }
+        if (_buffer.length < lengthHeader + length) break;
+        final packet = _buffer.consume(lengthHeader + length);
+        final payload = Uint8List.sublistView(packet, lengthHeader);
+        _handlePacket(payload);
+      } catch (e) {
+        print('[SFTP] _handlePackets ERROR: $e');
+        _buffer.clear();
+        return;
+      }
     }
   }
 
@@ -477,6 +506,7 @@ class SftpClient {
       case SftpExtendedReplyPacket.packetType:
         return _handleExtendedReplyPacket(payload);
       default:
+        print('[SFTP] UNKNOWN packet type=$type');
         printDebug?.call('SftpClient._handlePacket: unknown packet: $type');
     }
   }

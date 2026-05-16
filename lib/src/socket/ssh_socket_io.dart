@@ -10,6 +10,7 @@ Future<SSHSocket> connectNativeSocket(
   Duration? timeout,
 }) async {
   final socket = await Socket.connect(host, port, timeout: timeout);
+  socket.setOption(SocketOption.tcpNoDelay, true);
   return _SSHNativeSocket._(socket);
 }
 
