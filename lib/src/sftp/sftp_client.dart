@@ -40,6 +40,10 @@ class SftpClient {
       _handleData,
       onError: (Object e, _) {
         print('[SFTP] stream onError: $e');
+        for (var waiter in _replyWaiters.values) {
+          waiter.completeError(e);
+        }
+        _replyWaiters.clear();
         try {
           _done.completeError(e);
         } on StateError {
@@ -47,6 +51,11 @@ class SftpClient {
         }
       },
       onDone: () {
+        final error = SftpError('Stream closed');
+        for (var waiter in _replyWaiters.values) {
+          waiter.completeError(error);
+        }
+        _replyWaiters.clear();
         try {
           _done.complete();
         } on StateError {
@@ -263,6 +272,9 @@ class SftpClient {
     }
     _replyWaiters.clear();
     _buffer.clear();
+    if (!_handshake.isCompleted) {
+      _handshake.completeError(error, stackTrace);
+    }
     if (!_done.isCompleted) {
       _done.completeError(error, stackTrace);
     }
