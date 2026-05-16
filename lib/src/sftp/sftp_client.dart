@@ -23,6 +23,9 @@ const _kReadChunkSize = 16 * 1024;
 const _kReadMaxPendingRequests = 64;
 const _kDownloadChunkSize = 64 * 1024;
 const _kDownloadMaxPendingRequests = 128;
+// 16MB SFTP packet size limit (implementation DoS/safety limit, not protocol
+// requirement; RFC 4253 / SFTP has no fixed maximum but 16MB is reasonable).
+const _kMaxPacketSize = 16 * 1024 * 1024;
 
 class SftpClient {
   final SSHChannel _channel;
@@ -37,13 +40,17 @@ class SftpClient {
       _handleData,
       onError: (Object e, _) {
         print('[SFTP] stream onError: $e');
-        if (!_done.isCompleted) {
+        try {
           _done.completeError(e);
+        } on StateError {
+          // Ignore duplicate completion.
         }
       },
       onDone: () {
-        if (!_done.isCompleted) {
+        try {
           _done.complete();
+        } on StateError {
+          // Ignore duplicate completion.
         }
       },
     );
@@ -255,7 +262,10 @@ class SftpClient {
       waiter.completeError(error, stackTrace);
     }
     _replyWaiters.clear();
-    _done.completeError(error, stackTrace);
+    _buffer.clear();
+    if (!_done.isCompleted) {
+      _done.completeError(error, stackTrace);
+    }
   }
 
   void _startHandshake() {
@@ -461,7 +471,7 @@ class SftpClient {
       _buffer.add(data.bytes);
       _handlePackets();
     } catch (e) {
-      print('[SFTP] _handleData ERROR: $e');
+      _closeError(e);
     }
   }
 
@@ -470,10 +480,13 @@ class SftpClient {
     while (_buffer.length >= lengthHeader) {
       try {
         final length = _buffer.byteData.getUint32(0);
-        // SFTP payload should not exceed a reasonable limit (16MB)
-        if (length > 16 * 1024 * 1024) {
-          print('[SFTP] _handlePackets suspicious length=$length bufferLen=${_buffer.length}');
-          _buffer.clear();
+        if (length > _kMaxPacketSize) {
+          _closeError(
+            SftpError(
+              'Packet too large: length=$length '
+              'bufferLen=${_buffer.length}',
+            ),
+          );
           return;
         }
         if (_buffer.length < lengthHeader + length) break;
@@ -481,8 +494,7 @@ class SftpClient {
         final payload = Uint8List.sublistView(packet, lengthHeader);
         _handlePacket(payload);
       } catch (e) {
-        print('[SFTP] _handlePackets ERROR: $e');
-        _buffer.clear();
+        _closeError(e);
         return;
       }
     }
@@ -506,7 +518,6 @@ class SftpClient {
       case SftpExtendedReplyPacket.packetType:
         return _handleExtendedReplyPacket(payload);
       default:
-        print('[SFTP] UNKNOWN packet type=$type');
         printDebug?.call('SftpClient._handlePacket: unknown packet: $type');
     }
   }
