@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:asn1lib/asn1lib.dart';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:dartssh2/src/hostkey/hostkey_ecdsa.dart';
+import 'package:dartssh2/src/message/base.dart';
 import 'package:test/test.dart';
 
 import '../test_utils.dart';
@@ -71,6 +72,63 @@ $body
 MAA=
 -----END EC PRIVATE KEY-----''';
 
+  /// Returns [pemText] with the OpenSSH private-key comment replaced by an
+  /// intentionally malformed UTF-8 sequence.
+  ///
+  /// The input and output are both PEM strings. The helper decodes the PEM,
+  /// parses the OpenSSH key blob, rebuilds the privateKeyBlob with the original
+  /// key material, and writes malformed bytes in place of the comment.
+  String withMalformedOpenSSHComment(String pemText) {
+    final pem = SSHPem.decode(pemText);
+    final keyPairs = OpenSSHKeyPairs.decode(pem.content);
+    final reader = SSHMessageReader(keyPairs.privateKeyBlob);
+    final writer = SSHMessageWriter();
+
+    writer.writeUint32(reader.readUint32());
+    writer.writeUint32(reader.readUint32());
+
+    final type = reader.readUtf8();
+    writer.writeUtf8(type);
+
+    switch (type) {
+      case 'ssh-rsa':
+        for (var i = 0; i < 6; i++) {
+          writer.writeString(reader.readString());
+        }
+        break;
+      case 'ssh-ed25519':
+        writer.writeString(reader.readString());
+        writer.writeString(reader.readString());
+        break;
+      case 'ecdsa-sha2-nistp256':
+      case 'ecdsa-sha2-nistp384':
+      case 'ecdsa-sha2-nistp521':
+        writer.writeUtf8(reader.readUtf8());
+        writer.writeString(reader.readString());
+        writer.writeString(reader.readString());
+        break;
+      default:
+        throw UnsupportedError('Unsupported key type: $type');
+    }
+
+    reader.readString();
+    // 0xBB and 0xA8 are UTF-8 continuation bytes without a leading byte.
+    writer.writeString(Uint8List.fromList([0xbb, 0xa8]));
+    writer.writeBytes(reader.readToEnd());
+
+    return OpenSSHKeyPairs.unencrypted(
+      publicKeys: keyPairs.publicKeys,
+      privateKeyBlob: writer.takeBytes(),
+    ).toPem();
+  }
+
+  final ed25519PrivateWithMalformedComment =
+      withMalformedOpenSSHComment(ed25519Private);
+  final rsaPrivateOpenSSHWithMalformedComment =
+      withMalformedOpenSSHComment(rsaPrivateOpenSSH);
+  final ecdsaNistP256PrivateWithMalformedComment =
+      withMalformedOpenSSHComment(ecdsaNistP256Private);
+
   test('SSHKeyPair.fromPem works with RSA private key', () async {
     final pem = rsaPrivate;
     final keypair = SSHKeyPair.fromPem(pem);
@@ -78,11 +136,37 @@ MAA=
     expect(keypair.single, isA<RsaPrivateKey>());
   });
 
+  test('SSHKeyPair.fromPem accepts RSA key with malformed comment', () async {
+    expect(SSHKeyPair.isEncryptedPem(rsaPrivateOpenSSHWithMalformedComment),
+        false);
+
+    final keypairs = SSHKeyPair.fromPem(rsaPrivateOpenSSHWithMalformedComment);
+
+    expect(keypairs.length, 1);
+    final keypair = keypairs.single as OpenSSHRsaKeyPair;
+    expect(keypair.n.bitLength, greaterThan(0));
+    expect(keypair.d.bitLength, greaterThan(0));
+  });
+
   test('SSHKeyPair.fromPem works with ECdSA private key', () async {
     final pem = ecdsaNistP256Private;
     final keypair = SSHKeyPair.fromPem(pem);
     expect(keypair.length, 1);
     expect(keypair.single, isA<OpenSSHEcdsaKeyPair>());
+  });
+
+  test('SSHKeyPair.fromPem accepts ECDSA key with malformed comment', () async {
+    expect(SSHKeyPair.isEncryptedPem(ecdsaNistP256PrivateWithMalformedComment),
+        false);
+
+    final keypairs =
+        SSHKeyPair.fromPem(ecdsaNistP256PrivateWithMalformedComment);
+
+    expect(keypairs.length, 1);
+    final keypair = keypairs.single as OpenSSHEcdsaKeyPair;
+    expect(keypair.curveId, 'nistp256');
+    expect(keypair.q.length, 65);
+    expect(keypair.d.bitLength, greaterThan(0));
   });
 
   test('SSHKeyPair.fromPem works with ECDSA nistp384 private key', () async {
@@ -108,6 +192,19 @@ MAA=
     final keypairs = SSHKeyPair.fromPem(pem);
     expect(keypairs.length, 1);
     expect(keypairs.single, isA<OpenSSHEd25519KeyPair>());
+  });
+
+  test('SSHKeyPair.fromPem accepts Ed25519 key with malformed comment',
+      () async {
+    expect(
+        SSHKeyPair.isEncryptedPem(ed25519PrivateWithMalformedComment), false);
+
+    final keypairs = SSHKeyPair.fromPem(ed25519PrivateWithMalformedComment);
+
+    expect(keypairs.length, 1);
+    final keypair = keypairs.single as OpenSSHEd25519KeyPair;
+    expect(keypair.publicKey.length, 32);
+    expect(keypair.privateKey.length, 64);
   });
 
   test('SSHKeyPair.fromPem works with legacy EC PRIVATE KEY format', () async {

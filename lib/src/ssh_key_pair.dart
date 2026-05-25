@@ -351,7 +351,7 @@ class OpenSSHRsaKeyPair with OpenSSHKeyPair {
     final iqmp = reader.readMpint();
     final p = reader.readMpint();
     final q = reader.readMpint();
-    final comment = reader.readUtf8();
+    final comment = reader.readUtf8(allowMalformed: true);
     return OpenSSHRsaKeyPair(n, e, d, iqmp, p, q, comment);
   }
 
@@ -409,7 +409,7 @@ class OpenSSHEd25519KeyPair with OpenSSHKeyPair {
   factory OpenSSHEd25519KeyPair.readFrom(SSHMessageReader reader) {
     final publicKey = reader.readString();
     final privateKey = reader.readString();
-    final comment = reader.readUtf8();
+    final comment = reader.readUtf8(allowMalformed: true);
     return OpenSSHEd25519KeyPair(publicKey, privateKey, comment);
   }
 
@@ -458,7 +458,7 @@ class OpenSSHEcdsaKeyPair with OpenSSHKeyPair {
     final curve = reader.readUtf8();
     final q = reader.readString();
     final d = reader.readMpint();
-    final comment = reader.readUtf8();
+    final comment = reader.readUtf8(allowMalformed: true);
     return OpenSSHEcdsaKeyPair(curve, q, d, comment);
   }
 
