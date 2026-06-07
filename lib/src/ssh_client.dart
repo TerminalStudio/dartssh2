@@ -69,9 +69,9 @@ class SSHPtyConfig {
   /// Height of the terminal in pixels. 0 if unknown.
   final int pixelHeight;
 
-  /// Terminal modes (termios opcode -> value). See RFC 4254 §8.            // <--- 추가
-  /// Example: `{53: 0}` to disable echo (ECHO opcode = 53).                // <--- 추가
-  final Map<int, int>? modes;                                            // <--- 추가
+  /// Terminal modes to apply at pty-req time (termios opcode -> value).
+  /// See RFC 4254 §8. Example: `{53: 0}` to disable echo (ECHO opcode = 53).
+  final Map<int, int>? modes;
 
   const SSHPtyConfig({
     this.type = 'xterm-256color',
@@ -79,25 +79,27 @@ class SSHPtyConfig {
     this.height = 24,
     this.pixelWidth = 0,
     this.pixelHeight = 0,
-    this.modes,                                                          // <--- 추가
+    this.modes,
   });
 
-  /// Encode modes to "encoded terminal modes" per RFC 4254 §8 —          // <--- 추가
-  /// opcode(1) + value(4, big-endian) per entry, terminated by 0x00.    // <--- 추가
-  Uint8List encodeModes() {                                              // <--- 추가
-    final m = modes;                                                     // <--- 추가
-    if (m == null || m.isEmpty) return Uint8List(0);                     // <--- 추가
-    final bb = BytesBuilder();                                           // <--- 추가
-    m.forEach((op, v) {                                                  // <--- 추가
-      bb.addByte(op & 0xff);                                             // <--- 추가
-      bb.addByte((v >> 24) & 0xff);                                      // <--- 추가
-      bb.addByte((v >> 16) & 0xff);                                      // <--- 추가
-      bb.addByte((v >> 8) & 0xff);                                       // <--- 추가
-      bb.addByte(v & 0xff);                                              // <--- 추가
-    });                                                                  // <--- 추가
-    bb.addByte(0); // TTY_OP_END                                         // <--- 추가
-    return bb.toBytes();                                                 // <--- 추가
-  }                                                                      // <--- 추가
+  /// Encodes [modes] into the "encoded terminal modes" byte string defined
+  /// by RFC 4254 §8 — each entry is opcode(1) + value(4, big-endian),
+  /// terminated by TTY_OP_END (0x00). Returns an empty list when [modes] is
+  /// null or empty (preserving prior pre-modes behavior).
+  Uint8List encodeModes() {
+    final m = modes;
+    if (m == null || m.isEmpty) return Uint8List(0);
+    final bb = BytesBuilder();
+    m.forEach((op, v) {
+      bb.addByte(op & 0xff);
+      bb.addByte((v >> 24) & 0xff);
+      bb.addByte((v >> 16) & 0xff);
+      bb.addByte((v >> 8) & 0xff);
+      bb.addByte(v & 0xff);
+    });
+    bb.addByte(0); // TTY_OP_END
+    return bb.toBytes();
+  }
 }
 
 class SSHX11Config {
@@ -482,7 +484,7 @@ class SSHClient {
         terminalHeight: pty.height,
         terminalPixelWidth: pty.pixelWidth,
         terminalPixelHeight: pty.pixelHeight,
-        terminalModes: pty.encodeModes(),                                // <--- 추가
+        terminalModes: pty.encodeModes(),
       );
       if (!ptyOk) {
         channelController.close();
@@ -550,7 +552,7 @@ class SSHClient {
         terminalHeight: pty.height,
         terminalPixelWidth: pty.pixelWidth,
         terminalPixelHeight: pty.pixelHeight,
-        terminalModes: pty.encodeModes(),                                // <--- 추가
+        terminalModes: pty.encodeModes(),
       );
       if (!ok) {
         channelController.close();
