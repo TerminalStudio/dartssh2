@@ -192,6 +192,10 @@ class SSHTransport {
 
   final _remotePacketSN = SSHPacketSN.fromZero();
 
+  int _localAeadPacketCount = 0;
+
+  int _remoteAeadPacketCount = 0;
+
   /// Whether a key exchange is currently in progress (initial or re-key).
   bool _kexInProgress = false;
 
@@ -338,7 +342,7 @@ class SSHTransport {
     final encrypted = _processAead(
       key: _localCipherKey!,
       iv: _localIV!,
-      sequence: _localPacketSN.value,
+      sequence: _localAeadPacketCount++,
       aad: aad,
       input: plaintext,
       forEncryption: true,
@@ -683,7 +687,7 @@ class SSHTransport {
       plaintext = _processAead(
         key: _remoteCipherKey!,
         iv: _remoteIV!,
-        sequence: _remotePacketSN.value,
+        sequence: _remoteAeadPacketCount++,
         aad: aad,
         input: encryptedInput,
         forEncryption: false,
@@ -785,6 +789,7 @@ class SSHTransport {
     if (cipherType.isAead) {
       _encryptCipher = null;
       _localMac = null;
+      _localAeadPacketCount = 0;
       return;
     }
 
@@ -821,6 +826,7 @@ class SSHTransport {
     if (cipherType.isAead) {
       _decryptCipher = null;
       _remoteMac = null;
+      _remoteAeadPacketCount = 0;
       return;
     }
 
