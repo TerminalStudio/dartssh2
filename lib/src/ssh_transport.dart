@@ -109,6 +109,8 @@ class SSHTransport {
     _startHandshake();
   }
 
+  /// A completer that completes when the transport is closed or terminated,
+  /// either normally or due to an error.
   final _doneCompleter = Completer<void>();
 
   /// Contains unprocessed data from the socket.
