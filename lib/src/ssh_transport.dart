@@ -174,12 +174,16 @@ class SSHTransport {
   /// A [BlockCipher] to decrypt data sent from the other side.
   BlockCipher? _decryptCipher;
 
+  /// The cipher key derived for encrypting outgoing data.
   Uint8List? _localCipherKey;
 
+  /// The cipher key derived for decrypting incoming data.
   Uint8List? _remoteCipherKey;
 
+  /// The initialization vector (IV) or nonce prefix derived for encrypting outgoing data.
   Uint8List? _localIV;
 
+  /// The initialization vector (IV) or nonce prefix derived for decrypting incoming data.
   Uint8List? _remoteIV;
 
   /// A [Mac] used to authenticate data sent to the other side.
