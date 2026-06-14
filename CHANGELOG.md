@@ -1,4 +1,5 @@
 ## [2.18.0] - 2026-05-18
+- Fixed AES-GCM cipher encryption and decryption sequence number/nonce counter resetting during key exchanges [#165]. Thanks [@vicajilau].
 - **BREAKING**: `SSHHostkeyVerifyHandler` now receives an OpenSSH-style `SHA256:<base64>` host key fingerprint instead of the previous raw MD5 digest, so host key pinning code must be updated accordingly [#162]. Thanks [@thyssentishman].
 
 ## [2.17.1] - 2026-04-12
@@ -204,6 +205,7 @@
 
 - Initial release.
 
+[#165]: https://github.com/TerminalStudio/dartssh2/issues/165
 [#141]: https://github.com/TerminalStudio/dartssh2/pull/141
 [#140]: https://github.com/TerminalStudio/dartssh2/pull/140
 [#145]: https://github.com/TerminalStudio/dartssh2/pull/145

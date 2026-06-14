@@ -67,6 +67,7 @@ class SSHTransport {
   /// Function invoked with trace logging.
   final SSHPrintHandler? printTrace;
 
+  /// The collection of cryptographic and transport algorithms to negotiate and use.
   final SSHAlgorithms algorithms;
 
   /// Function called when the hostkey has been received. Returns true if the
@@ -79,6 +80,10 @@ class SSHTransport {
   /// Function called when a packet is received.
   final SSHPacketHandler? onPacket;
 
+  /// Whether to bypass server host key verification.
+  ///
+  /// If set to `true`, the connection will proceed without checking the server's
+  /// host key signature or identity, which is useful for testing but insecure.
   final bool disableHostkeyVerification;
 
   /// A [Future] that completes when the transport is closed, or when an error
@@ -109,6 +114,8 @@ class SSHTransport {
     _startHandshake();
   }
 
+  /// A completer that completes when the transport is closed or terminated,
+  /// either normally or due to an error.
   final _doneCompleter = Completer<void>();
 
   /// Contains unprocessed data from the socket.
@@ -138,18 +145,25 @@ class SSHTransport {
   /// compute the exchange hash.
   late Uint8List _remoteKexInit;
 
+  /// The selected key exchange algorithm type negotiated between the parties.
   SSHKexType? _kexType;
 
+  /// The selected server host key algorithm type negotiated between the parties.
   SSHHostkeyType? _hostkeyType;
 
+  /// The encryption cipher algorithm type selected for client-to-server communication.
   SSHCipherType? _clientCipherType;
 
+  /// The decryption cipher algorithm type selected for server-to-client communication.
   SSHCipherType? _serverCipherType;
 
+  /// The MAC algorithm type selected for client-to-server integrity verification.
   SSHMacType? _clientMacType;
 
+  /// The MAC algorithm type selected for server-to-client integrity verification.
   SSHMacType? _serverMacType;
 
+  /// The active key exchange algorithm implementation instance.
   SSHKex? _kex;
 
   /// [_exchangeHash] of the first key exchange is used as session identifier.
@@ -174,12 +188,16 @@ class SSHTransport {
   /// A [BlockCipher] to decrypt data sent from the other side.
   BlockCipher? _decryptCipher;
 
+  /// The cipher key derived for encrypting outgoing data.
   Uint8List? _localCipherKey;
 
+  /// The cipher key derived for decrypting incoming data.
   Uint8List? _remoteCipherKey;
 
+  /// The initialization vector (IV) or nonce prefix derived for encrypting outgoing data.
   Uint8List? _localIV;
 
+  /// The initialization vector (IV) or nonce prefix derived for decrypting incoming data.
   Uint8List? _remoteIV;
 
   /// A [Mac] used to authenticate data sent to the other side.
@@ -188,9 +206,29 @@ class SSHTransport {
   /// A [Mac] used to authenticate data sent from the other side.
   Mac? _remoteMac;
 
+  /// The monotonic sequence number of local packets sent over this transport.
+  /// Used for MAC computation and standard packet flow tracing.
   final _localPacketSN = SSHPacketSN.fromZero();
 
+  /// The monotonic sequence number of remote packets received over this transport.
+  /// Used for MAC verification and standard packet flow tracing.
   final _remotePacketSN = SSHPacketSN.fromZero();
+
+  /// The invocation counter for local AEAD (e.g. AES-GCM) packets.
+  ///
+  /// According to RFC 5647 Section 7.1, the invocation counter (used to derive
+  /// the AEAD nonce) must reset to zero when new keys are established (NEWKEYS).
+  /// This counter is used instead of [_localPacketSN], which is monotonic
+  /// across the entire SSH session and does not reset on rekey.
+  int _localAeadPacketCount = 0;
+
+  /// The invocation counter for remote AEAD (e.g. AES-GCM) packets.
+  ///
+  /// According to RFC 5647 Section 7.1, the invocation counter (used to derive
+  /// the AEAD nonce) must reset to zero when new keys are established (NEWKEYS).
+  /// This counter is used instead of [_remotePacketSN], which is monotonic
+  /// across the entire SSH session and does not reset on rekey.
+  int _remoteAeadPacketCount = 0;
 
   /// Whether a key exchange is currently in progress (initial or re-key).
   bool _kexInProgress = false;
@@ -202,6 +240,12 @@ class SSHTransport {
   /// Packets queued during key exchange that will be sent after NEW_KEYS
   final List<Uint8List> _rekeyPendingPackets = [];
 
+  /// Sends an SSH packet payload over the transport.
+  ///
+  /// This method packs the [data], calculates padding and MAC, encrypts the payload
+  /// (if encryption has been negotiated), and writes the bytes to the underlying socket.
+  /// If a key exchange is currently in progress, packets are queued and sent after
+  /// the key exchange completes (except for key exchange control messages which bypass the queue).
   void sendPacket(Uint8List data) {
     if (isClosed) {
       throw SSHStateError('Transport is closed');
@@ -319,6 +363,10 @@ class SSHTransport {
     _localPacketSN.increase();
   }
 
+  /// Sends a packet encrypted using AEAD (e.g. AES-GCM).
+  ///
+  /// Constructs the packet length and padding, generates random padding bytes,
+  /// encrypts the payload with GCM, and writes the packet to the socket.
   void _sendAeadPacket(Uint8List data, SSHCipherType cipherType) {
     final paddingLength =
         _alignedPaddingLength(data.length, cipherType.blockSize);
@@ -338,7 +386,7 @@ class SSHTransport {
     final encrypted = _processAead(
       key: _localCipherKey!,
       iv: _localIV!,
-      sequence: _localPacketSN.value,
+      sequence: _localAeadPacketCount++,
       aad: aad,
       input: plaintext,
       forEncryption: true,
@@ -351,11 +399,13 @@ class SSHTransport {
     socket.sink.add(buffer.takeBytes());
   }
 
+  /// Computes the correct padding length required to align the total packet size to [align] blocks.
   int _alignedPaddingLength(int payloadLength, int align) {
     final paddingLength = align - ((payloadLength + 1) % align);
     return paddingLength < 4 ? paddingLength + align : paddingLength;
   }
 
+  /// Encrypts or decrypts [input] using the AES-GCM AEAD block cipher.
   Uint8List _processAead({
     required Uint8List key,
     required Uint8List iv,
@@ -373,6 +423,9 @@ class SSHTransport {
     return cipher.process(input);
   }
 
+  /// Generates the AEAD nonce for a given [iv] and packet [sequence] number.
+  ///
+  /// XORs or appends the sequence number to the IV as specified by the cipher.
   Uint8List _nonceForSequence(Uint8List iv, int sequence) {
     if (iv.length != 12) {
       throw ArgumentError.value(iv, 'iv', 'AEAD IV must be 12 bytes long');
@@ -385,6 +438,7 @@ class SSHTransport {
     return nonce;
   }
 
+  /// Closes the SSH transport, cancels the socket subscription, and terminates the connection.
   void close() {
     printDebug?.call('SSHTransport.close');
     if (isClosed) return;
@@ -394,6 +448,7 @@ class SSHTransport {
     socket.destroy();
   }
 
+  /// Closes the SSH transport and completes the [done] future with an [error].
   void closeWithError(SSHError error, [StackTrace? stackTrace]) {
     printDebug?.call('SSHTransport.closeWithError $error');
     if (isClosed) return;
@@ -403,6 +458,7 @@ class SSHTransport {
     socket.destroy();
   }
 
+  /// Subscribes to the underlying socket stream to handle incoming data and status events.
   void _initSocket() {
     _socketSubscription = socket.stream.listen(
       _onSocketData,
@@ -413,6 +469,7 @@ class SSHTransport {
     socket.done.catchError(_onSocketError);
   }
 
+  /// Callback triggered when new raw bytes are received from the socket.
   void _onSocketData(Uint8List data) {
     _buffer.add(data);
     try {
@@ -424,16 +481,19 @@ class SSHTransport {
     }
   }
 
+  /// Callback triggered when an error occurs on the socket stream.
   void _onSocketError(Object error, StackTrace stackTrace) {
     printDebug?.call('SSHTransport._onSocketError($error)');
     closeWithError(SSHSocketError(error), stackTrace);
   }
 
+  /// Callback triggered when the socket stream is closed by the remote peer.
   void _onSocketDone() {
     printDebug?.call('SSHTransport._onSocketDone');
     close();
   }
 
+  /// Orchestrates processing of the current buffered data.
   void _processData() {
     if (_remoteVersion == null) {
       _processVersionExchange();
@@ -442,6 +502,7 @@ class SSHTransport {
     }
   }
 
+  /// Parses the SSH protocol banner/version string sent by the remote host.
   void _processVersionExchange() {
     printDebug?.call('SSHTransport._processVersionExchange');
 
@@ -513,6 +574,7 @@ class SSHTransport {
         : _consumeEncryptedPacket();
   }
 
+  /// Consumes and returns a single unencrypted packet payload from the buffer.
   Uint8List? _consumeClearTextPacket() {
     printDebug?.call('SSHTransport._consumeClearTextPacket');
 
@@ -535,6 +597,7 @@ class SSHTransport {
     return Uint8List.sublistView(packet, 5, packet.length - paddingLength);
   }
 
+  /// Consumes, decrypts, and returns a single encrypted packet payload from the buffer.
   Uint8List? _consumeEncryptedPacket() {
     printDebug?.call('SSHTransport._consumeEncryptedPacket');
 
@@ -657,6 +720,7 @@ class SSHTransport {
     }
   }
 
+  /// Consumes and decrypts an AEAD-encrypted packet.
   Uint8List? _consumeAeadPacket(SSHCipherType cipherType) {
     if (_buffer.length < 4) {
       return null;
@@ -683,7 +747,7 @@ class SSHTransport {
       plaintext = _processAead(
         key: _remoteCipherKey!,
         iv: _remoteIV!,
-        sequence: _remotePacketSN.value,
+        sequence: _remoteAeadPacketCount++,
         aad: aad,
         input: encryptedInput,
         forEncryption: false,
@@ -698,6 +762,7 @@ class SSHTransport {
     return Uint8List.sublistView(plaintext, 1, 1 + payloadLength);
   }
 
+  /// Validates that the parsed packet length is within acceptable bounds.
   void _verifyPacketLength(int packetLength) {
     if (packetLength > SSHPacket.maxLength) {
       throw SSHPacketError('Packet too long: $packetLength');
@@ -761,6 +826,7 @@ class SSHTransport {
     }
   }
 
+  /// Initiates the SSH version exchange handshake.
   void _startHandshake() {
     socket.sink.add(latin1.encode('$_localVersion\r\n'));
 
@@ -769,6 +835,7 @@ class SSHTransport {
     }
   }
 
+  /// Derives and applies the encryption and MAC keys for local-to-remote communication.
   void _applyLocalKeys() {
     final cipherType = isClient ? _clientCipherType : _serverCipherType;
     if (cipherType == null) throw StateError('No cipher type selected');
@@ -785,6 +852,7 @@ class SSHTransport {
     if (cipherType.isAead) {
       _encryptCipher = null;
       _localMac = null;
+      _localAeadPacketCount = 0;
       return;
     }
 
@@ -805,6 +873,7 @@ class SSHTransport {
     _localMac = macType.createMac(macKey);
   }
 
+  /// Derives and applies the decryption and MAC keys for remote-to-local communication.
   void _applyRemoteKeys() {
     final cipherType = isClient ? _serverCipherType : _clientCipherType;
     if (cipherType == null) throw StateError('No cipher type selected');
@@ -821,6 +890,7 @@ class SSHTransport {
     if (cipherType.isAead) {
       _decryptCipher = null;
       _remoteMac = null;
+      _remoteAeadPacketCount = 0;
       return;
     }
 
@@ -840,6 +910,7 @@ class SSHTransport {
     _remoteMac = macType.createMac(macKey);
   }
 
+  /// Derives a cryptographic key/IV of [keySize] bytes using KDF rules for the given [keyType].
   Uint8List _deriveKey(SSHDeriveKeyType keyType, int keySize) {
     return SSHKexUtils.deriveKey(
       digest: _kexType!.createDigest(),
@@ -870,6 +941,7 @@ class SSHTransport {
     return writer.takeBytes();
   }
 
+  /// Verifies the server's public host key signature against the computed exchange hash.
   bool _verifyHostkey({
     required Uint8List keyBytes,
     required Uint8List signatureBytes,
@@ -899,6 +971,7 @@ class SSHTransport {
     }
   }
 
+  /// Sends the KEXINIT message to negotiate algorithms with the remote peer.
   void _sendKexInit() {
     printDebug?.call('SSHTransport._sendKexInit');
 
@@ -952,6 +1025,7 @@ class SSHTransport {
     printTrace?.call('-> $socket: $message');
   }
 
+  /// Sends the Diffie-Hellman Group Exchange Request message.
   void _sendKexDHGexRequest() {
     printDebug?.call('SSHTransport._sendKexDHGexRequest');
 
@@ -965,6 +1039,7 @@ class SSHTransport {
     printTrace?.call('-> $socket: $message');
   }
 
+  /// Sends the Diffie-Hellman Group Exchange Init message.
   void _sendKexDHGexInit() {
     printDebug?.call('SSHTransport._sendKexDHGexInit');
 
@@ -987,6 +1062,7 @@ class SSHTransport {
     sendPacket(message.encode());
   }
 
+  /// Dispatches the incoming decrypted packet payload to the appropriate message handler.
   void _handleMessage(Uint8List message) {
     final messageId = SSHMessage.readMessageId(message);
     switch (messageId) {
@@ -1002,6 +1078,7 @@ class SSHTransport {
     }
   }
 
+  /// Processes the KEXINIT message received from the remote peer and negotiates algorithms.
   void _handleMessageKexInit(Uint8List payload) {
     printDebug?.call('SSHTransport._handleMessageKexInit');
 
@@ -1216,6 +1293,7 @@ class SSHTransport {
     );
   }
 
+  /// Processes the Group Exchange Reply (GEX Group) message containing Diffie-Hellman params.
   void _handleMessageKexGexReply(Uint8List payload) {
     printDebug?.call('SSHTransport._handleMessageKexGexReply');
     if (isServer) throw SSHStateError('Unexpected KEX_GEX_REPLY');
@@ -1227,6 +1305,7 @@ class SSHTransport {
     _sendKexDHGexInit();
   }
 
+  /// Handles the NEWKEYS message, activating the remote decryption keys and flushing queued packets.
   void _handleMessageNewKeys(Uint8List message) {
     printDebug?.call('SSHTransport._handleMessageNewKeys');
     printTrace?.call('<- $socket: SSH_Message_NewKeys');
