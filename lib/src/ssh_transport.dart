@@ -67,6 +67,7 @@ class SSHTransport {
   /// Function invoked with trace logging.
   final SSHPrintHandler? printTrace;
 
+  /// The collection of cryptographic and transport algorithms to negotiate and use.
   final SSHAlgorithms algorithms;
 
   /// Function called when the hostkey has been received. Returns true if the
@@ -79,6 +80,10 @@ class SSHTransport {
   /// Function called when a packet is received.
   final SSHPacketHandler? onPacket;
 
+  /// Whether to bypass server host key verification.
+  ///
+  /// If set to `true`, the connection will proceed without checking the server's
+  /// host key signature or identity, which is useful for testing but insecure.
   final bool disableHostkeyVerification;
 
   /// A [Future] that completes when the transport is closed, or when an error
@@ -201,8 +206,12 @@ class SSHTransport {
   /// A [Mac] used to authenticate data sent from the other side.
   Mac? _remoteMac;
 
+  /// The monotonic sequence number of local packets sent over this transport.
+  /// Used for MAC computation and standard packet flow tracing.
   final _localPacketSN = SSHPacketSN.fromZero();
 
+  /// The monotonic sequence number of remote packets received over this transport.
+  /// Used for MAC verification and standard packet flow tracing.
   final _remotePacketSN = SSHPacketSN.fromZero();
 
   /// The invocation counter for local AEAD (e.g. AES-GCM) packets.
