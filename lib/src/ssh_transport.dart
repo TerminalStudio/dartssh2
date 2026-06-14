@@ -138,18 +138,25 @@ class SSHTransport {
   /// compute the exchange hash.
   late Uint8List _remoteKexInit;
 
+  /// The selected key exchange algorithm type negotiated between the parties.
   SSHKexType? _kexType;
 
+  /// The selected server host key algorithm type negotiated between the parties.
   SSHHostkeyType? _hostkeyType;
 
+  /// The encryption cipher algorithm type selected for client-to-server communication.
   SSHCipherType? _clientCipherType;
 
+  /// The decryption cipher algorithm type selected for server-to-client communication.
   SSHCipherType? _serverCipherType;
 
+  /// The MAC algorithm type selected for client-to-server integrity verification.
   SSHMacType? _clientMacType;
 
+  /// The MAC algorithm type selected for server-to-client integrity verification.
   SSHMacType? _serverMacType;
 
+  /// The active key exchange algorithm implementation instance.
   SSHKex? _kex;
 
   /// [_exchangeHash] of the first key exchange is used as session identifier.
