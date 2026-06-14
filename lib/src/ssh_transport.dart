@@ -192,8 +192,20 @@ class SSHTransport {
 
   final _remotePacketSN = SSHPacketSN.fromZero();
 
+  /// The invocation counter for local AEAD (e.g. AES-GCM) packets.
+  ///
+  /// According to RFC 5647 Section 7.1, the invocation counter (used to derive
+  /// the AEAD nonce) must reset to zero when new keys are established (NEWKEYS).
+  /// This counter is used instead of [_localPacketSN], which is monotonic
+  /// across the entire SSH session and does not reset on rekey.
   int _localAeadPacketCount = 0;
 
+  /// The invocation counter for remote AEAD (e.g. AES-GCM) packets.
+  ///
+  /// According to RFC 5647 Section 7.1, the invocation counter (used to derive
+  /// the AEAD nonce) must reset to zero when new keys are established (NEWKEYS).
+  /// This counter is used instead of [_remotePacketSN], which is monotonic
+  /// across the entire SSH session and does not reset on rekey.
   int _remoteAeadPacketCount = 0;
 
   /// Whether a key exchange is currently in progress (initial or re-key).
