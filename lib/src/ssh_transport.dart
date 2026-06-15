@@ -28,8 +28,8 @@ typedef SSHPrintHandler = void Function(String?);
 
 /// Function called when host key is received.
 /// [type] is the type of the host key, for example 'ssh-rsa'.
-/// [fingerprint] is the MD5 fingerprint of the host key. The SHA256
-/// fingerprint is also logged via [printDebug] for user visibility.
+/// [fingerprint] is the OpenSSH-style SHA256 fingerprint of the host key,
+/// UTF-8 encoded as `SHA256:<base64-without-padding>`.
 Uint8List _hostkeyFingerprint(Uint8List hostkey) {
   final fingerprint = SHA256Digest().process(hostkey);
   final encoded = base64.encode(fingerprint).replaceAll('=', '');
