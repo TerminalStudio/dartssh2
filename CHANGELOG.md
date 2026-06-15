@@ -1,9 +1,13 @@
+## [2.18.0] - 2026-05-18
+- Fixed AES-GCM cipher encryption and decryption sequence number/nonce counter resetting during key exchanges [#165]. Thanks [@vicajilau].
+- **BREAKING**: `SSHHostkeyVerifyHandler` now receives an OpenSSH-style `SHA256:<base64>` host key fingerprint instead of the previous raw MD5 digest, so host key pinning code must be updated accordingly [#162]. Thanks [@thyssentishman].
+
 ## [2.17.1] - 2026-04-12
 - Made `SSHPem.decode` accept CRLF (`\r\n`) line endings in addition to LF when parsing PEM content [#157]. Thanks [@gkc].
 
 ## [2.17.0] - 2026-03-28
 - Improved Web/WASM compatibility by updating `SSHSocket` conditional imports so web runtimes consistently use the web socket shim and avoid incorrect native socket selection [#88]. Thanks [@vicajilau].
-- Added local dynamic forwarding (`SSHClient.forwardDynamic`) with SOCKS5 `NO AUTH` + `CONNECT`, including configurable handshake/connect timeouts and connection limits [#153].
+- Added local dynamic forwarding (`SSHClient.forwardDynamic`) with SOCKS5 `NO AUTH` + `CONNECT`, including configurable handshake/connect timeouts and connection limits.
 - Added AES-GCM (`aes128-gcm@openssh.com`, `aes256-gcm@openssh.com`) AEAD groundwork in transport and cipher negotiation; currently opt-in (not enabled by default yet). `chacha20-poly1305@openssh.com` remains pending [#26]. Thanks [@vicajilau].
 
 ## [2.16.0] - 2026-03-24
@@ -201,9 +205,11 @@
 
 - Initial release.
 
-[#145]: https://github.com/TerminalStudio/dartssh2/pull/145
+[#165]: https://github.com/TerminalStudio/dartssh2/issues/165
+[#162]: https://github.com/TerminalStudio/dartssh2/issues/162
 [#141]: https://github.com/TerminalStudio/dartssh2/pull/141
 [#140]: https://github.com/TerminalStudio/dartssh2/pull/140
+[#145]: https://github.com/TerminalStudio/dartssh2/pull/145
 [#153]: https://github.com/TerminalStudio/dartssh2/pull/153
 [#157]: https://github.com/TerminalStudio/dartssh2/pull/157
 [#102]: https://github.com/TerminalStudio/dartssh2/issues/102
@@ -215,15 +221,14 @@
 [#88]: https://github.com/TerminalStudio/dartssh2/issues/88
 [#26]: https://github.com/TerminalStudio/dartssh2/issues/26
 [#139]: https://github.com/TerminalStudio/dartssh2/pull/139
-[#133]: https://github.com/TerminalStudio/dartssh2/pull/133
 [#132]: https://github.com/TerminalStudio/dartssh2/pull/132
+[#133]: https://github.com/TerminalStudio/dartssh2/pull/133
+[#135]: https://github.com/TerminalStudio/dartssh2/pull/135
 [#131]: https://github.com/TerminalStudio/dartssh2/pull/131
 [#127]: https://github.com/TerminalStudio/dartssh2/pull/127
 [#126]: https://github.com/TerminalStudio/dartssh2/pull/126
 [#125]: https://github.com/TerminalStudio/dartssh2/pull/125
 [#123]: https://github.com/TerminalStudio/dartssh2/pull/123
-[#116]: https://github.com/TerminalStudio/dartssh2/pull/116
-[#115]: https://github.com/TerminalStudio/dartssh2/pull/115
 [#101]: https://github.com/TerminalStudio/dartssh2/pull/101
 [#100]: https://github.com/TerminalStudio/dartssh2/issues/100
 [#80]: https://github.com/TerminalStudio/dartssh2/issues/80

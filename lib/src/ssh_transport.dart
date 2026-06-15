@@ -28,8 +28,14 @@ typedef SSHPrintHandler = void Function(String?);
 
 /// Function called when host key is received.
 /// [type] is the type of the host key, for example 'ssh-rsa'.
-/// [fingerprint] is the MD5 fingerprint of the host key. The SHA256
-/// fingerprint is also logged via [printDebug] for user visibility.
+/// [fingerprint] is the OpenSSH-style SHA256 fingerprint of the host key,
+/// UTF-8 encoded as `SHA256:<base64-without-padding>`.
+Uint8List _hostkeyFingerprint(Uint8List hostkey) {
+  final fingerprint = SHA256Digest().process(hostkey);
+  final encoded = base64.encode(fingerprint).replaceAll('=', '');
+  return Uint8List.fromList(utf8.encode('SHA256:$encoded'));
+}
+
 typedef SSHHostkeyVerifyHandler = FutureOr<bool> Function(
   String type,
   Uint8List fingerprint,
@@ -1597,19 +1603,7 @@ class SSHTransport {
       return;
     }
 
-    // Compute MD5 and SHA256 fingerprints of the received host key.
-    final fingerprint = MD5Digest().process(hostkey);
-    final fingerprintSha256 = SHA256Digest().process(hostkey);
-
-    final fingerprintHex =
-        fingerprint.map((b) => b.toRadixString(16).padLeft(2, '0')).join(':');
-    final fingerprintSha256Base64 =
-        base64.encode(fingerprintSha256).replaceAll('=', '');
-
-    // RFC 4251 Section 4.1: Implementations SHOULD try to make best effort to check host keys
-    // Log both modern SHA256 (base64) and legacy MD5 (hex with colons) fingerprints.
-    printDebug?.call(
-        'Server host key fingerprint: SHA256:$fingerprintSha256Base64 (MD5:$fingerprintHex) (${_hostkeyType?.name})');
+    final fingerprint = _hostkeyFingerprint(hostkey);
 
     final verificationFuture = Future.sync(() async {
       final handler = onVerifyHostKey;
