@@ -1,5 +1,5 @@
 @Tags(['integration'])
-library;
+library ssh_client_test;
 
 import 'dart:convert';
 
@@ -14,6 +14,56 @@ void main() {
       var client = await getHoneypotClient();
       await client.authenticated;
       client.close();
+    });
+
+    test('onVerifyHostKey is called with OpenSSH-style SHA256 fingerprint',
+        () async {
+      var verifyCalled = false;
+      String? hostkeyType;
+      String? hostkeyFingerprint;
+
+      var client = SSHClient(
+        await SSHSocket.connect('test.rebex.net', 22),
+        username: 'demo',
+        onPasswordRequest: () => 'password',
+        onVerifyHostKey: (type, fingerprint) {
+          verifyCalled = true;
+          hostkeyType = type;
+          hostkeyFingerprint = utf8.decode(fingerprint);
+          return true;
+        },
+      );
+
+      await client.authenticated;
+      client.close();
+
+      expect(verifyCalled, isTrue);
+      expect(hostkeyType, isNotEmpty);
+      expect(hostkeyFingerprint, startsWith('SHA256:'));
+      final base64Part = hostkeyFingerprint!.substring(7);
+      expect(base64Part.length, equals(43));
+      expect(() => base64.decode('$base64Part='), returnsNormally);
+    });
+
+    test('onVerifyHostKey returning false aborts connection', () async {
+      var client = SSHClient(
+        await SSHSocket.connect('test.rebex.net', 22),
+        username: 'demo',
+        onPasswordRequest: () => 'password',
+        onVerifyHostKey: (type, fingerprint) {
+          return false;
+        },
+      );
+
+      try {
+        await client.authenticated;
+        fail('should have thrown');
+      } catch (e) {
+        expect(e, isA<SSHAuthAbortError>());
+        expect((e as SSHAuthAbortError).reason, isA<SSHHostkeyError>());
+      } finally {
+        client.close();
+      }
     });
 
     // test('throws SSHAuthFailError when password is wrong', () async {
@@ -31,8 +81,6 @@ void main() {
     //   client.close();
     // });
 
-// These are non-standard MAC extensions (hmac-sha2-256-96, hmac-sha2-512-96)
-// and require server support. Enable once server compatibility is verified.
     // test('hmacSha256_96 mac works', () async {
     //   var client = await getHoneypotClient(
     //     algorithms: SSHAlgorithms(mac: [SSHMacType.hmacSha256_96]),
@@ -51,30 +99,18 @@ void main() {
 
     test('hmacSha256Etm mac works', () async {
       var client = await getHoneypotClient(
-        algorithms: SSHAlgorithms(
-          mac: [SSHMacType.hmacSha256Etm],
-          cipher: [SSHCipherType.aes256ctr],
-        ),
+        algorithms: SSHAlgorithms(mac: [SSHMacType.hmacSha256Etm]),
       );
-      try {
-        await client.authenticated;
-      } finally {
-        client.close();
-      }
+      await client.authenticated;
+      client.close();
     });
 
     test('hmacSha512Etm mac works', () async {
       var client = await getHoneypotClient(
-        algorithms: SSHAlgorithms(
-          mac: [SSHMacType.hmacSha512Etm],
-          cipher: [SSHCipherType.aes256ctr],
-        ),
+        algorithms: SSHAlgorithms(mac: [SSHMacType.hmacSha512Etm]),
       );
-      try {
-        await client.authenticated;
-      } finally {
-        client.close();
-      }
+      await client.authenticated;
+      client.close();
     });
 
     test('throws SSHAuthFailError when public key is wrong', () async {
@@ -82,7 +118,6 @@ void main() {
         await SSHSocket.connect('test.rebex.net', 22),
         username: 'demos',
         identities: await getTestKeyPairs(),
-        onVerifyHostKey: acceptTestHostKey,
       );
       try {
         await client.authenticated;
@@ -101,7 +136,6 @@ void main() {
           ...await getTestKeyPairs(),
           ...await getTestKeyPairs(),
         ],
-        onVerifyHostKey: acceptTestHostKey,
       );
       try {
         await client.authenticated;
@@ -120,13 +154,12 @@ void main() {
           username: 'demo',
           onPasswordRequest: () => 'bad-password',
           identities: await getTestKeyPairs(),
-          onVerifyHostKey: acceptTestHostKey,
         );
         try {
           await client.authenticated;
           fail('should have thrown');
         } catch (e) {
-          expect(e, isA<SSHAuthAbortError>());
+          expect(e, isA<SSHAuthFailError>());
         }
         client.close();
       },
@@ -137,7 +170,6 @@ void main() {
         await SSHSocket.connect('test.rebex.net', 22),
         username: 'demo',
         identities: [],
-        onVerifyHostKey: acceptTestHostKey,
       );
       try {
         await client.authenticated;
@@ -160,19 +192,8 @@ void main() {
         fail('should have thrown');
       } catch (e) {
         expect(e, isA<SSHAuthAbortError>());
-        final reason = (e as SSHAuthAbortError).reason;
-        expect(
-          reason,
-          anyOf(
-            isNull,
-            isA<SSHSocketError>(),
-            predicate(
-              (error) =>
-                  error is SSHHandshakeError &&
-                  error.message.startsWith('Invalid version:'),
-            ),
-          ),
-        );
+        expect((e as SSHAuthAbortError).reason,
+            anyOf(isNull, isA<SSHSocketError>()));
       }
 
       client.close();
