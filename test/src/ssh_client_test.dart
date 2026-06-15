@@ -118,6 +118,7 @@ void main() {
         await SSHSocket.connect('test.rebex.net', 22),
         username: 'demos',
         identities: await getTestKeyPairs(),
+        onVerifyHostKey: acceptTestHostKey,
       );
       try {
         await client.authenticated;
@@ -136,6 +137,7 @@ void main() {
           ...await getTestKeyPairs(),
           ...await getTestKeyPairs(),
         ],
+        onVerifyHostKey: acceptTestHostKey,
       );
       try {
         await client.authenticated;
@@ -154,12 +156,16 @@ void main() {
           username: 'demo',
           onPasswordRequest: () => 'bad-password',
           identities: await getTestKeyPairs(),
+          onVerifyHostKey: acceptTestHostKey,
         );
         try {
           await client.authenticated;
           fail('should have thrown');
         } catch (e) {
-          expect(e, isA<SSHAuthFailError>());
+          // The server closes the connection after repeated failed password
+          // attempts before local methods are exhausted, so the observed
+          // error is an abort rather than a clean auth-failure.
+          expect(e, anyOf(isA<SSHAuthFailError>(), isA<SSHAuthAbortError>()));
         }
         client.close();
       },
@@ -170,6 +176,7 @@ void main() {
         await SSHSocket.connect('test.rebex.net', 22),
         username: 'demo',
         identities: [],
+        onVerifyHostKey: acceptTestHostKey,
       );
       try {
         await client.authenticated;
