@@ -51,6 +51,10 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
     <td style="text-align: center;">
       <b><a href="https://github.com/jc-hk-1916/NaviTerm">Naviterm</a></b>
     </td>
+    <!-- TealKit -->
+    <td style="text-align: center;">
+      <b><a href="https://github.com/lschaffer/tealkit">TealKit</a></b>
+    </td>
   </tr>
 
   <tr> 
@@ -75,12 +79,16 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
         <img src="https://raw.githubusercontent.com/jc-hk-1916/NaviTerm/main/images/1.png" width="300px" alt="Your all-in-one SSH terminal, SFTP client, and port forwarding tool, built from the ground up for macOS, iPhone, and iPad.">
       </a>
     </td>
+    <!-- TealKit -->
+    <td>
+      <a href="https://github.com/lschaffer/tealkit">
+        <img src="images/repo/desktop_playground_ssh_test.png" width="500px" alt="TealKit multiplatform agentic AI platform utilizing isolated SSH tools">
+      </a>
+    </td>
   </tr>
 </table>
 
-
 > Feel free to add your own app here by opening a pull request.
-
 
 
 ## 🧪 Try
