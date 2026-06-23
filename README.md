@@ -82,7 +82,7 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
     <!-- TealKit -->
     <td>
       <a href="https://github.com/lschaffer/tealkit">
-        <img src="images/repo/desktop_playground_ssh_test.png" width="500px" alt="TealKit multiplatform agentic AI platform utilizing isolated SSH tools">
+        <img src="https://github.com/lschaffer/tealkit/blob/master/images/repo/desktop_playground_ssh_test.png" width="500px" alt="TealKit multiplatform agentic AI platform utilizing isolated SSH tools">
       </a>
     </td>
   </tr>
