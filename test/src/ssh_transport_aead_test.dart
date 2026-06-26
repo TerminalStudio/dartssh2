@@ -88,6 +88,70 @@ void main() {
       receiver.close();
     });
 
+    test('accepts channel data message larger than channel payload', () async {
+      final key = Uint8List(16);
+      final iv = Uint8List(12);
+      for (var i = 0; i < key.length; i++) {
+        key[i] = i;
+      }
+      for (var i = 0; i < iv.length; i++) {
+        iv[i] = i + 16;
+      }
+
+      final senderSocket = _CaptureSSHSocket();
+      final sender = SSHTransport(
+        senderSocket,
+        algorithms: const SSHAlgorithms(
+          cipher: [SSHCipherType.aes128gcm],
+        ),
+      );
+
+      setPrivate(sender, '_clientCipherType', SSHCipherType.aes128gcm);
+      setPrivate(sender, '_localCipherKey', key);
+      setPrivate(sender, '_localIV', iv);
+      setPrivate(sender, '_kexInProgress', false);
+      setSequenceValue(sender, '_localPacketSN', 0);
+
+      final writer = SSHMessageWriter();
+      writer.writeUint8(94); // SSH_MSG_CHANNEL_DATA.
+      writer.writeUint32(0); // recipient channel id.
+      writer.writeString(Uint8List(32768));
+      final payload = writer.takeBytes();
+      expect(payload.length, 32777);
+      sender.sendPacket(payload);
+
+      final encryptedPacket = senderSocket.packets.last;
+
+      final receiverSocket = _CaptureSSHSocket();
+      final receivedPacket = Completer<Uint8List>();
+      final receiver = SSHTransport(
+        receiverSocket,
+        algorithms: const SSHAlgorithms(
+          cipher: [SSHCipherType.aes128gcm],
+        ),
+        onPacket: (packet) {
+          if (!receivedPacket.isCompleted) {
+            receivedPacket.complete(packet);
+          }
+        },
+      );
+
+      setPrivate(receiver, '_remoteVersion', 'SSH-2.0-test');
+      setPrivate(receiver, '_serverCipherType', SSHCipherType.aes128gcm);
+      setPrivate(receiver, '_remoteAeadKey', key);
+      setPrivate(receiver, '_remoteAeadFixedNonce', iv);
+      setSequenceValue(receiver, '_remotePacketSN', 0);
+
+      receiverSocket.addIncomingBytes(encryptedPacket);
+
+      final received =
+          await receivedPacket.future.timeout(const Duration(seconds: 2));
+      expect(received, payload);
+
+      sender.close();
+      receiver.close();
+    });
+
     test('reports AEAD authentication failure when packet is tampered',
         () async {
       final key = Uint8List(16);

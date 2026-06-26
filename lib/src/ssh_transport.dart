@@ -532,7 +532,11 @@ class SSHTransport {
       }
 
       /// For safety & performance reasons, we limit the maximum packet size.
-      if (payload.length > SSHPacket.maxPayloadLength) {
+      ///
+      /// This payload is the decoded SSH message payload, not a channel data
+      /// payload. A valid SSH_MSG_CHANNEL_DATA carrying a 32768-byte channel
+      /// chunk has 1 + 4 + 4 + 32768 = 32777 bytes here.
+      if (payload.length > SSHPacket.maxLength) {
         throw SSHPacketError('Packet too long: ${payload.length}');
       }
 
@@ -750,7 +754,12 @@ class SSHTransport {
 
     final paddingLength = plaintext[0];
     final payloadLength = packetLength - paddingLength - 1;
-    _verifyPacketPadding(payloadLength, paddingLength);
+    _verifyPacketPadding(
+      payloadLength,
+      paddingLength,
+      expectedPacketAlign: cipherType.blockSize,
+      includePacketLength: false,
+    );
     return Uint8List.sublistView(plaintext, 1, 1 + payloadLength);
   }
 
@@ -762,15 +771,19 @@ class SSHTransport {
 
   /// Verifies that the padding of the packet is correct. Throws [SSHPacketError]
   /// if the padding is incorrect.
-  void _verifyPacketPadding(int payloadLength, int paddingLength) {
-    final expectedPacketAlign = _decryptCipher == null
+  void _verifyPacketPadding(
+    int payloadLength,
+    int paddingLength, {
+    int? expectedPacketAlign,
+    bool includePacketLength = true,
+  }) {
+    expectedPacketAlign ??= _decryptCipher == null
         ? SSHPacket.minAlign
         : max(SSHPacket.minAlign, _decryptCipher!.blockSize);
 
-    final minPaddingLength = SSHPacket.paddingLength(
-      payloadLength,
-      align: expectedPacketAlign,
-    );
+    final minPaddingLength = includePacketLength
+        ? SSHPacket.paddingLength(payloadLength, align: expectedPacketAlign)
+        : _alignedPaddingLength(payloadLength, expectedPacketAlign);
 
     if (paddingLength < minPaddingLength) {
       throw SSHPacketError(

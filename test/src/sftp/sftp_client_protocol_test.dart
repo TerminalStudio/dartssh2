@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dartssh2/src/sftp/sftp_client.dart';
@@ -9,8 +10,6 @@ import 'package:dartssh2/src/sftp/sftp_status_code.dart';
 import 'package:dartssh2/src/ssh_channel.dart';
 import 'package:dartssh2/src/message/base.dart';
 import 'package:test/test.dart';
-
-const _packetTimeout = Duration(seconds: 1);
 
 void main() {
   group('SftpClient protocol', () {
@@ -119,7 +118,7 @@ void main() {
       harness.dispose();
     });
 
-    test('download keeps chunk order with pipelined reads', () async {
+    test('read ramps pipeline after first data packet', () async {
       final harness = _SftpHarness();
       await harness.nextOutgoingPacket();
       harness.sendResponsePacket(SftpVersionPacket(3));
@@ -140,16 +139,17 @@ void main() {
       );
 
       final read1 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
-      final read2 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
-
       expect(read1.offset, 0);
+
+      harness.sendResponsePacket(
+        SftpDataPacket(read1.requestId, Uint8List.fromList('ABCD'.codeUnits)),
+      );
+
+      final read2 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
       expect(read2.offset, 4);
 
       harness.sendResponsePacket(
         SftpDataPacket(read2.requestId, Uint8List.fromList('EFGH'.codeUnits)),
-      );
-      harness.sendResponsePacket(
-        SftpDataPacket(read1.requestId, Uint8List.fromList('ABCD'.codeUnits)),
       );
 
       final close = SftpClosePacket.decode(await harness.nextOutgoingPacket());
@@ -190,24 +190,22 @@ void main() {
       );
 
       final read1 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
-      final read2 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
       expect(read1.offset, 0);
-      expect(read2.offset, 4);
 
-      final read3Future = harness.nextOutgoingPacket();
       harness.sendResponsePacket(
-        SftpDataPacket(read2.requestId, Uint8List.fromList('EFGH'.codeUnits)),
+        SftpDataPacket(read1.requestId, Uint8List.fromList('ABCD'.codeUnits)),
       );
-      final read3 = SftpReadPacket.decode(
-        await read3Future.timeout(_packetTimeout),
-      );
+
+      final read2 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+      final read3 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+      expect(read2.offset, 4);
       expect(read3.offset, 8);
 
       harness.sendResponsePacket(
         SftpDataPacket(read3.requestId, Uint8List.fromList('IJKL'.codeUnits)),
       );
       harness.sendResponsePacket(
-        SftpDataPacket(read1.requestId, Uint8List.fromList('ABCD'.codeUnits)),
+        SftpDataPacket(read2.requestId, Uint8List.fromList('EFGH'.codeUnits)),
       );
 
       final close = SftpClosePacket.decode(await harness.nextOutgoingPacket());
@@ -247,24 +245,28 @@ void main() {
       );
 
       final read1 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
-      final read2 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
       expect(read1.offset, 0);
       expect(read1.length, 4);
-      expect(read2.offset, 4);
-      expect(read2.length, 4);
 
-      final retryFuture = harness.nextOutgoingPacket();
       harness.sendResponsePacket(
         SftpDataPacket(read1.requestId, Uint8List.fromList('AB'.codeUnits)),
       );
-      final retry = SftpReadPacket.decode(
-        await retryFuture.timeout(_packetTimeout),
-      );
+      final retry = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+      final read2 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
       expect(retry.offset, 2);
       expect(retry.length, 2);
+      expect(read2.offset, 4);
+      expect(read2.length, 2);
 
       harness.sendResponsePacket(
-        SftpDataPacket(read2.requestId, Uint8List.fromList('EFGH'.codeUnits)),
+        SftpDataPacket(read2.requestId, Uint8List.fromList('EF'.codeUnits)),
+      );
+      final read3 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+      expect(read3.offset, 6);
+      expect(read3.length, 2);
+
+      harness.sendResponsePacket(
+        SftpDataPacket(read3.requestId, Uint8List.fromList('GH'.codeUnits)),
       );
       harness.sendResponsePacket(
         SftpDataPacket(retry.requestId, Uint8List.fromList('CD'.codeUnits)),
@@ -284,6 +286,223 @@ void main() {
       expect(sink.bytes, Uint8List.fromList('ABCDEFGH'.codeUnits));
 
       harness.dispose();
+    });
+
+    test('downloadToRandomAccess writes out-of-order replies by offset',
+        () async {
+      final harness = _SftpHarness();
+      final outputFile = _tempOutputFile('random_access_out_of_order');
+      RandomAccessFile? output;
+
+      try {
+        await harness.nextOutgoingPacket();
+        harness.sendResponsePacket(SftpVersionPacket(3));
+        await harness.client.handshake;
+
+        final fileFuture = harness.client.open('/tmp/file');
+        final open = SftpOpenPacket.decode(await harness.nextOutgoingPacket());
+        harness.sendResponsePacket(
+          SftpHandlePacket(open.requestId, Uint8List.fromList([1, 2, 3])),
+        );
+        final file = await fileFuture;
+        output = await outputFile.open(mode: FileMode.write);
+        final progress = <int>[];
+
+        final downloadFuture = file.downloadToRandomAccess(
+          output,
+          length: 12,
+          chunkSize: 4,
+          maxPendingRequests: 2,
+          onProgress: progress.add,
+        );
+
+        final read1 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+        expect(read1.offset, 0);
+        harness.sendResponsePacket(
+          SftpDataPacket(read1.requestId, Uint8List.fromList('ABCD'.codeUnits)),
+        );
+
+        final read2 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+        final read3 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+        expect(read2.offset, 4);
+        expect(read3.offset, 8);
+
+        harness.sendResponsePacket(
+          SftpDataPacket(read3.requestId, Uint8List.fromList('IJKL'.codeUnits)),
+        );
+        await _waitUntil(() => progress.contains(8));
+        expect(progress, contains(8));
+
+        harness.sendResponsePacket(
+          SftpDataPacket(read2.requestId, Uint8List.fromList('EFGH'.codeUnits)),
+        );
+
+        final bytes = await downloadFuture;
+        await output.close();
+        output = null;
+        expect(bytes, 12);
+        expect(
+          await outputFile.readAsBytes(),
+          Uint8List.fromList('ABCDEFGHIJKL'.codeUnits),
+        );
+
+        final closeFuture = file.close();
+        final close =
+            SftpClosePacket.decode(await harness.nextOutgoingPacket());
+        harness.sendResponsePacket(
+          SftpStatusPacket(
+            requestId: close.requestId,
+            code: SftpStatusCode.ok,
+            message: 'ok',
+          ),
+        );
+        await closeFuture;
+      } finally {
+        await output?.close();
+        if (await outputFile.exists()) {
+          await outputFile.delete();
+        }
+        harness.dispose();
+      }
+    });
+
+    test('downloadToRandomAccess retries missing range after short data packet',
+        () async {
+      final harness = _SftpHarness();
+      final outputFile = _tempOutputFile('random_access_short_data');
+      RandomAccessFile? output;
+
+      try {
+        await harness.nextOutgoingPacket();
+        harness.sendResponsePacket(SftpVersionPacket(3));
+        await harness.client.handshake;
+
+        final fileFuture = harness.client.open('/tmp/file');
+        final open = SftpOpenPacket.decode(await harness.nextOutgoingPacket());
+        harness.sendResponsePacket(
+          SftpHandlePacket(open.requestId, Uint8List.fromList([1, 2, 3])),
+        );
+        final file = await fileFuture;
+        output = await outputFile.open(mode: FileMode.write);
+
+        final downloadFuture = file.downloadToRandomAccess(
+          output,
+          length: 8,
+          chunkSize: 4,
+          maxPendingRequests: 2,
+        );
+
+        final read1 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+        expect(read1.offset, 0);
+        expect(read1.length, 4);
+
+        harness.sendResponsePacket(
+          SftpDataPacket(read1.requestId, Uint8List.fromList('AB'.codeUnits)),
+        );
+        final retry = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+        final read2 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+        expect(retry.offset, 2);
+        expect(retry.length, 2);
+        expect(read2.offset, 4);
+        expect(read2.length, 2);
+
+        harness.sendResponsePacket(
+          SftpDataPacket(read2.requestId, Uint8List.fromList('EF'.codeUnits)),
+        );
+        final read3 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+        expect(read3.offset, 6);
+        expect(read3.length, 2);
+
+        harness.sendResponsePacket(
+          SftpDataPacket(read3.requestId, Uint8List.fromList('GH'.codeUnits)),
+        );
+        harness.sendResponsePacket(
+          SftpDataPacket(retry.requestId, Uint8List.fromList('CD'.codeUnits)),
+        );
+
+        final bytes = await downloadFuture;
+        await output.close();
+        output = null;
+        expect(bytes, 8);
+        expect(
+          await outputFile.readAsBytes(),
+          Uint8List.fromList('ABCDEFGH'.codeUnits),
+        );
+
+        final closeFuture = file.close();
+        final close =
+            SftpClosePacket.decode(await harness.nextOutgoingPacket());
+        harness.sendResponsePacket(
+          SftpStatusPacket(
+            requestId: close.requestId,
+            code: SftpStatusCode.ok,
+            message: 'ok',
+          ),
+        );
+        await closeFuture;
+      } finally {
+        await output?.close();
+        if (await outputFile.exists()) {
+          await outputFile.delete();
+        }
+        harness.dispose();
+      }
+    });
+
+    test('downloadToRandomAccess throws on incomplete download', () async {
+      final harness = _SftpHarness();
+      final outputFile = _tempOutputFile('random_access_incomplete');
+      RandomAccessFile? output;
+
+      try {
+        await harness.nextOutgoingPacket();
+        harness.sendResponsePacket(SftpVersionPacket(3));
+        await harness.client.handshake;
+
+        final fileFuture = harness.client.open('/tmp/file');
+        final open = SftpOpenPacket.decode(await harness.nextOutgoingPacket());
+        harness.sendResponsePacket(
+          SftpHandlePacket(open.requestId, Uint8List.fromList([1, 2, 3])),
+        );
+        final file = await fileFuture;
+        output = await outputFile.open(mode: FileMode.write);
+
+        final downloadFuture = file.downloadToRandomAccess(
+          output,
+          length: 8,
+          chunkSize: 4,
+          maxPendingRequests: 1,
+        );
+
+        final read = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+        harness.sendResponsePacket(
+          SftpStatusPacket(
+            requestId: read.requestId,
+            code: SftpStatusCode.eof,
+            message: 'eof',
+          ),
+        );
+
+        await expectLater(downloadFuture, throwsA(isA<SftpError>()));
+
+        final closeFuture = file.close();
+        final close =
+            SftpClosePacket.decode(await harness.nextOutgoingPacket());
+        harness.sendResponsePacket(
+          SftpStatusPacket(
+            requestId: close.requestId,
+            code: SftpStatusCode.ok,
+            message: 'ok',
+          ),
+        );
+        await closeFuture;
+      } finally {
+        await output?.close();
+        if (await outputFile.exists()) {
+          await outputFile.delete();
+        }
+        harness.dispose();
+      }
     });
 
     test('read rejects invalid pipeline settings', () async {
@@ -319,6 +538,57 @@ void main() {
       );
       await closeFuture;
       harness.dispose();
+    });
+
+    test('downloadToRandomAccess rejects invalid pipeline settings', () async {
+      final harness = _SftpHarness();
+      final outputFile = _tempOutputFile('random_access_invalid_args');
+      RandomAccessFile? output;
+
+      try {
+        await harness.nextOutgoingPacket();
+        harness.sendResponsePacket(SftpVersionPacket(3));
+        await harness.client.handshake;
+
+        final fileFuture = harness.client.open('/tmp/file');
+        final open = SftpOpenPacket.decode(await harness.nextOutgoingPacket());
+        harness.sendResponsePacket(
+          SftpHandlePacket(open.requestId, Uint8List.fromList([1, 2, 3])),
+        );
+        final file = await fileFuture;
+        output = await outputFile.open(mode: FileMode.write);
+
+        await expectLater(
+          file.downloadToRandomAccess(output, length: 1, chunkSize: 0),
+          throwsA(isA<ArgumentError>()),
+        );
+        await expectLater(
+          file.downloadToRandomAccess(
+            output,
+            length: 1,
+            maxPendingRequests: 0,
+          ),
+          throwsA(isA<ArgumentError>()),
+        );
+
+        final closeFuture = file.close();
+        final close =
+            SftpClosePacket.decode(await harness.nextOutgoingPacket());
+        harness.sendResponsePacket(
+          SftpStatusPacket(
+            requestId: close.requestId,
+            code: SftpStatusCode.ok,
+            message: 'ok',
+          ),
+        );
+        await closeFuture;
+      } finally {
+        await output?.close();
+        if (await outputFile.exists()) {
+          await outputFile.delete();
+        }
+        harness.dispose();
+      }
     });
 
     test('downloadTo can close destination sink', () async {
@@ -498,6 +768,22 @@ void main() {
       harness.dispose();
     });
   });
+}
+
+File _tempOutputFile(String name) {
+  return File(
+    '${Directory.systemTemp.path}/dartssh2_${name}_${DateTime.now().microsecondsSinceEpoch}.bin',
+  );
+}
+
+Future<void> _waitUntil(bool Function() condition) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 1));
+  while (!condition()) {
+    if (DateTime.now().isAfter(deadline)) {
+      throw TimeoutException('Condition was not met');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
 }
 
 class _CollectingSink implements StreamSink<List<int>> {
