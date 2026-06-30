@@ -371,7 +371,7 @@ void main() async {
 }
 ```
 
-Decrypt PEM file with [`compute`](https://api.flutter.dev/flutter/foundation/compute-constant.html) in Flutter:
+Decrypting encrypted PEM files (especially those using secure key derivation functions like `bcrypt` with many rounds) is a CPU-intensive operation that can freeze the UI. In Flutter, you can offload this decryption to a background isolate using the [`compute`](https://api.flutter.dev/flutter/foundation/compute-constant.html) function:
 
 ```dart
 void main() async {
