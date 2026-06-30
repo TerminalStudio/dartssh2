@@ -340,8 +340,8 @@ void main() {
           firstKexPacketFollows: false,
         ).encode();
 
-        final result = reflect(transport)
-            .invoke(privateSymbol('_handleMessageKexInit'), [payload]).reflectee;
+        final result = reflect(transport).invoke(
+            privateSymbol('_handleMessageKexInit'), [payload]).reflectee;
         await expectLater(result, completes);
 
         transport.close();
