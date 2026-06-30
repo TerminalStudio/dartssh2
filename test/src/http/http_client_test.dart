@@ -140,9 +140,60 @@ void main() {
       expect(response.statusCode, 204);
       expect(response.body, isEmpty);
     });
+
+    test('ignores spaces in chunk size and before chunk extensions', () async {
+      final socket = _FakeSocket([
+        'HTTP/1.1 200 OK\r\n',
+        'transfer-encoding: chunked\r\n',
+        '\r\n',
+        '5   ; extension-key=extension-value\r\nhello\r\n0\r\n\r\n',
+      ]);
+
+      final response = await SSHHttpClientResponse.from(socket);
+
+      expect(response.body, 'hello');
+    });
+
+    test('decodes chunked body using LF-only delimiters', () async {
+      final socket = _FakeSocket([
+        'HTTP/1.1 200 OK\n',
+        'transfer-encoding: chunked\n',
+        '\n',
+        '5\nhello\n0\n\n',
+      ]);
+
+      final response = await SSHHttpClientResponse.from(socket);
+
+      expect(response.body, 'hello');
+    });
   });
 
   group('SSHHttpClientResponse headers', () {
+    test('throws FormatException on header line without colon', () async {
+      final socket = _FakeSocket([
+        'HTTP/1.1 200 OK\r\n',
+        'invalid_header_line_without_colon\r\n',
+        '\r\n',
+      ]);
+
+      expect(
+        () => SSHHttpClientResponse.from(socket),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('parses RFC 7231 IMF-fixdate format in header', () async {
+      final socket = _FakeSocket([
+        'HTTP/1.1 200 OK\r\n',
+        'date: Sun, 06 Nov 1994 08:49:37 GMT\r\n',
+        'content-length: 0\r\n',
+        '\r\n',
+      ]);
+
+      final response = await SSHHttpClientResponse.from(socket);
+      expect(response.headers.date, DateTime.utc(1994, 11, 6, 8, 49, 37));
+    });
+
     test('throws when reading duplicated header via value()', () async {
       final socket = _FakeSocket([
         'HTTP/1.1 200 OK\r\n',

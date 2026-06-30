@@ -1,6 +1,7 @@
 ## [2.19.0] - 2026-06-30
 - Added tolerant HTTP-date parsing to accept all RFC 7231 §7.1.1.1 HTTP-date formats (`IMF-fixdate`, `RFC 850`, `asctime`) for HTTP response headers [#170]. Thanks [@GT-610].
 - Added chunked transfer-encoding decoding for HTTP response bodies according to RFC 7230 §4.1, improving interoperability with HTTP/1.1 servers [#171]. Thanks [@GT-610].
+- Added support for OpenSSH's `posix-rename@openssh.com` SFTP extension to perform atomic renames with POSIX semantics (replace destination if it exists) when advertised by the server [#172]. Thanks [@GT-610].
 
 ## [2.18.0] - 2026-05-18
 - Fixed AES-GCM cipher encryption and decryption sequence number/nonce counter resetting during key exchanges [#165]. Thanks [@vicajilau].

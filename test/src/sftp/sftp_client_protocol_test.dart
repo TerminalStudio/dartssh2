@@ -406,6 +406,34 @@ void main() {
       await renameFuture;
       harness.dispose();
     });
+
+    test(
+        'rename falls back to SSH_FXP_RENAME when extension version is mismatched',
+        () async {
+      final harness = _SftpHarness();
+      await harness.nextOutgoingPacket();
+      harness.sendResponsePacket(
+        SftpVersionPacket(3, {'posix-rename@openssh.com': '2'}),
+      );
+      await harness.client.handshake;
+
+      final renameFuture = harness.client.rename('/tmp/a', '/tmp/b');
+      final packet = await harness.nextOutgoingPacket();
+      final rename = SftpRenamePacket.decode(packet);
+      expect(rename.oldPath, '/tmp/a');
+      expect(rename.newPath, '/tmp/b');
+
+      harness.sendResponsePacket(
+        SftpStatusPacket(
+          requestId: rename.requestId,
+          code: SftpStatusCode.ok,
+          message: 'ok',
+        ),
+      );
+
+      await renameFuture;
+      harness.dispose();
+    });
   });
 }
 
