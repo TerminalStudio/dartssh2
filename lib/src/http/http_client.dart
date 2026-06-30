@@ -432,7 +432,8 @@ class SSHHttpClientResponse {
             final trimmed = line.trim();
             // Allow optional chunk extensions: <size>;(extension...)
             final semi = trimmed.indexOf(';');
-            final sizeStr = (semi >= 0 ? trimmed.substring(0, semi) : trimmed);
+            final sizeStr =
+                (semi >= 0 ? trimmed.substring(0, semi) : trimmed).trim();
             currentChunkSize = int.parse(sizeStr, radix: 16);
             if (currentChunkSize == 0) {
               // Last-chunk; proceed to optional trailer headers terminated
@@ -452,8 +453,8 @@ class SSHHttpClientResponse {
             body.write(line);
             expectingChunkData = false;
             expectingChunkCRLF = true;
-            // Consume trailing CRLF after chunk data.
-            decoder.expectedByteCount = 2;
+            // The next line in the stream is the trailing CRLF/LF after chunk data.
+            // Leave decoder.expectedByteCount as -1 to scan until the next '\n'.
             return;
           }
           if (expectingChunkCRLF) {

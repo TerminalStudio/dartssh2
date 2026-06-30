@@ -1,3 +1,33 @@
+// Month map (lowercase)
+const _months = {
+  'jan': 1,
+  'feb': 2,
+  'mar': 3,
+  'apr': 4,
+  'may': 5,
+  'jun': 6,
+  'jul': 7,
+  'aug': 8,
+  'sep': 9,
+  'oct': 10,
+  'nov': 11,
+  'dec': 12,
+};
+
+final _hasExplicitTimezone = RegExp(r'(?:Z|[+-]\d{2}:?\d{2})$');
+
+// IMF-fixdate: Sun, 06 Nov 1994 08:49:37 GMT
+final _rImf = RegExp(
+    r"^[A-Za-z]{3},\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})\s+([A-Za-z0-9:+-]+)$");
+
+// RFC 850: Sunday, 06-Nov-94 08:49:37 GMT
+final _r850 = RegExp(
+    r"^[A-Za-z]+,\s+(\d{1,2})-([A-Za-z]{3})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\s+([A-Za-z0-9:+-]+)$");
+
+// asctime(): Sun Nov  6 08:49:37 1994
+final _rAsc = RegExp(
+    r"^[A-Za-z]{3}\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})\s+(\d{4})$");
+
 /// Tolerant HTTP-date parsing per RFC 7231 §7.1.1.1.
 ///
 /// Supports these forms:
@@ -9,36 +39,16 @@
 DateTime? parseHttpDate(String input) {
   final s = input.trim();
 
-  final hasExplicitTimezone = RegExp(r'(?:Z|[+-]\d{2}:\d{2})$').hasMatch(s);
-  if (hasExplicitTimezone) {
+  if (_hasExplicitTimezone.hasMatch(s)) {
     final iso8601 = DateTime.tryParse(s);
     if (iso8601 != null) {
       return iso8601.toUtc();
     }
   }
 
-  // Month map (lowercase)
-  const months = {
-    'jan': 1,
-    'feb': 2,
-    'mar': 3,
-    'apr': 4,
-    'may': 5,
-    'jun': 6,
-    'jul': 7,
-    'aug': 8,
-    'sep': 9,
-    'oct': 10,
-    'nov': 11,
-    'dec': 12,
-  };
+  int? monthFromToken(String token) => _months[token.toLowerCase()];
 
-  int? monthFromToken(String token) => months[token.toLowerCase()];
-
-  // IMF-fixdate: Sun, 06 Nov 1994 08:49:37 GMT
-  final rImf = RegExp(
-      r"^[A-Za-z]{3},\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})\s+([A-Za-z0-9:+-]+)$");
-  final mImf = rImf.firstMatch(s);
+  final mImf = _rImf.firstMatch(s);
   if (mImf != null) {
     final day = int.parse(mImf.group(1)!);
     final mon = monthFromToken(mImf.group(2)!);
@@ -51,10 +61,7 @@ DateTime? parseHttpDate(String input) {
     return DateTime.utc(year, mon, day, hh, mm, ss);
   }
 
-  // RFC 850: Sunday, 06-Nov-94 08:49:37 GMT
-  final r850 = RegExp(
-      r"^[A-Za-z]+,\s+(\d{1,2})-([A-Za-z]{3})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\s+([A-Za-z0-9:+-]+)$");
-  final m850 = r850.firstMatch(s);
+  final m850 = _r850.firstMatch(s);
   if (m850 != null) {
     final day = int.parse(m850.group(1)!);
     final mon = monthFromToken(m850.group(2)!);
@@ -67,10 +74,7 @@ DateTime? parseHttpDate(String input) {
     return DateTime.utc(year, mon, day, hh, mm, ss);
   }
 
-  // asctime(): Sun Nov  6 08:49:37 1994
-  final rAsc = RegExp(
-      r"^[A-Za-z]{3}\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})\s+(\d{4})$");
-  final mAsc = rAsc.firstMatch(s);
+  final mAsc = _rAsc.firstMatch(s);
   if (mAsc != null) {
     final mon = monthFromToken(mAsc.group(1)!);
     final day = int.parse(mAsc.group(2)!);
