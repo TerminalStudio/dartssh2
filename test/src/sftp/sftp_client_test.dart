@@ -1,6 +1,3 @@
-@Tags(['integration'])
-library sftp_client_test;
-
 import 'dart:io';
 
 import 'package:dartssh2/dartssh2.dart';

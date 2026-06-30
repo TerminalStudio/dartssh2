@@ -1,6 +1,3 @@
-@Tags(['integration'])
-library ssh_client_test;
-
 import 'dart:convert';
 
 import 'package:dartssh2/dartssh2.dart';
