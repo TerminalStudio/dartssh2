@@ -414,27 +414,110 @@ class SSHHttpClientResponse {
     var inBody = false;
     var contentLength = 0;
     var contentRead = 0;
+    var finished = false;
+
+    // Chunked transfer encoding state (RFC 7230 §4.1).
+    var chunked = false;
+    var expectingChunkSize = false;
+    var expectingChunkData = false;
+    var expectingChunkCRLF = false;
+    var inTrailers = false;
+    var currentChunkSize = 0;
 
     void processLine(String line, int bytesRead, LineDecoder decoder) {
       final normalizedLine = line.trimRight();
       if (inBody) {
-        body.write(line);
-        contentRead += bytesRead;
+        if (chunked) {
+          if (expectingChunkSize) {
+            final trimmed = line.trim();
+            // Allow optional chunk extensions: <size>;(extension...)
+            final semi = trimmed.indexOf(';');
+            final sizeStr = (semi >= 0 ? trimmed.substring(0, semi) : trimmed);
+            currentChunkSize = int.parse(sizeStr, radix: 16);
+            if (currentChunkSize == 0) {
+              // Last-chunk; proceed to optional trailer headers terminated
+              // by a blank line.
+              expectingChunkSize = false;
+              inTrailers = true;
+              return;
+            }
+            // Read exactly currentChunkSize bytes for chunk data.
+            expectingChunkSize = false;
+            expectingChunkData = true;
+            decoder.expectedByteCount = currentChunkSize;
+            return;
+          }
+          if (expectingChunkData) {
+            // Append chunk data (decoded as UTF-8 text).
+            body.write(line);
+            expectingChunkData = false;
+            expectingChunkCRLF = true;
+            // Consume trailing CRLF after chunk data.
+            decoder.expectedByteCount = 2;
+            return;
+          }
+          if (expectingChunkCRLF) {
+            // Ignore CRLF and expect next chunk size line.
+            expectingChunkCRLF = false;
+            expectingChunkSize = true;
+            return;
+          }
+          if (inTrailers) {
+            // Read trailers until blank line, then finish.
+            if (line.trim().isEmpty) {
+              finished = true;
+            } else {
+              // Store trailer headers if needed.
+              final separator = line.indexOf(':');
+              if (separator > 0) {
+                final name =
+                    line.substring(0, separator).toLowerCase().trim();
+                final value = line.substring(separator + 1).trim();
+                headers.putIfAbsent(name, () => []).add(value);
+              }
+            }
+            return;
+          }
+          // Should not reach here under normal chunked flow.
+          return;
+        } else {
+          body.write(line);
+          contentRead += bytesRead;
+        }
       } else if (inHeader) {
         if (normalizedLine.trim().isEmpty) {
           inBody = true;
-          if (contentLength > 0) {
-            decoder.expectedByteCount = contentLength;
+          // Decide body framing.
+          final te = headers[SSHHttpHeaders.transferEncodingHeader]
+              ?.join(',')
+              .toLowerCase();
+          if (te != null && te.contains('chunked')) {
+            chunked = true;
+            expectingChunkSize = true;
+          } else {
+            // Identity transfer; use Content-Length when provided.
+            if (contentLength > 0) {
+              decoder.expectedByteCount = contentLength;
+            }
           }
           return;
         }
         final separator = normalizedLine.indexOf(':');
+        if (separator <= 0) {
+          throw FormatException(
+            'Invalid header line: "$normalizedLine" - no colon separator found',
+          );
+        }
         final name =
             normalizedLine.substring(0, separator).toLowerCase().trim();
         final value = normalizedLine.substring(separator + 1).trim();
+        final normalizedValue = value.toLowerCase();
         if (name == SSHHttpHeaders.transferEncodingHeader &&
-            value.toLowerCase() != 'identity') {
-          throw UnsupportedError('only identity transfer encoding is accepted');
+            normalizedValue != 'identity' &&
+            normalizedValue != 'chunked') {
+          throw UnsupportedError(
+            "only 'identity' or 'chunked' transfer encodings are accepted: $normalizedValue",
+          );
         }
         if (name == SSHHttpHeaders.contentLengthHeader) {
           contentLength = int.parse(value);
@@ -458,13 +541,15 @@ class SSHHttpClientResponse {
     final lineDecoder = LineDecoder.withCallback(processLine);
 
     await for (final chunk in socket.stream) {
-      if (!inHeader ||
-          !inBody ||
-          ((contentRead + lineDecoder.bufferedBytes) < contentLength)) {
-        lineDecoder.add(chunk);
-        continue;
+      lineDecoder.add(chunk);
+      if (finished) break;
+      if (!chunked) {
+        if (inHeader && inBody && contentLength >= 0) {
+          if ((contentRead + lineDecoder.bufferedBytes) >= contentLength) {
+            break;
+          }
+        }
       }
-      break;
     }
 
     try {

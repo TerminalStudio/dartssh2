@@ -41,10 +41,10 @@ void main() {
       expect(response.body, isEmpty);
     });
 
-    test('throws for non-identity transfer encoding', () async {
+    test('throws for unsupported transfer encoding', () async {
       final socket = _FakeSocket([
         'HTTP/1.1 200 OK\r\n',
-        'transfer-encoding: chunked\r\n',
+        'transfer-encoding: compress\r\n',
         'content-length: 0\r\n',
         '\r\n',
       ]);
@@ -64,6 +64,81 @@ void main() {
         SSHHttpClientResponse.from(socket),
         throwsA(isA<UnsupportedError>()),
       );
+    });
+  });
+
+  group('SSHHttpClientResponse chunked transfer encoding', () {
+    test('decodes a single-chunk body', () async {
+      final socket = _FakeSocket([
+        'HTTP/1.1 200 OK\r\n',
+        'transfer-encoding: chunked\r\n',
+        '\r\n',
+        '5\r\nhello\r\n0\r\n\r\n',
+      ]);
+
+      final response = await SSHHttpClientResponse.from(socket);
+
+      expect(response.statusCode, 200);
+      expect(response.body, 'hello');
+      expect(socket.closed, isTrue);
+    });
+
+    test('decodes multiple chunks into concatenated body', () async {
+      final socket = _FakeSocket([
+        'HTTP/1.1 200 OK\r\n',
+        'transfer-encoding: chunked\r\n',
+        '\r\n',
+        '5\r\nhello\r\n',
+        '1\r\n \r\n',
+        '6\r\nworld!\r\n0\r\n\r\n',
+      ]);
+
+      final response = await SSHHttpClientResponse.from(socket);
+
+      expect(response.body, 'hello world!');
+    });
+
+    test('ignores chunk extensions', () async {
+      final socket = _FakeSocket([
+        'HTTP/1.1 200 OK\r\n',
+        'transfer-encoding: chunked\r\n',
+        '\r\n',
+        '5;name=value\r\nhello\r\n0\r\n\r\n',
+      ]);
+
+      final response = await SSHHttpClientResponse.from(socket);
+
+      expect(response.body, 'hello');
+    });
+
+    test('parses trailer headers after last-chunk', () async {
+      final socket = _FakeSocket([
+        'HTTP/1.1 200 OK\r\n',
+        'transfer-encoding: chunked\r\n',
+        '\r\n',
+        '5\r\nhello\r\n0\r\n',
+        'x-trailer: yes\r\n',
+        '\r\n',
+      ]);
+
+      final response = await SSHHttpClientResponse.from(socket);
+
+      expect(response.body, 'hello');
+      expect(response.headers.value('x-trailer'), 'yes');
+    });
+
+    test('handles empty chunked body', () async {
+      final socket = _FakeSocket([
+        'HTTP/1.1 204 No Content\r\n',
+        'transfer-encoding: chunked\r\n',
+        '\r\n',
+        '0\r\n\r\n',
+      ]);
+
+      final response = await SSHHttpClientResponse.from(socket);
+
+      expect(response.statusCode, 204);
+      expect(response.body, isEmpty);
     });
   });
 
