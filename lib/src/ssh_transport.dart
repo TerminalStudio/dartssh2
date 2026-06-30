@@ -1186,20 +1186,20 @@ class SSHTransport {
         _kex = await SSHKexX25519.createAsync();
         break;
       case SSHKexType.nistp256:
-        _kex = SSHKexNist.p256();
+        _kex = await SSHKexNist.p256Async();
         break;
       case SSHKexType.nistp384:
-        _kex = SSHKexNist.p384();
+        _kex = await SSHKexNist.p384Async();
         break;
       case SSHKexType.nistp521:
-        _kex = SSHKexNist.p521();
+        _kex = await SSHKexNist.p521Async();
         break;
       case SSHKexType.dh14Sha1:
       case SSHKexType.dh14Sha256:
-        _kex = SSHKexDH.group14();
+        _kex = await SSHKexDH.group14Async();
         break;
       case SSHKexType.dh1Sha1:
-        _kex = SSHKexDH.group1();
+        _kex = await SSHKexDH.group1Async();
         break;
       case SSHKexType.dhGexSha1:
       case SSHKexType.dhGexSha256:
@@ -1251,7 +1251,7 @@ class SSHTransport {
       hostSignature = message.signature;
       serverKexKey = encodeBigInt(message.f);
       clientKexKey = encodeBigInt(kex.e);
-      sharedSecret = kex.computeSecret(message.f);
+      sharedSecret = await kex.computeSecretAsync(message.f);
     } else if (kex is SSHKexECDH) {
       final message = SSH_Message_KexECDH_Reply.decode(payload);
       printTrace?.call('<- $socket: $message');
@@ -1260,6 +1260,8 @@ class SSHTransport {
       serverKexKey = message.ecdhPublicKey;
       clientKexKey = kex.publicKey;
       if (kex is SSHKexX25519) {
+        sharedSecret = await kex.computeSecretAsync(message.ecdhPublicKey);
+      } else if (kex is SSHKexNist) {
         sharedSecret = await kex.computeSecretAsync(message.ecdhPublicKey);
       } else {
         sharedSecret = kex.computeSecret(message.ecdhPublicKey);
@@ -1325,7 +1327,8 @@ class SSHTransport {
     final message = SSH_Message_KexDH_GexGroup.decode(payload);
     printTrace?.call('<- $socket: $message');
 
-    _kex = SSHKexDH(p: message.p, g: message.g, secretBits: 256);
+    _kex =
+        await SSHKexDH.createAsync(p: message.p, g: message.g, secretBits: 256);
     _sendKexDHGexInit();
   }
 

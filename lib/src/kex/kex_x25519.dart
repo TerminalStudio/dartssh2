@@ -26,10 +26,11 @@ class SSHKexX25519 implements SSHKexECDH {
   SSHKexX25519._({required this.privateKey, required this.publicKey});
 
   static Future<SSHKexX25519> createAsync() async {
-    final keyPair = await sshCompute(_computeX25519KeyPair, null);
+    final (privateKey, publicKey) =
+        await sshCompute(_computeX25519KeyPair, null);
     return SSHKexX25519._(
-      privateKey: keyPair[0],
-      publicKey: keyPair[1],
+      privateKey: privateKey,
+      publicKey: publicKey,
     );
   }
 
@@ -42,20 +43,20 @@ class SSHKexX25519 implements SSHKexECDH {
   Future<BigInt> computeSecretAsync(Uint8List remotePublicKey) async {
     final secret = await sshCompute(
       _computeX25519Secret,
-      [privateKey, remotePublicKey],
+      (privateKey, remotePublicKey),
     );
     return decodeBigIntWithSign(1, secret);
   }
 }
 
-List<Uint8List> _computeX25519KeyPair(void _) {
+(Uint8List, Uint8List) _computeX25519KeyPair(void _) {
   final privateKey = randomBytes(32);
   final publicKey = _ScalarMult.scalseMultBase(privateKey);
-  return [privateKey, publicKey];
+  return (privateKey, publicKey);
 }
 
-Uint8List _computeX25519Secret(List<Uint8List> data) {
-  return _ScalarMult.scalseMult(data[0], data[1]);
+Uint8List _computeX25519Secret((Uint8List, Uint8List) data) {
+  return _ScalarMult.scalseMult(data.$1, data.$2);
 }
 
 /// Scalar multiplication, Implements curve25519.
