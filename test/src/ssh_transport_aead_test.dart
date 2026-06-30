@@ -39,53 +39,57 @@ void main() {
         iv[i] = i + 16;
       }
 
-      final senderSocket = _CaptureSSHSocket();
-      final sender = SSHTransport(
-        senderSocket,
-        algorithms: const SSHAlgorithms(
-          cipher: [SSHCipherType.aes128gcm],
-        ),
-      );
+      for (final payloadLength in [1, 5, 6, 10, 11, 15, 16, 20, 31, 32]) {
+        final senderSocket = _CaptureSSHSocket();
+        final sender = SSHTransport(
+          senderSocket,
+          algorithms: const SSHAlgorithms(
+            cipher: [SSHCipherType.aes128gcm],
+          ),
+        );
 
-      setPrivate(sender, '_clientCipherType', SSHCipherType.aes128gcm);
-      setPrivate(sender, '_localCipherKey', key);
-      setPrivate(sender, '_localIV', iv);
-      setPrivate(sender, '_kexInProgress', false);
-      setSequenceValue(sender, '_localPacketSN', 0);
+        setPrivate(sender, '_clientCipherType', SSHCipherType.aes128gcm);
+        setPrivate(sender, '_localCipherKey', key);
+        setPrivate(sender, '_localIV', iv);
+        setPrivate(sender, '_kexInProgress', false);
+        setSequenceValue(sender, '_localPacketSN', 0);
 
-      final payload = Uint8List.fromList([250, 1, 2, 3, 4, 5]);
-      sender.sendPacket(payload);
+        final payload = Uint8List.fromList(
+          List.generate(payloadLength, (index) => index % 256),
+        );
+        sender.sendPacket(payload);
 
-      final encryptedPacket = senderSocket.packets.last;
+        final encryptedPacket = senderSocket.packets.last;
 
-      final receiverSocket = _CaptureSSHSocket();
-      final receivedPacket = Completer<Uint8List>();
-      final receiver = SSHTransport(
-        receiverSocket,
-        algorithms: const SSHAlgorithms(
-          cipher: [SSHCipherType.aes128gcm],
-        ),
-        onPacket: (packet) {
-          if (!receivedPacket.isCompleted) {
-            receivedPacket.complete(packet);
-          }
-        },
-      );
+        final receiverSocket = _CaptureSSHSocket();
+        final receivedPacket = Completer<Uint8List>();
+        final receiver = SSHTransport(
+          receiverSocket,
+          algorithms: const SSHAlgorithms(
+            cipher: [SSHCipherType.aes128gcm],
+          ),
+          onPacket: (packet) {
+            if (!receivedPacket.isCompleted) {
+              receivedPacket.complete(packet);
+            }
+          },
+        );
 
-      setPrivate(receiver, '_remoteVersion', 'SSH-2.0-test');
-      setPrivate(receiver, '_serverCipherType', SSHCipherType.aes128gcm);
-      setPrivate(receiver, '_remoteCipherKey', key);
-      setPrivate(receiver, '_remoteIV', iv);
-      setSequenceValue(receiver, '_remotePacketSN', 0);
+        setPrivate(receiver, '_remoteVersion', 'SSH-2.0-test');
+        setPrivate(receiver, '_serverCipherType', SSHCipherType.aes128gcm);
+        setPrivate(receiver, '_remoteCipherKey', key);
+        setPrivate(receiver, '_remoteIV', iv);
+        setSequenceValue(receiver, '_remotePacketSN', 0);
 
-      receiverSocket.addIncomingBytes(encryptedPacket);
+        receiverSocket.addIncomingBytes(encryptedPacket);
 
-      final received =
-          await receivedPacket.future.timeout(const Duration(seconds: 2));
-      expect(received, payload);
+        final received =
+            await receivedPacket.future.timeout(const Duration(seconds: 2));
+        expect(received, payload);
 
-      sender.close();
-      receiver.close();
+        sender.close();
+        receiver.close();
+      }
     });
 
     test('reports AEAD authentication failure when packet is tampered',

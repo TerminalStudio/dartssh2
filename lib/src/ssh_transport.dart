@@ -758,7 +758,15 @@ class SSHTransport {
 
     final paddingLength = plaintext[0];
     final payloadLength = packetLength - paddingLength - 1;
-    _verifyPacketPadding(payloadLength, paddingLength);
+
+    final minPaddingLength =
+        _alignedPaddingLength(payloadLength, cipherType.blockSize);
+    if (paddingLength < minPaddingLength) {
+      throw SSHPacketError(
+        'Invalid padding length: $paddingLength, expected: $minPaddingLength',
+      );
+    }
+
     return Uint8List.sublistView(plaintext, 1, 1 + payloadLength);
   }
 
