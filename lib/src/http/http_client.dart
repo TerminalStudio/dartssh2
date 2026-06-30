@@ -470,8 +470,7 @@ class SSHHttpClientResponse {
               // Store trailer headers if needed.
               final separator = line.indexOf(':');
               if (separator > 0) {
-                final name =
-                    line.substring(0, separator).toLowerCase().trim();
+                final name = line.substring(0, separator).toLowerCase().trim();
                 final value = line.substring(separator + 1).trim();
                 headers.putIfAbsent(name, () => []).add(value);
               }
