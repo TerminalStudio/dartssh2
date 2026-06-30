@@ -1,3 +1,6 @@
+@Tags(['integration'])
+library;
+
 import 'dart:convert';
 
 import 'package:dartssh2/dartssh2.dart';
