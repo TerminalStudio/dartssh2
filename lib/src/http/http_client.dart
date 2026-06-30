@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:dartssh2/src/http/http_date.dart';
 import 'package:dartssh2/src/http/http_exception.dart';
 import 'package:dartssh2/src/http/line_decoder.dart';
 import 'package:dartssh2/src/http/http_content_type.dart';
@@ -562,7 +563,7 @@ class _SSHHttpClientResponseHeaders implements SSHHttpHeaders {
   DateTime? get date {
     final val = value(SSHHttpHeaders.dateHeader);
     if (val != null) {
-      return DateTime.parse(val);
+      return parseHttpDate(val);
     }
     return null;
   }
@@ -576,7 +577,7 @@ class _SSHHttpClientResponseHeaders implements SSHHttpHeaders {
   DateTime? get expires {
     final val = value(SSHHttpHeaders.expiresHeader);
     if (val != null) {
-      return DateTime.parse(val);
+      return parseHttpDate(val);
     }
     return null;
   }
@@ -603,7 +604,7 @@ class _SSHHttpClientResponseHeaders implements SSHHttpHeaders {
   DateTime? get ifModifiedSince {
     final val = value(SSHHttpHeaders.ifModifiedSinceHeader);
     if (val != null) {
-      return DateTime.parse(val);
+      return parseHttpDate(val);
     }
     return null;
   }
