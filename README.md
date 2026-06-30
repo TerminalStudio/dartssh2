@@ -30,6 +30,7 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
 -  **Authentication**: Supports password, private key and interactive authentication method.
 -  **Forwarding**: Supports local forwarding, remote forwarding, and dynamic forwarding (SOCKS5 CONNECT).
 -  **SFTP**: Supports all operations defined in [SFTPv3 protocol](https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02) including upload, download, list, link, remove, rename, etc.
+-  **Non-blocking Key Exchange**: Automatically offloads heavy key exchange calculations (X25519, NIST Curves, DH) to background isolates on supported VM platforms, preventing the main UI thread from freezing during connection.
 
 ## 🧬 Built with dartssh2
 
@@ -370,15 +371,15 @@ void main() async {
 }
 ```
 
-Decrypt PEM file with [`compute`](https://api.flutter.dev/flutter/foundation/compute-constant.html) in Flutter
+Decrypt PEM file with [`compute`](https://api.flutter.dev/flutter/foundation/compute-constant.html) in Flutter:
 
 ```dart
 void main() async {
-  List<SSHKeyPair> decryptKeyPairs(List<String> args) {
-    return SSHKeyPair.fromPem(args[0], args[1]);
+  List<SSHKeyPair> decryptKeyPairs((String pem, String passphrase) args) {
+    return SSHKeyPair.fromPem(args.$1, args.$2);
   }
 
-  final keypairs = await compute(decryptKeyPairs, ['<pem text>', '<passphrase>']);
+  final keypairs = await compute(decryptKeyPairs, ('<pem text>', '<passphrase>'));
 }
 ```
 

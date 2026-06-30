@@ -1,5 +1,5 @@
 @Tags(['integration'])
-library ssh_client_test;
+library;
 
 import 'dart:convert';
 

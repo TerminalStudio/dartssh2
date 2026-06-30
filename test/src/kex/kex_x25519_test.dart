@@ -61,4 +61,17 @@ void main() {
       expect(validSharedSecret.bitLength, greaterThan(0));
     });
   });
+
+  group('SSHKexX25519 (Async)', () {
+    test('generate keys and compute shared secret asynchronously', () async {
+      final kex1 = await SSHKexX25519.createAsync();
+      final kex2 = await SSHKexX25519.createAsync();
+      expect(kex1.privateKey.length, equals(32));
+      expect(kex1.publicKey.length, equals(32));
+
+      final secret1 = await kex1.computeSecretAsync(kex2.publicKey);
+      final secret2 = await kex2.computeSecretAsync(kex1.publicKey);
+      expect(secret1, equals(secret2));
+    });
+  });
 }

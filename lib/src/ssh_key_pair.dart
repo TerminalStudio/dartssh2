@@ -280,7 +280,7 @@ class OpenSSHBcryptKdfOptions implements OpenSSHKdfOptions {
   }
 }
 
-abstract class OpenSSHKeyPair implements SSHKeyPair {
+abstract mixin class OpenSSHKeyPair implements SSHKeyPair {
   void writeTo(SSHMessageWriter writer);
 
   @override

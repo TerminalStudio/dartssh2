@@ -128,6 +128,9 @@ class SSHTransport {
   /// transport is closed.
   StreamSubscription? _socketSubscription;
 
+  /// Guards asynchronous packet processing to preserve message order.
+  var _isProcessingData = false;
+
   /// Identification string sent by us without trailing \r\n. For example,
   /// "SSH-2.0-DartSSH_2.0".
   String get _localVersion => 'SSH-2.0-$version';
@@ -472,13 +475,7 @@ class SSHTransport {
   /// Callback triggered when new raw bytes are received from the socket.
   void _onSocketData(Uint8List data) {
     _buffer.add(data);
-    try {
-      _processData();
-    } on SSHError catch (e, stackTrace) {
-      closeWithError(e, stackTrace);
-    } catch (e) {
-      rethrow;
-    }
+    _scheduleProcessData();
   }
 
   /// Callback triggered when an error occurs on the socket stream.
@@ -493,12 +490,33 @@ class SSHTransport {
     close();
   }
 
-  /// Orchestrates processing of the current buffered data.
-  void _processData() {
+  void _scheduleProcessData() {
+    if (_isProcessingData || isClosed) {
+      return;
+    }
+
+    _isProcessingData = true;
+
+    _processDataAsync().catchError((error, stackTrace) {
+      if (error is SSHError) {
+        closeWithError(error, stackTrace);
+      } else {
+        closeWithError(SSHInternalError(error), stackTrace);
+      }
+    }).whenComplete(() {
+      _isProcessingData = false;
+      if (_buffer.isNotEmpty && !isClosed) {
+        _scheduleProcessData();
+      }
+    });
+  }
+
+  Future<void> _processDataAsync() async {
     if (_remoteVersion == null) {
       _processVersionExchange();
-    } else {
-      _processPackets();
+    }
+    if (_remoteVersion != null) {
+      await _processPackets();
     }
   }
 
@@ -541,12 +559,12 @@ class SSHTransport {
       _sendKexInit();
     }
 
-    // There maybe more data in the buffer, so process it.
-    _processPackets();
+    // There maybe more data in the buffer, so it will be consumed by the
+    // asynchronous packet processing queue.
   }
 
   /// Process one or more SSH packets queued in [_buffer].
-  void _processPackets() {
+  Future<void> _processPackets() async {
     printDebug?.call('SSHTransport._processPackets');
 
     while (_buffer.isNotEmpty && !isClosed) {
@@ -559,7 +577,7 @@ class SSHTransport {
       //   throw SSHPacketError('Packet too long: ${payload.length}');
       // }
 
-      _handleMessage(payload);
+      await _handleMessage(payload);
 
       _remotePacketSN.increase();
     }
@@ -1071,7 +1089,7 @@ class SSHTransport {
   }
 
   /// Dispatches the incoming decrypted packet payload to the appropriate message handler.
-  void _handleMessage(Uint8List message) {
+  Future<void> _handleMessage(Uint8List message) async {
     final messageId = SSHMessage.readMessageId(message);
     switch (messageId) {
       case SSH_Message_KexInit.messageId:
@@ -1087,7 +1105,7 @@ class SSHTransport {
   }
 
   /// Processes the KEXINIT message received from the remote peer and negotiates algorithms.
-  void _handleMessageKexInit(Uint8List payload) {
+  Future<void> _handleMessageKexInit(Uint8List payload) async {
     printDebug?.call('SSHTransport._handleMessageKexInit');
 
     // If this message initiates a new key-exchange round from the remote
@@ -1165,23 +1183,23 @@ class SSHTransport {
 
     switch (_kexType) {
       case SSHKexType.x25519:
-        _kex = SSHKexX25519();
+        _kex = await SSHKexX25519.createAsync();
         break;
       case SSHKexType.nistp256:
-        _kex = SSHKexNist.p256();
+        _kex = await SSHKexNist.p256Async();
         break;
       case SSHKexType.nistp384:
-        _kex = SSHKexNist.p384();
+        _kex = await SSHKexNist.p384Async();
         break;
       case SSHKexType.nistp521:
-        _kex = SSHKexNist.p521();
+        _kex = await SSHKexNist.p521Async();
         break;
       case SSHKexType.dh14Sha1:
       case SSHKexType.dh14Sha256:
-        _kex = SSHKexDH.group14();
+        _kex = await SSHKexDH.group14Async();
         break;
       case SSHKexType.dh1Sha1:
-        _kex = SSHKexDH.group1();
+        _kex = await SSHKexDH.group1Async();
         break;
       case SSHKexType.dhGexSha1:
       case SSHKexType.dhGexSha256:
@@ -1199,7 +1217,7 @@ class SSHTransport {
   /// When client receives [SSH_Message_KexECDH_Reply], it should verify the
   /// server's signature with the server's public key. Then send NEW_KEYS
   /// message back to the server.
-  void _handleMessageKexReply(Uint8List payload) {
+  Future<void> _handleMessageKexReply(Uint8List payload) async {
     printDebug?.call('SSHTransport._handleMessageKexReply');
     if (isServer) throw SSHStateError('Unexpected KEX_REPLY');
 
@@ -1233,7 +1251,7 @@ class SSHTransport {
       hostSignature = message.signature;
       serverKexKey = encodeBigInt(message.f);
       clientKexKey = encodeBigInt(kex.e);
-      sharedSecret = kex.computeSecret(message.f);
+      sharedSecret = await kex.computeSecretAsync(message.f);
     } else if (kex is SSHKexECDH) {
       final message = SSH_Message_KexECDH_Reply.decode(payload);
       printTrace?.call('<- $socket: $message');
@@ -1241,7 +1259,13 @@ class SSHTransport {
       hostSignature = message.signature;
       serverKexKey = message.ecdhPublicKey;
       clientKexKey = kex.publicKey;
-      sharedSecret = kex.computeSecret(message.ecdhPublicKey);
+      if (kex is SSHKexX25519) {
+        sharedSecret = await kex.computeSecretAsync(message.ecdhPublicKey);
+      } else if (kex is SSHKexNist) {
+        sharedSecret = await kex.computeSecretAsync(message.ecdhPublicKey);
+      } else {
+        sharedSecret = kex.computeSecret(message.ecdhPublicKey);
+      }
     } else {
       throw UnimplementedError('$kex');
     }
@@ -1281,40 +1305,35 @@ class SSHTransport {
     }
 
     final userVerified = onVerifyHostKey != null
-        ? onVerifyHostKey!(_hostkeyType!.name, fingerprint)
+        ? await Future.value(onVerifyHostKey!(_hostkeyType!.name, fingerprint))
         : true;
 
-    Future.value(userVerified).then(
-      (verified) {
-        if (!verified) {
-          closeWithError(SSHHostkeyError('Hostkey verification failed'));
-        } else {
-          _hostkeyVerified = true;
-          _sendNewKeys();
-          _applyLocalKeys();
-          onReady?.call();
-        }
-      },
-      onError: (error) {
-        closeWithError(error);
-      },
-    );
+    if (!userVerified) {
+      closeWithError(SSHHostkeyError('Hostkey verification failed'));
+      return;
+    }
+
+    _hostkeyVerified = true;
+    _sendNewKeys();
+    _applyLocalKeys();
+    onReady?.call();
   }
 
   /// Processes the Group Exchange Reply (GEX Group) message containing Diffie-Hellman params.
-  void _handleMessageKexGexReply(Uint8List payload) {
+  Future<void> _handleMessageKexGexReply(Uint8List payload) async {
     printDebug?.call('SSHTransport._handleMessageKexGexReply');
     if (isServer) throw SSHStateError('Unexpected KEX_GEX_REPLY');
 
     final message = SSH_Message_KexDH_GexGroup.decode(payload);
     printTrace?.call('<- $socket: $message');
 
-    _kex = SSHKexDH(p: message.p, g: message.g, secretBits: 256);
+    _kex =
+        await SSHKexDH.createAsync(p: message.p, g: message.g, secretBits: 256);
     _sendKexDHGexInit();
   }
 
   /// Handles the NEWKEYS message, activating the remote decryption keys and flushing queued packets.
-  void _handleMessageNewKeys(Uint8List message) {
+  Future<void> _handleMessageNewKeys(Uint8List message) async {
     printDebug?.call('SSHTransport._handleMessageNewKeys');
     printTrace?.call('<- $socket: SSH_Message_NewKeys');
 

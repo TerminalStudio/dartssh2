@@ -1,5 +1,5 @@
 @Tags(['integration'])
-library sftp_client_test;
+library;
 
 import 'dart:io';
 

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:dartssh2/src/ssh_kex.dart';
 import 'package:dartssh2/src/utils/bigint.dart';
 import 'package:dartssh2/src/utils/list.dart';
+import 'package:dartssh2/src/utils/compute.dart';
 
 /// The Diffie-Hellman (DH) key exchange provides a shared secret that
 /// cannot be determined by either party alone.
@@ -35,6 +36,14 @@ class SSHKexDH implements SSHKex {
     e = g.modPow(x, p);
   }
 
+  SSHKexDH._({
+    required this.p,
+    required this.g,
+    required this.secretBits,
+    required this.x,
+    required this.e,
+  });
+
   /// https://tools.ietf.org/html/rfc2409 Second Oakley Group
   factory SSHKexDH.group1() {
     return SSHKexDH(p: _group1Prime, g: BigInt.from(2), secretBits: 160);
@@ -45,10 +54,54 @@ class SSHKexDH implements SSHKex {
     return SSHKexDH(p: _group14Prime, g: BigInt.from(2), secretBits: 224);
   }
 
+  static Future<SSHKexDH> createAsync({
+    required BigInt p,
+    required BigInt g,
+    required int secretBits,
+  }) async {
+    final (x, e) = await sshCompute(_computeDHKeyPair, (p, g, secretBits));
+    return SSHKexDH._(
+      p: p,
+      g: g,
+      secretBits: secretBits,
+      x: x,
+      e: e,
+    );
+  }
+
+  static Future<SSHKexDH> group1Async() {
+    return createAsync(p: _group1Prime, g: BigInt.from(2), secretBits: 160);
+  }
+
+  static Future<SSHKexDH> group14Async() {
+    return createAsync(p: _group14Prime, g: BigInt.from(2), secretBits: 224);
+  }
+
   /// Compute the shared secret K
   BigInt computeSecret(BigInt f) {
     return f.modPow(x, p);
   }
+
+  Future<BigInt> computeSecretAsync(BigInt f) async {
+    return sshCompute(_computeDHSecret, (f, x, p));
+  }
+}
+
+(BigInt, BigInt) _computeDHKeyPair((BigInt, BigInt, int) args) {
+  final p = args.$1;
+  final g = args.$2;
+  final secretBits = args.$3;
+
+  final x = decodeBigIntWithSign(1, randomBytes(secretBits ~/ 8));
+  final e = g.modPow(x, p);
+  return (x, e);
+}
+
+BigInt _computeDHSecret((BigInt, BigInt, BigInt) args) {
+  final f = args.$1;
+  final x = args.$2;
+  final p = args.$3;
+  return f.modPow(x, p);
 }
 
 final _group1Prime = decodeBigIntWithSign(

@@ -1,3 +1,9 @@
+## [2.20.0] - 2026-06-30
+- **BREAKING**: Bumped the minimum Dart SDK constraint to `3.0.0` [#23]. Thanks [@vicajilau].
+- **BREAKING**: Declared `OpenSSHKeyPair` as a `mixin class` to comply with Dart 3.0 class modifier rules [#23]. Thanks [@vicajilau].
+- Offloaded all cryptographic key exchange (KEX) calculations to background isolates using `Isolate.run` on platforms that support it, preventing the Flutter main thread from blocking/freezing during connection [#23]. Thanks [@vicajilau].
+- Refactored internal key exchange isolate communication payloads (X25519, NIST Curves, DH) to use Dart 3.0 type-safe Records [#23]. Thanks [@vicajilau].
+
 ## [2.19.0] - 2026-06-30
 - Added tolerant HTTP-date parsing to accept all RFC 7231 §7.1.1.1 HTTP-date formats (`IMF-fixdate`, `RFC 850`, `asctime`) for HTTP response headers [#170]. Thanks [@GT-610].
 - Added chunked transfer-encoding decoding for HTTP response bodies according to RFC 7230 §4.1, improving interoperability with HTTP/1.1 servers [#171]. Thanks [@GT-610].
@@ -241,6 +247,7 @@
 [#71]: https://github.com/TerminalStudio/dartssh2/issues/71
 [#50]: https://github.com/TerminalStudio/dartssh2/issues/50
 [#24]: https://github.com/TerminalStudio/dartssh2/issues/24
+[#23]: https://github.com/TerminalStudio/dartssh2/issues/23
 [#21]: https://github.com/TerminalStudio/dartssh2/issues/21
 [#18]: https://github.com/TerminalStudio/dartssh2/issues/18
 [#17]: https://github.com/TerminalStudio/dartssh2/issues/17
