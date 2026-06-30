@@ -1,3 +1,14 @@
+## [2.19.0] - 2026-06-30
+- Added tolerant HTTP-date parsing to accept all RFC 7231 §7.1.1.1 HTTP-date formats (`IMF-fixdate`, `RFC 850`, `asctime`) for HTTP response headers [#170]. Thanks [@GT-610].
+- Added chunked transfer-encoding decoding for HTTP response bodies according to RFC 7230 §4.1, improving interoperability with HTTP/1.1 servers [#171]. Thanks [@GT-610].
+- Added support for OpenSSH's `posix-rename@openssh.com` SFTP extension to perform atomic renames with POSIX semantics (replace destination if it exists) when advertised by the server [#172]. Thanks [@GT-610].
+- Added `SftpFile.downloadToRandomAccess` to download a remote file directly into a `dart:io` `RandomAccessFile` using out-of-order pipelined writes, maximizing download performance on high-latency links [#173]. Thanks [@GT-610].
+- Fixed a connection drop bug during AEAD (AES-GCM) decryption caused by incorrect padding length validation offset calculation [#168]. Thanks [@nuclear06].
+
+## [2.18.0] - 2026-05-18
+- Fixed AES-GCM cipher encryption and decryption sequence number/nonce counter resetting during key exchanges [#165]. Thanks [@vicajilau].
+- **BREAKING**: `SSHHostkeyVerifyHandler` now receives an OpenSSH-style `SHA256:<base64>` host key fingerprint instead of the previous raw MD5 digest, so host key pinning code must be updated accordingly [#162]. Thanks [@thyssentishman].
+
 ## [2.17.1] - 2026-04-12
 - Made `SSHPem.decode` accept CRLF (`\r\n`) line endings in addition to LF when parsing PEM content [#157]. Thanks [@gkc].
 
@@ -201,6 +212,7 @@
 
 - Initial release.
 
+[#165]: https://github.com/TerminalStudio/dartssh2/issues/165
 [#141]: https://github.com/TerminalStudio/dartssh2/pull/141
 [#140]: https://github.com/TerminalStudio/dartssh2/pull/140
 [#145]: https://github.com/TerminalStudio/dartssh2/pull/145

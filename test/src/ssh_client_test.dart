@@ -16,6 +16,56 @@ void main() {
       client.close();
     });
 
+    test('onVerifyHostKey is called with OpenSSH-style SHA256 fingerprint',
+        () async {
+      var verifyCalled = false;
+      String? hostkeyType;
+      String? hostkeyFingerprint;
+
+      var client = SSHClient(
+        await SSHSocket.connect('test.rebex.net', 22),
+        username: 'demo',
+        onPasswordRequest: () => 'password',
+        onVerifyHostKey: (type, fingerprint) {
+          verifyCalled = true;
+          hostkeyType = type;
+          hostkeyFingerprint = utf8.decode(fingerprint);
+          return true;
+        },
+      );
+
+      await client.authenticated;
+      client.close();
+
+      expect(verifyCalled, isTrue);
+      expect(hostkeyType, isNotEmpty);
+      expect(hostkeyFingerprint, startsWith('SHA256:'));
+      final base64Part = hostkeyFingerprint!.substring(7);
+      expect(base64Part.length, equals(43));
+      expect(() => base64.decode('$base64Part='), returnsNormally);
+    });
+
+    test('onVerifyHostKey returning false aborts connection', () async {
+      var client = SSHClient(
+        await SSHSocket.connect('test.rebex.net', 22),
+        username: 'demo',
+        onPasswordRequest: () => 'password',
+        onVerifyHostKey: (type, fingerprint) {
+          return false;
+        },
+      );
+
+      try {
+        await client.authenticated;
+        fail('should have thrown');
+      } catch (e) {
+        expect(e, isA<SSHAuthAbortError>());
+        expect((e as SSHAuthAbortError).reason, isA<SSHHostkeyError>());
+      } finally {
+        client.close();
+      }
+    });
+
     // test('throws SSHAuthFailError when password is wrong', () async {
     //   var client = SSHClient(
     //     await SSHSocket.connect('test.rebex.net', 22),
@@ -142,7 +192,8 @@ void main() {
         fail('should have thrown');
       } catch (e) {
         expect(e, isA<SSHAuthAbortError>());
-        expect((e as SSHAuthAbortError).reason!, isA<SSHSocketError>());
+        expect((e as SSHAuthAbortError).reason,
+            anyOf(isNull, isA<SSHSocketError>()));
       }
 
       client.close();

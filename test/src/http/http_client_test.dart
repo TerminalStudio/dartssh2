@@ -41,10 +41,10 @@ void main() {
       expect(response.body, isEmpty);
     });
 
-    test('throws for non-identity transfer encoding', () async {
+    test('throws for unsupported transfer encoding', () async {
       final socket = _FakeSocket([
         'HTTP/1.1 200 OK\r\n',
-        'transfer-encoding: chunked\r\n',
+        'transfer-encoding: compress\r\n',
         'content-length: 0\r\n',
         '\r\n',
       ]);
@@ -67,7 +67,133 @@ void main() {
     });
   });
 
+  group('SSHHttpClientResponse chunked transfer encoding', () {
+    test('decodes a single-chunk body', () async {
+      final socket = _FakeSocket([
+        'HTTP/1.1 200 OK\r\n',
+        'transfer-encoding: chunked\r\n',
+        '\r\n',
+        '5\r\nhello\r\n0\r\n\r\n',
+      ]);
+
+      final response = await SSHHttpClientResponse.from(socket);
+
+      expect(response.statusCode, 200);
+      expect(response.body, 'hello');
+      expect(socket.closed, isTrue);
+    });
+
+    test('decodes multiple chunks into concatenated body', () async {
+      final socket = _FakeSocket([
+        'HTTP/1.1 200 OK\r\n',
+        'transfer-encoding: chunked\r\n',
+        '\r\n',
+        '5\r\nhello\r\n',
+        '1\r\n \r\n',
+        '6\r\nworld!\r\n0\r\n\r\n',
+      ]);
+
+      final response = await SSHHttpClientResponse.from(socket);
+
+      expect(response.body, 'hello world!');
+    });
+
+    test('ignores chunk extensions', () async {
+      final socket = _FakeSocket([
+        'HTTP/1.1 200 OK\r\n',
+        'transfer-encoding: chunked\r\n',
+        '\r\n',
+        '5;name=value\r\nhello\r\n0\r\n\r\n',
+      ]);
+
+      final response = await SSHHttpClientResponse.from(socket);
+
+      expect(response.body, 'hello');
+    });
+
+    test('parses trailer headers after last-chunk', () async {
+      final socket = _FakeSocket([
+        'HTTP/1.1 200 OK\r\n',
+        'transfer-encoding: chunked\r\n',
+        '\r\n',
+        '5\r\nhello\r\n0\r\n',
+        'x-trailer: yes\r\n',
+        '\r\n',
+      ]);
+
+      final response = await SSHHttpClientResponse.from(socket);
+
+      expect(response.body, 'hello');
+      expect(response.headers.value('x-trailer'), 'yes');
+    });
+
+    test('handles empty chunked body', () async {
+      final socket = _FakeSocket([
+        'HTTP/1.1 204 No Content\r\n',
+        'transfer-encoding: chunked\r\n',
+        '\r\n',
+        '0\r\n\r\n',
+      ]);
+
+      final response = await SSHHttpClientResponse.from(socket);
+
+      expect(response.statusCode, 204);
+      expect(response.body, isEmpty);
+    });
+
+    test('ignores spaces in chunk size and before chunk extensions', () async {
+      final socket = _FakeSocket([
+        'HTTP/1.1 200 OK\r\n',
+        'transfer-encoding: chunked\r\n',
+        '\r\n',
+        '5   ; extension-key=extension-value\r\nhello\r\n0\r\n\r\n',
+      ]);
+
+      final response = await SSHHttpClientResponse.from(socket);
+
+      expect(response.body, 'hello');
+    });
+
+    test('decodes chunked body using LF-only delimiters', () async {
+      final socket = _FakeSocket([
+        'HTTP/1.1 200 OK\n',
+        'transfer-encoding: chunked\n',
+        '\n',
+        '5\nhello\n0\n\n',
+      ]);
+
+      final response = await SSHHttpClientResponse.from(socket);
+
+      expect(response.body, 'hello');
+    });
+  });
+
   group('SSHHttpClientResponse headers', () {
+    test('throws FormatException on header line without colon', () async {
+      final socket = _FakeSocket([
+        'HTTP/1.1 200 OK\r\n',
+        'invalid_header_line_without_colon\r\n',
+        '\r\n',
+      ]);
+
+      expect(
+        () => SSHHttpClientResponse.from(socket),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('parses RFC 7231 IMF-fixdate format in header', () async {
+      final socket = _FakeSocket([
+        'HTTP/1.1 200 OK\r\n',
+        'date: Sun, 06 Nov 1994 08:49:37 GMT\r\n',
+        'content-length: 0\r\n',
+        '\r\n',
+      ]);
+
+      final response = await SSHHttpClientResponse.from(socket);
+      expect(response.headers.date, DateTime.utc(1994, 11, 6, 8, 49, 37));
+    });
+
     test('throws when reading duplicated header via value()', () async {
       final socket = _FakeSocket([
         'HTTP/1.1 200 OK\r\n',
