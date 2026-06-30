@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dartssh2/src/message/msg_channel.dart';
@@ -404,6 +405,76 @@ void main() {
       );
 
       await renameFuture;
+      harness.dispose();
+    });
+
+    test('downloadToRandomAccess writes out-of-order chunks at offset',
+        () async {
+      final harness = _SftpHarness();
+      await harness.nextOutgoingPacket();
+      harness.sendResponsePacket(SftpVersionPacket(3));
+      await harness.client.handshake;
+
+      final fileFuture = harness.client.open('/tmp/file');
+      final open = SftpOpenPacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpHandlePacket(open.requestId, Uint8List.fromList([1, 2, 3])),
+      );
+      final file = await fileFuture;
+
+      final tempDir = await Directory.systemTemp.createTemp('sftp_ra_test');
+      final tempFile = File('${tempDir.path}/ra.bin');
+      final raf = await tempFile.open(mode: FileMode.write);
+
+      final downloadFuture = file.downloadToRandomAccess(
+        raf,
+        length: 12,
+        chunkSize: 4,
+        maxPendingRequests: 2,
+      );
+
+      // activeReadLimit starts at 1, so only read1 is issued initially.
+      final read1 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+      expect(read1.offset, 0);
+      // Replying to read1 bumps activeReadLimit to 2, which schedules read2
+      // and read3 together (both fit within the limit now).
+      harness.sendResponsePacket(
+        SftpDataPacket(read1.requestId, Uint8List.fromList('ABCD'.codeUnits)),
+      );
+      final read2 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+      final read3 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+      expect(read2.offset, 4);
+      expect(read3.offset, 8);
+
+      // Reply out of order: read3 before read2. downloadToRandomAccess must
+      // write each chunk at its own offset regardless of arrival order.
+      harness.sendResponsePacket(
+        SftpDataPacket(read3.requestId, Uint8List.fromList('IJKL'.codeUnits)),
+      );
+      harness.sendResponsePacket(
+        SftpDataPacket(read2.requestId, Uint8List.fromList('EFGH'.codeUnits)),
+      );
+
+      final bytes = await downloadFuture;
+      expect(bytes, 12);
+
+      final closeFuture = file.close();
+      final close = SftpClosePacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpStatusPacket(
+          requestId: close.requestId,
+          code: SftpStatusCode.ok,
+          message: 'ok',
+        ),
+      );
+      await closeFuture;
+
+      await raf.close();
+
+      final contents = await tempFile.readAsBytes();
+      expect(contents, Uint8List.fromList('ABCDEFGHIJKL'.codeUnits));
+
+      await tempDir.delete(recursive: true);
       harness.dispose();
     });
   });
