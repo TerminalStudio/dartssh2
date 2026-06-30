@@ -60,7 +60,8 @@ void main() {
   });
 
   group('SSHKexDH (Async)', () {
-    test('generate keys and compute shared secret asynchronously (Group 1)', () async {
+    test('generate keys and compute shared secret asynchronously (Group 1)',
+        () async {
       final kex1 = await SSHKexDH.group1Async();
       final kex2 = await SSHKexDH.group1Async();
       final secret1 = await kex1.computeSecretAsync(kex2.e);
@@ -68,7 +69,8 @@ void main() {
       expect(secret1, equals(secret2));
     });
 
-    test('generate keys and compute shared secret asynchronously (Group 14)', () async {
+    test('generate keys and compute shared secret asynchronously (Group 14)',
+        () async {
       final kex1 = await SSHKexDH.group14Async();
       final kex2 = await SSHKexDH.group14Async();
       final secret1 = await kex1.computeSecretAsync(kex2.e);
@@ -76,9 +78,13 @@ void main() {
       expect(secret1, equals(secret2));
     });
 
-    test('generate keys and compute shared secret asynchronously (Custom Group)', () async {
-      final kex1 = await SSHKexDH.createAsync(p: _group1Prime, g: BigInt.from(2), secretBits: 160);
-      final kex2 = await SSHKexDH.createAsync(p: _group1Prime, g: BigInt.from(2), secretBits: 160);
+    test(
+        'generate keys and compute shared secret asynchronously (Custom Group)',
+        () async {
+      final kex1 = await SSHKexDH.createAsync(
+          p: _group1Prime, g: BigInt.from(2), secretBits: 160);
+      final kex2 = await SSHKexDH.createAsync(
+          p: _group1Prime, g: BigInt.from(2), secretBits: 160);
       final secret1 = await kex1.computeSecretAsync(kex2.e);
       final secret2 = await kex2.computeSecretAsync(kex1.e);
       expect(secret1, equals(secret2));
