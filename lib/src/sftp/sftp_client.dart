@@ -162,7 +162,29 @@ class SftpClient {
   }
 
   /// Renames a file or directory from [oldPath] to [newPath].
+  ///
+  /// If the server supports the `posix-rename@openssh.com` SFTP extension
+  /// (version "1"), this method uses it to perform an atomic rename with
+  /// POSIX semantics (replace destination if it exists). Otherwise, it falls
+  /// back to the standard SFTP `SSH_FXP_RENAME` request.
   Future<void> rename(String oldPath, String newPath) async {
+    // Prefer OpenSSH's posix-rename extension when available.
+    final hs = await handshake;
+    final extVersion = hs.extensions['posix-rename@openssh.com'];
+    if (extVersion != null) {
+      try {
+        await _checkExtension('posix-rename@openssh.com', '1');
+        final payload =
+            SftpPosixRenameRequest(oldPath: oldPath, newPath: newPath);
+        final reply = await _sendExtended(payload);
+        if (reply is! SftpStatusPacket) throw SftpError('Unexpected reply');
+        SftpStatusError.check(reply);
+        return;
+      } on SftpExtensionError {
+        // Fall through to standard rename if extension unsupported/mismatched.
+      }
+    }
+
     final reply = await _sendRename(oldPath, newPath);
     if (reply is! SftpStatusPacket) throw SftpError('Unexpected reply');
     SftpStatusError.check(reply);

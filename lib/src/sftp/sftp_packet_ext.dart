@@ -27,6 +27,27 @@ abstract class SftpExtendedRequest {
 /// [SftpExtendedReplyPacket] before being sent.
 abstract class SftpExtendedReply {}
 
+/// Represents the `posix-rename@openssh.com` extension request.
+///
+/// Performs an atomic rename with POSIX semantics (replace destination if it
+/// exists), as defined by OpenSSH.
+class SftpPosixRenameRequest extends SftpExtendedRequest {
+  SftpPosixRenameRequest({required this.oldPath, required this.newPath});
+
+  @override
+  final String name = 'posix-rename@openssh.com';
+
+  final String oldPath;
+
+  final String newPath;
+
+  @override
+  void writeTo(SSHMessageWriter writer) {
+    writer.writeUtf8(oldPath);
+    writer.writeUtf8(newPath);
+  }
+}
+
 /// This request correspond to the statvfs POSIX system interface.
 class SftpStatVfsRequest extends SftpExtendedRequest {
   SftpStatVfsRequest({required this.path});

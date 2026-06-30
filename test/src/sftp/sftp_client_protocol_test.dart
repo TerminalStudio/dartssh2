@@ -358,6 +358,54 @@ void main() {
       await closeFuture;
       harness.dispose();
     });
+
+    test('rename uses posix-rename extension when advertised', () async {
+      final harness = _SftpHarness();
+      await harness.nextOutgoingPacket();
+      harness.sendResponsePacket(
+        SftpVersionPacket(3, {'posix-rename@openssh.com': '1'}),
+      );
+      await harness.client.handshake;
+
+      final renameFuture = harness.client.rename('/tmp/a', '/tmp/b');
+      final packet = await harness.nextOutgoingPacket();
+      final extended = SftpExtendedPacket.decode(packet);
+
+      harness.sendResponsePacket(
+        SftpStatusPacket(
+          requestId: extended.requestId,
+          code: SftpStatusCode.ok,
+          message: 'ok',
+        ),
+      );
+
+      await renameFuture;
+      harness.dispose();
+    });
+
+    test('rename falls back to SSH_FXP_RENAME without extension', () async {
+      final harness = _SftpHarness();
+      await harness.nextOutgoingPacket();
+      harness.sendResponsePacket(SftpVersionPacket(3));
+      await harness.client.handshake;
+
+      final renameFuture = harness.client.rename('/tmp/a', '/tmp/b');
+      final packet = await harness.nextOutgoingPacket();
+      final rename = SftpRenamePacket.decode(packet);
+      expect(rename.oldPath, '/tmp/a');
+      expect(rename.newPath, '/tmp/b');
+
+      harness.sendResponsePacket(
+        SftpStatusPacket(
+          requestId: rename.requestId,
+          code: SftpStatusCode.ok,
+          message: 'ok',
+        ),
+      );
+
+      await renameFuture;
+      harness.dispose();
+    });
   });
 }
 
