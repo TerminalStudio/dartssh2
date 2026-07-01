@@ -239,8 +239,14 @@ class OpenSSHKeyPairs {
 
     final key = Uint8List.view(kdfHash.buffer, 0, cipher.keySize);
     final iv = Uint8List.view(kdfHash.buffer, cipher.keySize, cipher.ivSize);
-    final decryptCipher = cipher.createCipher(key, iv, forEncryption: false);
-    return decryptCipher.processAll(blob);
+
+    try {
+      final decryptCipher =
+          cipher.createCipher(key, iv, forEncryption: false);
+      return decryptCipher.processAll(blob);
+    } catch (e) {
+      throw SSHKeyDecryptError('Failed to decrypt private key', e);
+    }
   }
 
   @override
@@ -339,7 +345,7 @@ class OpenSSHRsaKeyPair with OpenSSHKeyPair {
     final iqmp = reader.readMpint();
     final p = reader.readMpint();
     final q = reader.readMpint();
-    final comment = reader.readUtf8();
+    final comment = reader.readUtf8(allowMalformed: true);
     return OpenSSHRsaKeyPair(n, e, d, iqmp, p, q, comment);
   }
 
@@ -397,7 +403,7 @@ class OpenSSHEd25519KeyPair with OpenSSHKeyPair {
   factory OpenSSHEd25519KeyPair.readFrom(SSHMessageReader reader) {
     final publicKey = reader.readString();
     final privateKey = reader.readString();
-    final comment = reader.readUtf8();
+    final comment = reader.readUtf8(allowMalformed: true);
     return OpenSSHEd25519KeyPair(publicKey, privateKey, comment);
   }
 
@@ -446,7 +452,7 @@ class OpenSSHEcdsaKeyPair with OpenSSHKeyPair {
     final curve = reader.readUtf8();
     final q = reader.readString();
     final d = reader.readMpint();
-    final comment = reader.readUtf8();
+    final comment = reader.readUtf8(allowMalformed: true);
     return OpenSSHEcdsaKeyPair(curve, q, d, comment);
   }
 
@@ -538,6 +544,8 @@ class RsaKeyPair {
 
     try {
       return RsaPrivateKey.decode(keyBlob);
+    } on UnsupportedError {
+      rethrow;
     } catch (e) {
       throw SSHKeyDecodeError('Failed to decode private key', e);
     }
@@ -755,6 +763,8 @@ class EcKeyPair {
 
     try {
       return _decodeLegacyEcPrivateKey(keyBlob);
+    } on UnsupportedError {
+      rethrow;
     } catch (e) {
       throw SSHKeyDecodeError('Failed to decode private key', e);
     }
@@ -772,10 +782,21 @@ class EcKeyPair {
     final d = decodeBigIntWithSign(1, privateKeyOctets);
 
     Uint8List? publicPoint;
+    String? curveId;
 
     for (var i = 2; i < sequence.elements.length; i++) {
       final element = sequence.elements[i];
-      if (element.tag == 0xA1) {
+      if (element.tag == 0xA0) {
+        final inner = ASN1Parser(element.valueBytes()).nextObject();
+        if (inner is ASN1ObjectIdentifier && inner.identifier != null) {
+          final oid = inner.identifier!;
+          curveId = _curveIdFromOid(oid);
+          if (curveId == null) {
+            throw UnsupportedError(
+                'Unsupported EC PRIVATE KEY curve OID: $oid');
+          }
+        }
+      } else if (element.tag == 0xA1) {
         final inner = ASN1Parser(element.valueBytes()).nextObject();
         if (inner is ASN1BitString) {
           publicPoint = inner.contentBytes();
@@ -783,15 +804,31 @@ class EcKeyPair {
       }
     }
 
-    final curveId =
+    curveId ??=
         _inferCurveId(publicPoint?.length ?? 0, privateKeyOctets.length);
     if (curveId == null) {
       throw UnsupportedError('Unsupported EC PRIVATE KEY curve');
     }
 
+    if (publicPoint != null) {
+      final expectedPublicPoint = _derivePublicPoint(curveId, d);
+      if (publicPoint.length != expectedPublicPoint.length ||
+          !publicPoint.equals(expectedPublicPoint)) {
+        throw UnsupportedError(
+            'EC PRIVATE KEY public point does not match curve $curveId');
+      }
+    }
+
     final q = publicPoint ?? _derivePublicPoint(curveId, d);
 
     return OpenSSHEcdsaKeyPair(curveId, q, d, '');
+  }
+
+  String? _curveIdFromOid(String oid) {
+    if (oid == '1.2.840.10045.3.1.7') return 'nistp256';
+    if (oid == '1.3.132.0.34') return 'nistp384';
+    if (oid == '1.3.132.0.35') return 'nistp521';
+    return null;
   }
 
   String? _inferCurveId(int publicPointLength, int privateKeyLength) {

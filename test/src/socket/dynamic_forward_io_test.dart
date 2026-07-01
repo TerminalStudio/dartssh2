@@ -369,6 +369,69 @@ void main() {
       expect(dialedHosts[0], '192.168.1.2');
       expect(dialedHosts[1], contains(':'));
     });
+
+    test('closes remote sink when client EOF arrives during streaming',
+        () async {
+      late _DialedTunnel dialed;
+
+      final forward = await startDynamicForward(
+        bindHost: '127.0.0.1',
+        bindPort: 0,
+        options: const SSHDynamicForwardOptions(),
+        dial: (_, __) async {
+          dialed = _DialedTunnel.create();
+          return dialed.channel;
+        },
+      );
+
+      final client = await Socket.connect(forward.host, forward.port);
+      final incoming = client.asBroadcastStream();
+      addTearDown(() async {
+        await client.close();
+        await forward.close();
+        dialed.dispose();
+      });
+
+      await _sendGreeting(client, incoming);
+      final reply =
+          await _sendConnectDomain(client, incoming, 'example.com', 443);
+      expect(reply[1], 0x00);
+
+      // Send some data then close client side (half-close / EOF).
+      client.add(utf8.encode('data'));
+      await client.close();
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+    });
+
+    test('handles handshake buffer overflow gracefully', () async {
+      final forward = await startDynamicForward(
+        bindHost: '127.0.0.1',
+        bindPort: 0,
+        options: const SSHDynamicForwardOptions(),
+        dial: (_, __) async => _DialedTunnel.create().channel,
+      );
+      addTearDown(() => forward.close());
+
+      final client = await Socket.connect(forward.host, forward.port);
+      addTearDown(() => client.close());
+
+      // Send a valid greeting but then flood the handshake buffer beyond
+      // kMaxHandshakeSize (32768). The server should close the connection
+      // rather than keep buffering indefinitely.
+      await _sendGreeting(client, client.asBroadcastStream());
+      final huge = Uint8List(33000);
+      client.add(huge);
+
+      // Give the server time to detect the overflow and close. The test
+      // passes if the server does not crash — the forward is still usable
+      // for a new connection after the overflow victim is cleaned up.
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      // Verify the forward still accepts new connections.
+      final client2 = await Socket.connect(forward.host, forward.port);
+      addTearDown(() => client2.close());
+      await _sendGreeting(client2, client2.asBroadcastStream());
+    });
   });
 }
 

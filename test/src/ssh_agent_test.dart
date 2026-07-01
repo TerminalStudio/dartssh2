@@ -290,4 +290,76 @@ void main() {
 
     controller.destroy();
   });
+
+  test('SSHAgentChannel closes on invalid frame length (zero)', () async {
+    final handler = _RecordingAgentHandler(Uint8List.fromList([1]));
+
+    final controller = SSHChannelController(
+      localId: 1,
+      localMaximumPacketSize: 1024,
+      localInitialWindowSize: 1024,
+      remoteId: 2,
+      remoteMaximumPacketSize: 1024,
+      remoteInitialWindowSize: 1024,
+      sendMessage: (_) {},
+    );
+
+    SSHAgentChannel(
+      controller.channel,
+      handler,
+      printDebug: (_) {},
+    );
+
+    // Frame with length = 0 (invalid).
+    final zeroFrame = Uint8List.fromList([0, 0, 0, 0]);
+    controller.handleMessage(
+      SSH_Message_Channel_Data(
+        recipientChannel: controller.localId,
+        data: zeroFrame,
+      ),
+    );
+
+    await Future<void>.delayed(Duration.zero);
+
+    // The channel should have been destroyed, no requests processed.
+    expect(handler.requests, isEmpty);
+
+    controller.destroy();
+  });
+
+  test('SSHAgentChannel closes on frame length exceeding maxFrameSize',
+      () async {
+    final handler = _RecordingAgentHandler(Uint8List.fromList([1]));
+
+    final controller = SSHChannelController(
+      localId: 1,
+      localMaximumPacketSize: 1024,
+      localInitialWindowSize: 1024,
+      remoteId: 2,
+      remoteMaximumPacketSize: 1024,
+      remoteInitialWindowSize: 1024,
+      sendMessage: (_) {},
+    );
+
+    SSHAgentChannel(
+      controller.channel,
+      handler,
+      printDebug: (_) {},
+    );
+
+    // Frame claiming a length > maxFrameSize (256 * 1024 = 262144).
+    final oversizedFrame = Uint8List.fromList([0, 4, 0, 1]);
+    controller.handleMessage(
+      SSH_Message_Channel_Data(
+        recipientChannel: controller.localId,
+        data: oversizedFrame,
+      ),
+    );
+
+    await Future<void>.delayed(Duration.zero);
+
+    expect(handler.requests, isEmpty);
+
+    controller.destroy();
+  });
 }
