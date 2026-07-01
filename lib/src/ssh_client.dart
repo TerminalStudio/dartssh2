@@ -182,6 +182,12 @@ class SSHClient {
   /// method. Set this to null to disable automatic keep-alive messages.
   final Duration? keepAliveInterval;
 
+  /// Maximum time to wait for the SSH transport handshake to complete.
+  final Duration? handshakeTimeout;
+
+  /// Maximum time to wait for authentication after the transport is ready.
+  final Duration? authTimeout;
+
   /// Function called when additional host keys are received. This is an OpenSSH
   /// extension. May not be called if the server does not support the extension.
   // final SSHHostKeysHandler? onHostKeys;
@@ -217,6 +223,8 @@ class SSHClient {
     this.onX11Forward,
     this.agentHandler,
     this.keepAliveInterval = const Duration(seconds: 10),
+    this.handshakeTimeout,
+    this.authTimeout,
     this.disableHostkeyVerification = false,
     String ident = 'DartSSH_2.0',
   }) : ident = _validateIdent(ident) {
@@ -246,6 +254,11 @@ class SSHClient {
 
     if (identities != null) {
       _keyPairsLeft.addAll(identities!);
+    }
+
+    final handshakeTimeout = this.handshakeTimeout;
+    if (handshakeTimeout != null) {
+      _handshakeTimeoutTimer = Timer(handshakeTimeout, _handleHandshakeTimeout);
     }
   }
 
@@ -294,6 +307,12 @@ class SSHClient {
       : null;
 
   SSHAuthMethod? _currentAuthMethod;
+
+  var _transportReady = false;
+
+  Timer? _handshakeTimeoutTimer;
+
+  Timer? _authTimeoutTimer;
 
   /// A [Future] that completes when the client has authenticated, or
   /// completes with an error if the client could not authenticate.
@@ -676,6 +695,8 @@ class SSHClient {
   /// Shutdown the entire SSH connection. Sessions and channels will also be
   /// closed immediately.
   void close() {
+    _handshakeTimeoutTimer?.cancel();
+    _authTimeoutTimer?.cancel();
     _closeChannels();
     _transport.close();
   }
@@ -692,11 +713,25 @@ class SSHClient {
 
   void _handleTransportReady() {
     printDebug?.call('SSHClient._onTransportReady');
+    _transportReady = true;
+    _handshakeTimeoutTimer?.cancel();
+    _handshakeTimeoutTimer = null;
+
+    final authTimeout = this.authTimeout;
+    if (authTimeout != null) {
+      _authTimeoutTimer = Timer(authTimeout, _handleAuthTimeout);
+    }
+
     _requestAuthentication();
   }
 
   void _handleTransportClosed(SSHError? error) {
     printDebug?.call('SSHClient._onTransportClosed');
+    _handshakeTimeoutTimer?.cancel();
+    _handshakeTimeoutTimer = null;
+    _authTimeoutTimer?.cancel();
+    _authTimeoutTimer = null;
+
     if (!_authenticated.isCompleted) {
       _authenticated.completeError(
         SSHAuthAbortError('Connection closed before authentication', error),
@@ -806,9 +841,29 @@ class SSHClient {
   void _handleUserauthSuccess() {
     printTrace?.call('<- $socket: SSH_Message_Userauth_Success');
     printDebug?.call('SSHClient._handleUserauthSuccess');
+    _authTimeoutTimer?.cancel();
+    _authTimeoutTimer = null;
     _authenticated.complete();
     onAuthenticated?.call();
     _keepAlive?.start();
+  }
+
+  void _handleHandshakeTimeout() {
+    if (_authenticated.isCompleted || _transportReady) return;
+
+    _handshakeTimeoutTimer = null;
+    final error = SSHHandshakeError('Handshake timed out');
+    _authenticated.completeError(error, StackTrace.current);
+  }
+
+  void _handleAuthTimeout() {
+    if (_authenticated.isCompleted) return;
+
+    _authTimeoutTimer = null;
+    _authenticated.completeError(
+      SSHAuthAbortError('Authentication timed out'),
+      StackTrace.current,
+    );
   }
 
   void _handleUserauthFailure(Uint8List payload) {
