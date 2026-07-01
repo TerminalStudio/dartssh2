@@ -277,6 +277,25 @@ void main() async {
 
 Processes killed by signals do not have an exit code, instead they have an exit signal property.
 
+**Waiting for exit status with a timeout**
+
+Alternatively, you can wait for the remote process to report its exit status or exit signal with an optional timeout using `session.waitForExit()`:
+
+```dart
+void main() async {
+  final session = await client.execute('sleep 5');
+  
+  // Wait for the exit status to be reported (or up to 10 seconds).
+  final exitCode = await session.waitForExit(timeout: Duration(seconds: 10));
+  
+  if (exitCode != null) {
+    print('Process exited with code: $exitCode');
+  } else {
+    print('Process timed out or was terminated by a signal');
+  }
+}
+```
+
 ### Forward connections on local port 8080 to the server
 
 ```dart

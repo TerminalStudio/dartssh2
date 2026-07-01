@@ -1,4 +1,5 @@
-## [2.20.1] - 2026-07-01
+## [2.21.0] - 2026-07-01
+- Added `SSHSession.waitForExit({Duration? timeout})` to await remote process exit status with an optional timeout [#176]. Thanks [@GT-610].
 - Hardened SOCKS5 dynamic forwarding (half-close streaming, dialing guards, timeout cancellation, malformed UTF-8 decoding, and buffer limits) [#175]. Thanks [@GT-610].
 - Hardened SSH agent channel frame validation (rejecting empty or oversized frames) and fallback RSA signature type checks [#175]. Thanks [@GT-610].
 - Improved EC private key parsing with proper ASN.1 OID curve detection, public point derivation validation, and robust comments decoding [#175]. Thanks [@GT-610].
@@ -258,6 +259,7 @@
 [#17]: https://github.com/TerminalStudio/dartssh2/issues/17
 [#14]: https://github.com/TerminalStudio/dartssh2/pull/14
 [#175]: https://github.com/TerminalStudio/dartssh2/pull/175
+[#176]: https://github.com/TerminalStudio/dartssh2/pull/176
 [#1]: https://github.com/TerminalStudio/dartssh/pull/1/files
 
 [@linhanyu]: https://github.com/linhanyu
