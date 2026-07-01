@@ -8,6 +8,65 @@ import 'package:dartssh2/src/ssh_channel.dart';
 import 'package:test/test.dart';
 
 void main() {
+  group('SSHSession.waitForExit', () {
+    test('returns exit status after channel closes', () async {
+      final harness = _SessionHarness();
+
+      final exit = harness.session.waitForExit();
+      harness.sendExitStatus(7);
+      harness.close();
+
+      expect(await exit, 7);
+
+      harness.dispose();
+    });
+
+    test('returns exit status before channel closes', () async {
+      final harness = _SessionHarness();
+
+      final exit = harness.session.waitForExit();
+      harness.sendExitStatus(7);
+
+      expect(await exit, 7);
+
+      harness.dispose();
+    });
+
+    test('returns null when timeout elapses before exit', () async {
+      final harness = _SessionHarness();
+
+      final exit = await harness.session.waitForExit(
+        timeout: const Duration(milliseconds: 10),
+      );
+
+      expect(exit, isNull);
+      expect(harness.session.exitCode, isNull);
+
+      harness.dispose();
+    });
+
+    test('returns null when channel closes without exit status', () async {
+      final harness = _SessionHarness();
+
+      final exit = harness.session.waitForExit();
+      harness.close();
+
+      expect(await exit, isNull);
+
+      harness.dispose();
+    });
+
+    test('returns existing exit status immediately', () async {
+      final harness = _SessionHarness();
+
+      harness.sendExitStatus(3);
+
+      expect(await harness.session.waitForExit(), 3);
+
+      harness.dispose();
+    });
+  });
+
   group('SSHClient.runWithResult', () {
     test('captures stdout/stderr and exit status', () async {
       final harness = _SessionHarness();
