@@ -1,3 +1,8 @@
+## [2.20.1] - 2026-07-01
+- Hardened SOCKS5 dynamic forwarding (half-close streaming, dialing guards, timeout cancellation, malformed UTF-8 decoding, and buffer limits) [#175]. Thanks [@GT-610].
+- Hardened SSH agent channel frame validation (rejecting empty or oversized frames) and fallback RSA signature type checks [#175]. Thanks [@GT-610].
+- Improved EC private key parsing with proper ASN.1 OID curve detection, public point derivation validation, and robust comments decoding [#175]. Thanks [@GT-610].
+
 ## [2.20.0] - 2026-06-30
 - **BREAKING**: Bumped the minimum Dart SDK constraint to `3.0.0` [#23]. Thanks [@vicajilau].
 - **BREAKING**: Declared `OpenSSHKeyPair` as a `mixin class` to comply with Dart 3.0 class modifier rules [#23]. Thanks [@vicajilau].
@@ -252,6 +257,7 @@
 [#18]: https://github.com/TerminalStudio/dartssh2/issues/18
 [#17]: https://github.com/TerminalStudio/dartssh2/issues/17
 [#14]: https://github.com/TerminalStudio/dartssh2/pull/14
+[#175]: https://github.com/TerminalStudio/dartssh2/pull/175
 [#1]: https://github.com/TerminalStudio/dartssh/pull/1/files
 
 [@linhanyu]: https://github.com/linhanyu
@@ -270,3 +276,4 @@
 [@Wackymax]: https://github.com/Wackymax
 [@gkc]: https://github.com/gkc
 [@vicajilau]: https://github.com/vicajilau
+[@GT-610]: https://github.com/GT-610
