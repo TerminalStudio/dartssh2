@@ -114,20 +114,39 @@ class _SocksConnection {
   StreamSubscription<Uint8List>? _remoteSub;
   Timer? _handshakeTimer;
   bool _closed = false;
+  bool _dialing = false;
   _SocksState _state = _SocksState.greeting;
 
   void start() {
+    _clientSub = _client.listen(
+      _onClientData,
+      onDone: _handleClientEOF,
+      onError: (_, __) => close(),
+      cancelOnError: true,
+    );
+
     _handshakeTimer = Timer(options.handshakeTimeout, () async {
       _sendReply(_SocksReply.ttlExpired);
       await close();
     });
+  }
 
-    _clientSub = _client.listen(
-      _onClientData,
-      onDone: close,
-      onError: (_, __) => close(),
-      cancelOnError: true,
-    );
+  void _handleClientEOF() {
+    if (_state == _SocksState.streaming) {
+      _remote?.sink.close();
+      _clientSub?.cancel();
+    } else {
+      close();
+    }
+  }
+
+  void _handleRemoteEOF() {
+    if (_state == _SocksState.streaming) {
+      _client.destroy();
+      _remoteSub?.cancel();
+    } else {
+      close();
+    }
   }
 
   Future<void> close() async {
@@ -152,9 +171,8 @@ class _SocksConnection {
       return;
     }
 
-    _buffer.add(chunk);
-
     try {
+      _buffer.add(chunk);
       await _consumeHandshake();
     } catch (_) {
       await close();
@@ -169,20 +187,27 @@ class _SocksConnection {
     }
 
     if (_state == _SocksState.request) {
+      if (_dialing) return;
       final target = _parseConnectRequest();
       if (target == null) return;
+      _dialing = true;
 
       if (filter != null && !filter!(target.host, target.port)) {
         _sendReply(_SocksReply.connectionNotAllowed);
+        _dialing = false;
         await close();
         return;
       }
 
       if (!canOpenTunnel()) {
         _sendReply(_SocksReply.connectionRefused);
+        _dialing = false;
         await close();
         return;
       }
+
+      _handshakeTimer?.cancel();
+      _handshakeTimer = null;
 
       try {
         _remote = await dial(target.host, target.port).timeout(
@@ -190,20 +215,27 @@ class _SocksConnection {
         );
       } catch (_) {
         _sendReply(_SocksReply.hostUnreachable);
+        _dialing = false;
         await close();
+        return;
+      }
+
+      _dialing = false;
+
+      if (_closed) {
+        _remote?.destroy();
+        _remote = null;
         return;
       }
 
       _remoteSub = _remote!.stream.listen(
         _client.add,
-        onDone: close,
+        onDone: _handleRemoteEOF,
         onError: (_, __) => close(),
         cancelOnError: true,
       );
 
       _sendReply(_SocksReply.succeeded);
-      _handshakeTimer?.cancel();
-      _handshakeTimer = null;
       _state = _SocksState.streaming;
 
       final pending = _buffer.takeAll();
@@ -288,7 +320,7 @@ class _SocksConnection {
     if (atyp == 0x03) {
       final length = request[4];
       final bytes = request.sublist(5, 5 + length);
-      return utf8.decode(bytes);
+      return utf8.decode(bytes, allowMalformed: true);
     }
 
     final raw = request.sublist(4, 20);
@@ -316,12 +348,18 @@ class _SocksConnection {
 }
 
 class _ByteBuffer {
+  static const kMaxHandshakeSize = 32768;
+
   final _data = <int>[];
   int _offset = 0;
 
   int get length => _data.length - _offset;
 
   void add(List<int> chunk) {
+    if (length + chunk.length > kMaxHandshakeSize) {
+      throw StateError(
+          'Handshake buffer overflow: $length + ${chunk.length} > $kMaxHandshakeSize');
+    }
     _data.addAll(chunk);
   }
 
