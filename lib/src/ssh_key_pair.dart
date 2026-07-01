@@ -241,8 +241,7 @@ class OpenSSHKeyPairs {
     final iv = Uint8List.view(kdfHash.buffer, cipher.keySize, cipher.ivSize);
 
     try {
-      final decryptCipher =
-          cipher.createCipher(key, iv, forEncryption: false);
+      final decryptCipher = cipher.createCipher(key, iv, forEncryption: false);
       return decryptCipher.processAll(blob);
     } catch (e) {
       throw SSHKeyDecryptError('Failed to decrypt private key', e);
