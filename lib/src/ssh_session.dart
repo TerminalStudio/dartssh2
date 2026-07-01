@@ -35,6 +35,12 @@ class SSHSession {
   SSHSession(this._channel) {
     _channel.setRequestHandler(_handleRequest);
 
+    done.then((_) {
+      if (!_exitCompleter.isCompleted) {
+        _exitCompleter.complete(_exitCode);
+      }
+    });
+
     _channelDataSubscription = _channel.stream.listen(
       _handleChannelData,
       onDone: _handleChannelDataDone,
@@ -50,6 +56,8 @@ class SSHSession {
   int? _exitCode;
 
   SSHSessionExitSignal? _exitSignal;
+
+  final _exitCompleter = Completer<int?>();
 
   late final StreamSubscription _channelDataSubscription;
 
@@ -103,6 +111,18 @@ class SSHSession {
     _channel.close();
   }
 
+  /// Waits for the remote process to report an exit status.
+  ///
+  /// Returns the exit status, or `null` if the process exited without reporting
+  /// one, was terminated by a signal, or [timeout] elapsed before it exited.
+  Future<int?> waitForExit({Duration? timeout}) {
+    Future<int?> wait = _exitCompleter.future;
+    if (timeout != null) {
+      wait = wait.timeout(timeout, onTimeout: () => null);
+    }
+    return wait;
+  }
+
   /// Deliver [signal] to the remote process. Some implementations may not
   /// support this.
   void kill(SSHSignal signal) {
@@ -113,6 +133,9 @@ class SSHSession {
     switch (request.requestType) {
       case SSHChannelRequestType.exitStatus:
         _exitCode = request.exitStatus!;
+        if (!_exitCompleter.isCompleted) {
+          _exitCompleter.complete(_exitCode);
+        }
         return true;
       case SSHChannelRequestType.exitSignal:
         _exitSignal = SSHSessionExitSignal(
@@ -121,6 +144,9 @@ class SSHSession {
           errorMessage: request.errorMessage!,
           languageTag: request.languageTag!,
         );
+        if (!_exitCompleter.isCompleted) {
+          _exitCompleter.complete(null);
+        }
         return true;
     }
     return false;
