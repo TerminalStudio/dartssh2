@@ -1,3 +1,6 @@
+## [2.21.1] - 2026-07-02
+- Fixed an `SSHTransport` busy-loop (100% CPU / ANR) that occurred when a partial packet remained in the read buffer [#179]. Thanks [@vicajilau].
+
 ## [2.21.0] - 2026-07-01
 - Added `SSHSession.waitForExit({Duration? timeout})` to await remote process exit status with an optional timeout [#176]. Thanks [@GT-610].
 - Hardened SOCKS5 dynamic forwarding (half-close streaming, dialing guards, timeout cancellation, malformed UTF-8 decoding, and buffer limits) [#175]. Thanks [@GT-610].
