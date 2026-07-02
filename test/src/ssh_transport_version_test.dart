@@ -64,6 +64,24 @@ void main() {
 
       client.close();
     });
+
+    test('reschedules processing when more data remains in the buffer', () async {
+      final socket = _FakeSSHSocket();
+      final client = SSHClient(
+        socket,
+        username: 'demo',
+      );
+
+      // Send the version banner followed by some extra data in one go.
+      socket.addIncoming('SSH-2.0-OpenSSH_3.6.1p2\r\nSSH-2.0-SecondLine\r\n');
+
+      // Pump until the client processes the first version.
+      await _pumpUntil(() => client.remoteVersion != null);
+
+      expect(client.remoteVersion, 'SSH-2.0-OpenSSH_3.6.1p2');
+
+      client.close();
+    });
   });
 }
 
