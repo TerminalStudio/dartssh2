@@ -53,7 +53,7 @@ jobs:
       - name: Upload coverage
         uses: codecov/codecov-action@v5
         with:
-          fail_ci_if_error: true # optional (default = false)
+          fail_ci_if_error: false # optional (default = false)
           files: ./coverage/lcov.info # optional
           flags: unittests # optional
           name: codecov-umbrella # optional
