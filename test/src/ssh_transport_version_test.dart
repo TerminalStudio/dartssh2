@@ -65,7 +65,8 @@ void main() {
       client.close();
     });
 
-    test('reschedules processing when more data remains in the buffer', () async {
+    test('reschedules processing when more data remains in the buffer',
+        () async {
       final socket = _FakeSSHSocket();
       final client = SSHClient(
         socket,
