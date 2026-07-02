@@ -43,6 +43,46 @@ void main() {
 
       client.close();
     });
+
+    test('does not busy loop on partial packet after handshake', () async {
+      final socket = _FakeSSHSocket();
+      final client = SSHClient(
+        socket,
+        username: 'demo',
+      );
+
+      // Complete the version exchange.
+      socket.addIncoming('SSH-2.0-OpenSSH_3.6.1p2\r\n');
+      await _pumpUntil(() => client.remoteVersion != null);
+
+      // Send the first 4 bytes of a packet indicating a length of 100.
+      socket.addRawIncoming(Uint8List.fromList([0, 0, 0, 100]));
+
+      // Wait a moment. If there is a microtask busy loop, the delayed future
+      // will never run and the test will timeout.
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      client.close();
+    });
+
+    test('reschedules processing when more data remains in the buffer',
+        () async {
+      final socket = _FakeSSHSocket();
+      final client = SSHClient(
+        socket,
+        username: 'demo',
+      );
+
+      // Send the version banner followed by some extra data in one go.
+      socket.addIncoming('SSH-2.0-OpenSSH_3.6.1p2\r\nSSH-2.0-SecondLine\r\n');
+
+      // Pump until the client processes the first version.
+      await _pumpUntil(() => client.remoteVersion != null);
+
+      expect(client.remoteVersion, 'SSH-2.0-OpenSSH_3.6.1p2');
+
+      client.close();
+    });
   });
 }
 
@@ -72,6 +112,10 @@ class _FakeSSHSocket implements SSHSocket {
 
   void addIncoming(String data) {
     _inputController.add(Uint8List.fromList(latin1.encode(data)));
+  }
+
+  void addRawIncoming(Uint8List data) {
+    _inputController.add(data);
   }
 
   @override

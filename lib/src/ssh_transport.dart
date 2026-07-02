@@ -131,6 +131,9 @@ class SSHTransport {
   /// Guards asynchronous packet processing to preserve message order.
   var _isProcessingData = false;
 
+  /// Tracks whether new socket data was received since packet processing started.
+  var _hasNewData = false;
+
   /// Identification string sent by us without trailing \r\n. For example,
   /// "SSH-2.0-DartSSH_2.0".
   String get _localVersion => 'SSH-2.0-$version';
@@ -475,6 +478,7 @@ class SSHTransport {
   /// Callback triggered when new raw bytes are received from the socket.
   void _onSocketData(Uint8List data) {
     _buffer.add(data);
+    _hasNewData = true;
     _scheduleProcessData();
   }
 
@@ -496,6 +500,8 @@ class SSHTransport {
     }
 
     _isProcessingData = true;
+    final lengthBefore = _buffer.length;
+    _hasNewData = false;
 
     _processDataAsync().catchError((error, stackTrace) {
       if (error is SSHError) {
@@ -506,7 +512,9 @@ class SSHTransport {
     }).whenComplete(() {
       _isProcessingData = false;
       if (_buffer.isNotEmpty && !isClosed) {
-        _scheduleProcessData();
+        if (_hasNewData || _buffer.length < lengthBefore) {
+          _scheduleProcessData();
+        }
       }
     });
   }
