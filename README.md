@@ -162,6 +162,24 @@ void main() async {
 
 `ident` defaults to `DartSSH_2.0`.
 
+### Configure handshake and authentication timeouts
+
+You can specify optional timeouts for the transport handshake and user authentication:
+
+```dart
+void main() async {
+  final client = SSHClient(
+    await SSHSocket.connect('localhost', 22),
+    username: '<username>',
+    onPasswordRequest: () => '<password>',
+    handshakeTimeout: const Duration(seconds: 15),
+    authTimeout: const Duration(seconds: 15),
+  );
+}
+```
+
+By default, these parameters are `null` (no timeout is enforced). Without these timeouts, the connection or authentication process could hang indefinitely if the remote server becomes unresponsive.
+
 ### Spawn a shell on remote host
 
 ```dart

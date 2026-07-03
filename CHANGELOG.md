@@ -1,3 +1,6 @@
+## [2.22.0] - 2026-07-03
+- Added optional `handshakeTimeout` and `authTimeout` to `SSHClient` to limit connection negotiation and user authentication times [#182]. Thanks [@GT-610].
+
 ## [2.21.1] - 2026-07-02
 - Fixed an `SSHTransport` busy-loop (100% CPU / ANR) that occurred when a partial packet remained in the read buffer [#179]. Thanks [@vicajilau].
 
