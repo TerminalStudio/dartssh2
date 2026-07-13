@@ -9,6 +9,8 @@ class SSHKeepAlive {
 
   final Future Function() ping;
 
+  bool _isPinging = false;
+
   SSHKeepAlive({
     required this.ping,
     this.interval = const Duration(seconds: 10),
@@ -16,7 +18,15 @@ class SSHKeepAlive {
 
   void start() {
     _timer ??= Timer.periodic(interval, (timer) async {
-      await ping();
+      if (_isPinging) return;
+      _isPinging = true;
+      try {
+        await ping();
+      } catch (_) {
+        // Ignore errors, the client transport will handle disconnection.
+      } finally {
+        _isPinging = false;
+      }
     });
   }
 
