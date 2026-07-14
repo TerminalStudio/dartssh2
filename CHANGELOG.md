@@ -1,3 +1,6 @@
+## [2.22.2] - 2026-07-14
+- Added `flush()` to `SSHSocket`, `SSHClient`, and `SSHChannel` to allow force flushing of buffered outgoing data [#183]. Thanks [@vicajilau].
+
 ## [2.22.1] - 2026-07-13
 - Fixed a keepalive issue where overlapping pings could occur and caught errors during ping execution. Thanks [@vicajilau].
 
