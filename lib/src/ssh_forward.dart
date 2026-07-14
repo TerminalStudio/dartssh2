@@ -76,6 +76,13 @@ class SSHForwardChannel implements SSHSocket {
   void destroy() {
     _channel.destroy();
   }
+
+  /// Force flush any buffered outgoing data.
+  @override
+  Future<void> flush() async {
+    await Future.microtask(() {});
+    await _channel.flush();
+  }
 }
 
 class SSHX11Channel extends SSHForwardChannel {

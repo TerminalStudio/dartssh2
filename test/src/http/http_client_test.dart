@@ -300,4 +300,7 @@ class _FakeSocket implements SSHSocket {
     }
     unawaited(_sinkController.close());
   }
+
+  @override
+  Future<void> flush() async {}
 }

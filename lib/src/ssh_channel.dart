@@ -31,6 +31,8 @@ class SSHChannelController {
 
   SSHChannel get channel => SSHChannel(this);
 
+  final Future<void> Function()? onFlush;
+
   SSHChannelController({
     required this.localId,
     required this.localMaximumPacketSize,
@@ -39,6 +41,7 @@ class SSHChannelController {
     required this.remoteInitialWindowSize,
     required this.remoteMaximumPacketSize,
     required this.sendMessage,
+    this.onFlush,
     this.printDebug,
   }) {
     if (remoteInitialWindowSize > 0) {
@@ -404,6 +407,10 @@ class SSHChannelController {
       _remoteWindow -= data.bytes.length;
     }
   });
+
+  Future<void> flush() async {
+    await onFlush?.call();
+  }
 }
 
 class SSHChannel {
@@ -433,6 +440,9 @@ class SSHChannel {
   void addData(Uint8List data, {int? type}) {
     sink.add(SSHChannelData(data, type: type));
   }
+
+  /// Force flush any buffered outgoing data on this channel to the socket.
+  Future<void> flush() => _controller.flush();
 
   void setRequestHandler(SSHChannelRequestHandler handler) {
     _controller._requestHandler = handler;

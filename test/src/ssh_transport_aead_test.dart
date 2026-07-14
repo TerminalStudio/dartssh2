@@ -548,6 +548,9 @@ class _CaptureSSHSocket implements SSHSocket {
     }
     unawaited(_inputController.close());
   }
+
+  @override
+  Future<void> flush() async {}
 }
 
 class _CaptureSink implements StreamSink<List<int>> {

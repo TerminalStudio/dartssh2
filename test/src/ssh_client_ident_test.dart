@@ -100,6 +100,9 @@ class _FakeSSHSocket implements SSHSocket {
     }
     unawaited(_inputController.close());
   }
+
+  @override
+  Future<void> flush() async {}
 }
 
 class _RecordingSink implements StreamSink<List<int>> {
