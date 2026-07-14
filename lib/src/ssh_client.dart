@@ -701,6 +701,11 @@ class SSHClient {
     _transport.close();
   }
 
+  /// Force flush any buffered outgoing data to the socket.
+  Future<void> flush() async {
+    await _transport.flush();
+  }
+
   /// Close all channels that are currently open.
   void _closeChannels() {
     for (final channel in _channels.values) {
@@ -1376,6 +1381,7 @@ class SSHClient {
       remoteInitialWindowSize: remoteInitialWindowSize,
       remoteMaximumPacketSize: remoteMaximumPacketSize,
       sendMessage: _sendMessage,
+      onFlush: flush,
       printDebug: printDebug,
     );
 

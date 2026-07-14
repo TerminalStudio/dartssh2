@@ -32,6 +32,9 @@ class SSHSession {
   /// be available on the [stdout] and [stderr] streams at this time.
   Future<void> get done => _channel.done;
 
+  /// The underlying SSH channel.
+  SSHChannel get channel => _channel;
+
   SSHSession(this._channel) {
     _channel.setRequestHandler(_handleRequest);
 
@@ -77,6 +80,12 @@ class SSHSession {
   /// method that calls [stdin.add].
   void write(Uint8List data) {
     stdin.add(data);
+  }
+
+  /// Force flush any buffered stdin data to the remote process.
+  Future<void> flush() async {
+    await Future.microtask(() {});
+    await _channel.flush();
   }
 
   /// Inform remote process of the current window size.

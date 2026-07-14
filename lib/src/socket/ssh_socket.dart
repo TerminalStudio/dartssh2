@@ -28,4 +28,7 @@ abstract class SSHSocket {
   Future<void> close();
 
   void destroy();
+
+  /// Force flush any buffered outgoing data.
+  Future<void> flush() async {}
 }

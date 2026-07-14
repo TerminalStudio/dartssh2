@@ -464,6 +464,11 @@ class SSHTransport {
     socket.destroy();
   }
 
+  /// Force flush any buffered outgoing data to the socket.
+  Future<void> flush() async {
+    await socket.flush();
+  }
+
   /// Subscribes to the underlying socket stream to handle incoming data and status events.
   void _initSocket() {
     _socketSubscription = socket.stream.listen(

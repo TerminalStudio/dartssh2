@@ -1,7 +1,10 @@
-## [2.22.1] - 2026-07-14
+## [2.22.2] - 2026-07-14
+- Added `flush()` to `SSHSocket`, `SSHClient`, and `SSHChannel` to allow force flushing of buffered outgoing data [#183]. Thanks [@vicajilau].
+
+## [2.22.1] - 2026-07-13
 - Fixed a keepalive issue where overlapping pings could occur and caught errors during ping execution. Thanks [@vicajilau].
 
-## [2.22.0] - 2026-07-13
+## [2.22.0] - 2026-07-03
 - Added optional `handshakeTimeout` and `authTimeout` to `SSHClient` to limit connection negotiation and user authentication times [#182]. Thanks [@GT-610].
 
 ## [2.21.1] - 2026-07-02

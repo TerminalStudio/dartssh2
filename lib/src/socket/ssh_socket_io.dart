@@ -38,6 +38,11 @@ class _SSHNativeSocket implements SSHSocket {
   }
 
   @override
+  Future<void> flush() async {
+    await _socket.flush();
+  }
+
+  @override
   String toString() {
     final address = '${_socket.remoteAddress.host}:${_socket.remotePort}';
     return '_SSHNativeSocket($address)';
