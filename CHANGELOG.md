@@ -1,7 +1,7 @@
-## [2.22.1] - 2026-07-13
+## [2.22.1] - 2026-07-14
 - Fixed a keepalive issue where overlapping pings could occur and caught errors during ping execution. Thanks [@vicajilau].
 
-## [2.22.0] - 2026-07-03
+## [2.22.0] - 2026-07-13
 - Added optional `handshakeTimeout` and `authTimeout` to `SSHClient` to limit connection negotiation and user authentication times [#182]. Thanks [@GT-610].
 
 ## [2.21.1] - 2026-07-02
