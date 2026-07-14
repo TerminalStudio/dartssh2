@@ -4,6 +4,7 @@ library;
 import 'dart:convert';
 
 import 'package:dartssh2/dartssh2.dart';
+import 'package:dartssh2/src/ssh_channel.dart';
 import 'package:test/test.dart';
 
 import '../test_utils.dart';
@@ -261,6 +262,34 @@ void main() {
       }
       expect(result.exitSignal, isNull);
 
+      client.close();
+    });
+  });
+
+  group('SSHClient.flush', () {
+    test('can flush client, session, channel, and forward channel', () async {
+      final client = await getTestClient();
+      await client.authenticated;
+
+      await client.flush();
+
+      final session = await client.execute('echo flush_test');
+      await session.flush();
+
+      final controller = SSHChannelController(
+        localId: 1,
+        localMaximumPacketSize: 1024,
+        localInitialWindowSize: 1024,
+        remoteId: 2,
+        remoteMaximumPacketSize: 1024,
+        remoteInitialWindowSize: 1024,
+        sendMessage: (msg) {},
+        onFlush: () async {},
+      );
+      final forwardChannel = SSHForwardChannel(controller.channel);
+      await forwardChannel.flush();
+
+      await session.done;
       client.close();
     });
   });
