@@ -1,4 +1,4 @@
-## [2.22.2] - 2026-07-14
+## [2.22.2] - 2026-07-15
 - Added `flush()` to `SSHSocket`, `SSHClient`, and `SSHChannel` to allow force flushing of buffered outgoing data [#183]. Thanks [@vicajilau].
 
 ## [2.22.1] - 2026-07-13
