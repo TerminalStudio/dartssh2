@@ -1,3 +1,6 @@
+## [2.22.3] - 2026-07-20
+- Fixed an SSH channel leak in `SftpClient.close()` by closing the underlying SSH channel and returning `Future<void>` to allow awaiting channel teardown [#186]. Thanks [@keinstn].
+
 ## [2.22.2] - 2026-07-15
 - Added `flush()` to `SSHSocket`, `SSHClient`, and `SSHChannel` to allow force flushing of buffered outgoing data [#183]. Thanks [@vicajilau].
 
