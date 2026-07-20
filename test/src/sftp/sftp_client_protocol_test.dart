@@ -93,9 +93,24 @@ void main() {
       final openFuture = harness.client.open('/tmp/f');
       await harness.nextOutgoingPacket();
 
-      harness.client.close();
+      unawaited(harness.client.close());
 
       await expectLater(openFuture, throwsA(isA<SftpAbortError>()));
+      harness.dispose();
+    });
+
+    test('close closes the underlying channel', () async {
+      final harness = _SftpHarness();
+      await harness.nextOutgoingPacket();
+      harness.sendResponsePacket(SftpVersionPacket(3));
+      await harness.client.handshake;
+
+      final closeFuture = harness.client.close();
+      // The server acks the channel close, letting the teardown complete.
+      harness.closeRemote();
+      await closeFuture;
+
+      await expectLater(harness.channelDone, completes);
       harness.dispose();
     });
 
@@ -546,6 +561,14 @@ class _SftpHarness {
 
   Future<Uint8List> nextOutgoingPacket() => _outgoing.stream.first;
 
+  Future<void> get channelDone => _controller.channel.done;
+
+  void closeRemote() {
+    _controller.handleMessage(
+      SSH_Message_Channel_Close(recipientChannel: _controller.localId),
+    );
+  }
+
   void sendResponsePacket(SftpPacket packet) {
     final payload = packet.encode();
     final writer = SSHMessageWriter();
@@ -564,11 +587,7 @@ class _SftpHarness {
     if (_disposed) return;
     _disposed = true;
 
-    try {
-      client.close();
-    } catch (_) {
-      // SftpClient.close is not idempotent when already completed with error.
-    }
+    unawaited(client.close());
     _controller.destroy();
     _outgoing.close();
   }
