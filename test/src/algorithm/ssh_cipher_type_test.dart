@@ -106,6 +106,7 @@ void main() {
         algorithms.kex,
         equals([
           SSHKexType.x25519,
+          SSHKexType.x25519Rfc,
           SSHKexType.nistp521,
           SSHKexType.nistp384,
           SSHKexType.nistp256,
