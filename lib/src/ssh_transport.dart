@@ -1196,6 +1196,7 @@ class SSHTransport {
 
     switch (_kexType) {
       case SSHKexType.x25519:
+      case SSHKexType.x25519Rfc:
         _kex = await SSHKexX25519.createAsync();
         break;
       case SSHKexType.nistp256:
