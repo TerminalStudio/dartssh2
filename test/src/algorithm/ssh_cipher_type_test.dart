@@ -105,8 +105,8 @@ void main() {
     expect(
         algorithms.kex,
         equals([
-          SSHKexType.x25519,
           SSHKexType.x25519Rfc,
+          SSHKexType.x25519,
           SSHKexType.nistp521,
           SSHKexType.nistp384,
           SSHKexType.nistp256,

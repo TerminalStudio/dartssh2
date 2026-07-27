@@ -1,3 +1,6 @@
+## [2.22.4] - 2026-07-27
+- Advertised standard RFC 8731 key exchange name `curve25519-sha256` alongside legacy `curve25519-sha256@libssh.org` [#187]. Thanks [@nickn17].
+
 ## [2.22.3] - 2026-07-20
 - Fixed an SSH channel leak in `SftpClient.close()` by closing the underlying SSH channel and returning `Future<void>` to allow awaiting channel teardown [#186]. Thanks [@keinstn].
 
