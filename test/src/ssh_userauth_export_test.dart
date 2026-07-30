@@ -2,7 +2,9 @@ import 'package:dartssh2/dartssh2.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('SSHUserInfoRequest and related userauth classes are exported by dartssh2.dart', () {
+  test(
+      'SSHUserInfoRequest and related userauth classes are exported by dartssh2.dart',
+      () {
     final prompt = SSHUserInfoPrompt('Password:', false);
     expect(prompt.promptText, equals('Password:'));
     expect(prompt.echo, isFalse);
@@ -17,6 +19,7 @@ void main() {
     expect(changePasswordResponse.oldPassword, equals('old'));
     expect(changePasswordResponse.newPassword, equals('new'));
 
-    expect(SSHAuthMethod.keyboardInteractive.name, equals('keyboard-interactive'));
+    expect(
+        SSHAuthMethod.keyboardInteractive.name, equals('keyboard-interactive'));
   });
 }
