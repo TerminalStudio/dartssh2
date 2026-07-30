@@ -1,3 +1,6 @@
+## [2.22.5] - 2026-07-30
+- Exported `src/ssh_userauth.dart` in `lib/dartssh2.dart` to expose `SSHUserInfoRequest`, `SSHUserInfoPrompt`, `SSHAuthMethod`, and `SSHChangePasswordResponse` [#188]. Thanks [@vicajilau].
+
 ## [2.22.4] - 2026-07-27
 - Advertised standard RFC 8731 key exchange name `curve25519-sha256` alongside legacy `curve25519-sha256@libssh.org` [#187]. Thanks [@nickn17].
 
@@ -279,6 +282,7 @@
 [#175]: https://github.com/TerminalStudio/dartssh2/pull/175
 [#176]: https://github.com/TerminalStudio/dartssh2/pull/176
 [#1]: https://github.com/TerminalStudio/dartssh/pull/1/files
+[#188]: https://github.com/TerminalStudio/dartssh2/issues/188
 
 [@linhanyu]: https://github.com/linhanyu
 [@Migarl]: https://github.com/Migarl
