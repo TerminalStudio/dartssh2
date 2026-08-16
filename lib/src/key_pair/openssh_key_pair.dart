@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:dartssh2/src/algorithm/ssh_cipher_type.dart';
@@ -263,7 +262,7 @@ abstract mixin class OpenSSHKeyPair implements SSHKeyPair {
   @override
   String toPem() {
     final writer = SSHMessageWriter();
-    final checkInt = Random().nextInt(0xFFFFFFFF);
+    final checkInt = ByteData.sublistView(randomBytes(4)).getUint32(0);
 
     writer.writeUint32(checkInt);
     writer.writeUint32(checkInt);
