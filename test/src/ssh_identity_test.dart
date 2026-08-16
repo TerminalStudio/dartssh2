@@ -44,21 +44,8 @@ void main() {
     test('SSHRawHostKey and SSHRawSignature encode correctly', () {
       final rawKeyBytes =
           Uint8List.fromList([0, 0, 0, 11, ...utf8.encode('ssh-ed25519')]);
-      final rawSigBytes = Uint8List.fromList([
-        0,
-        0,
-        0,
-        11,
-        ...utf8.encode('ssh-ed25519'),
-        0,
-        0,
-        0,
-        4,
-        1,
-        2,
-        3,
-        4
-      ]);
+      final rawSigBytes = Uint8List.fromList(
+          [0, 0, 0, 11, ...utf8.encode('ssh-ed25519'), 0, 0, 0, 4, 1, 2, 3, 4]);
 
       final rawHostKey = SSHRawHostKey(rawKeyBytes);
       expect(rawHostKey.encode(), equals(rawKeyBytes));
@@ -70,21 +57,8 @@ void main() {
     test('SSHHostKey.getType and SSHSignature.getType parse types', () {
       final rawKeyBytes =
           Uint8List.fromList([0, 0, 0, 11, ...utf8.encode('ssh-ed25519')]);
-      final rawSigBytes = Uint8List.fromList([
-        0,
-        0,
-        0,
-        11,
-        ...utf8.encode('ssh-ed25519'),
-        0,
-        0,
-        0,
-        4,
-        1,
-        2,
-        3,
-        4
-      ]);
+      final rawSigBytes = Uint8List.fromList(
+          [0, 0, 0, 11, ...utf8.encode('ssh-ed25519'), 0, 0, 0, 4, 1, 2, 3, 4]);
 
       expect(SSHHostKey.getType(rawKeyBytes), 'ssh-ed25519');
       expect(SSHSignature.getType(rawSigBytes), 'ssh-ed25519');
@@ -150,7 +124,8 @@ void main() {
   });
 
   group('SSHClient with asynchronous SSHIdentity', () {
-    test('authenticates successfully with async signer without probe', () async {
+    test('authenticates successfully with async signer without probe',
+        () async {
       final socket = _FakeSSHSocket();
       final signerCompleter = Completer<SSHSignature>();
       var signCallCount = 0;

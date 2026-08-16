@@ -47,4 +47,3 @@ class SSHRawSignature implements SSHSignature {
   @override
   Uint8List encode() => bytes;
 }
-

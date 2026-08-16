@@ -4,13 +4,13 @@ import 'dart:typed_data';
 
 import 'package:dartssh2/src/http/http_client.dart';
 import 'package:dartssh2/src/sftp/sftp_client.dart';
-import 'package:dartssh2/src/dynamic_forward.dart';
+import 'package:dartssh2/src/forward/dynamic_forward.dart';
 import 'package:dartssh2/src/ssh_algorithm.dart';
 import 'package:dartssh2/src/ssh_agent.dart';
 import 'package:dartssh2/src/ssh_channel.dart';
 import 'package:dartssh2/src/ssh_channel_id.dart';
 import 'package:dartssh2/src/ssh_errors.dart';
-import 'package:dartssh2/src/ssh_forward.dart';
+import 'package:dartssh2/src/forward/ssh_forward.dart';
 import 'package:dartssh2/src/ssh_keepalive.dart';
 import 'package:dartssh2/src/ssh_identity.dart';
 import 'package:dartssh2/src/ssh_session.dart';

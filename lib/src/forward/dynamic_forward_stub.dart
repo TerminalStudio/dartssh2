@@ -1,4 +1,4 @@
-import 'package:dartssh2/src/ssh_forward.dart';
+import 'package:dartssh2/src/forward/ssh_forward.dart';
 
 typedef SSHDynamicDial = Future<SSHForwardChannel> Function(
   String host,
