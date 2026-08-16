@@ -197,10 +197,13 @@ void main() {
         singleConnection: true,
         x11AuthenticationProtocol: 'MIT-MAGIC-COOKIE-1',
         x11AuthenticationCookie: 'deadbeef',
-        x11ScreenNumber: '0',
+        x11ScreenNumber: 0x01020304,
       );
 
-      final decoded = SSH_Message_Channel_Request.decode(message.encode());
+      final encoded = message.encode();
+      expect(encoded.sublist(encoded.length - 4), [1, 2, 3, 4]);
+
+      final decoded = SSH_Message_Channel_Request.decode(encoded);
 
       expect(decoded.requestType, SSHChannelRequestType.x11);
       expect(decoded.recipientChannel, 5);
@@ -208,7 +211,7 @@ void main() {
       expect(decoded.singleConnection, isTrue);
       expect(decoded.x11AuthenticationProtocol, 'MIT-MAGIC-COOKIE-1');
       expect(decoded.x11AuthenticationCookie, 'deadbeef');
-      expect(decoded.x11ScreenNumber, '0');
+      expect(decoded.x11ScreenNumber, 0x01020304);
     });
 
     test('auth-agent request encode/decode roundtrip', () {

@@ -608,7 +608,7 @@ class SSH_Message_Channel_Request implements SSHMessage {
   final bool? singleConnection;
   final String? x11AuthenticationProtocol;
   final String? x11AuthenticationCookie;
-  final String? x11ScreenNumber;
+  final int? x11ScreenNumber;
 
   /// "env" request specific data
   final String? variableName;
@@ -689,7 +689,7 @@ class SSH_Message_Channel_Request implements SSHMessage {
     bool singleConnection = false,
     required String x11AuthenticationProtocol,
     required String x11AuthenticationCookie,
-    required String x11ScreenNumber,
+    required int x11ScreenNumber,
   }) {
     return SSH_Message_Channel_Request(
       recipientChannel: recipientChannel,
@@ -851,7 +851,7 @@ class SSH_Message_Channel_Request implements SSHMessage {
         final singleConnection = reader.readBool();
         final x11AuthenticationProtocol = reader.readUtf8();
         final x11AuthenticationCookie = reader.readUtf8();
-        final x11ScreenNumber = reader.readUtf8();
+        final x11ScreenNumber = reader.readUint32();
         return SSH_Message_Channel_Request(
           recipientChannel: recipientChannel,
           requestType: requestType,
@@ -955,7 +955,7 @@ class SSH_Message_Channel_Request implements SSHMessage {
         writer.writeBool(singleConnection!);
         writer.writeUtf8(x11AuthenticationProtocol!);
         writer.writeUtf8(x11AuthenticationCookie!);
-        writer.writeUtf8(x11ScreenNumber!);
+        writer.writeUint32(x11ScreenNumber!);
         break;
       case 'env':
         writer.writeUtf8(variableName!);
