@@ -4,6 +4,7 @@
 - Fixed `SSHClient.run()` and `SSHClient.runWithResult()` hanging forever when the stdout stream emitted an error, by routing stdout errors to the stdout completer [#195]. Thanks [@GT-610].
 - Fixed `SSHClient.run()` and `SSHClient.runWithResult()` raising an uncaught error, instead of throwing to the caller, when the stderr stream emitted an error while stdout was still open. Both streams are now awaited together, and the session is closed on failure so the SSH channel is no longer leaked [#197].
 - Switched SSH protocol randomness to a `Random.secure()` source and widened byte generation to the full `0x00`-`0xff` range, covering key exchange cookies, ephemeral key exchange private values, and OpenSSH private key encryption seeds [#193]. Thanks [@GT-610].
+- Switched the check int of OpenSSH private keys written by `SSHKeyPair.toPem()` to the same secure random source, removing the last insecure `Random()` usage in the library [#198].
 
 ## [3.0.0] - 2026-08-16
 - **BREAKING**: Changed `SSHClient.identities` getter type from `List<SSHKeyPair>?` to `List<SSHIdentity>?` to support asynchronous external signers (OS agents, hardware tokens, smart cards, Secure Enclave, Android Keystore, and custom signers) [#190]. Constructor invocations passing `List<SSHKeyPair>` remain 100% source-compatible.
@@ -303,6 +304,7 @@
 [#195]: https://github.com/TerminalStudio/dartssh2/pull/195
 [#196]: https://github.com/TerminalStudio/dartssh2/pull/196
 [#197]: https://github.com/TerminalStudio/dartssh2/pull/197
+[#198]: https://github.com/TerminalStudio/dartssh2/pull/198
 
 [@linhanyu]: https://github.com/linhanyu
 [@Migarl]: https://github.com/Migarl

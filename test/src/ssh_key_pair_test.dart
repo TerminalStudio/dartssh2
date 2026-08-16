@@ -232,6 +232,22 @@ MAA=
     expect(signature1.signature, signature2.signature);
   });
 
+  test('OpenSSHKeyPair.toPem() uses a fresh check int on every call', () async {
+    final keypair = SSHKeyPair.fromPem(rsaPrivateOpenSSH).single;
+
+    final pems = List.generate(4, (_) => keypair.toPem());
+
+    expect(
+      pems.toSet(),
+      hasLength(pems.length),
+      reason: 'the check int must be randomized on every call',
+    );
+
+    for (final pem in pems) {
+      expect(() => SSHKeyPair.fromPem(pem), returnsNormally);
+    }
+  });
+
   test('OpenSSHEcdsaKeyPair.toPem() works', () async {
     final pem1 = ecdsaNistP256Private;
     final keypair1 = SSHKeyPair.fromPem(pem1).single as OpenSSHEcdsaKeyPair;
