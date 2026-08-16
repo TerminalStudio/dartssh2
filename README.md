@@ -27,7 +27,7 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
 
 -  **Pure Dart**: Working with both Dart VM and Flutter.
 -  **SSH Session**: Executing commands, spawning shells, setting environment variables, pseudo terminals, etc.
--  **Authentication**: Supports password, private key and interactive authentication method.
+-  **Authentication**: Supports password, in-memory private keys (`SSHKeyPair`), external asynchronous identities (`SSHIdentity` for Secure Enclave, YubiKey/FIDO2, smart cards, OS agents), RFC 4252 §7.8 public-key probing, and keyboard-interactive authentication.
 -  **Forwarding**: Supports local forwarding, remote forwarding, and dynamic forwarding (SOCKS5 CONNECT).
 -  **SFTP**: Supports all operations defined in [SFTPv3 protocol](https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02) including upload, download, list, link, remove, rename, etc.
 -  **Non-blocking Key Exchange**: Automatically offloads heavy key exchange calculations (X25519, NIST Curves, DH) to background isolates on supported VM platforms, preventing the main UI thread from freezing during connection.
@@ -196,7 +196,7 @@ void main() async {
   }
 
   await shell.done; // wait for shell to exit
-  client.close();
+  await client.close();
 }
 ```
 
@@ -381,7 +381,6 @@ If the proxy is working, this command returns the public egress IP seen through
 the SSH tunnel.
 
 ### Authenticate with public keys
-
 ```dart
 void main() async {
   final client = SSHClient(
@@ -395,11 +394,39 @@ void main() async {
 }
 ```
 
+### Authenticate with external identities (Secure Enclave, Smart Cards, Hardware Tokens)
+
+Use `SSHIdentity.custom` or implement `SSHIdentity` when signing is performed asynchronously by external hardware, the operating system, or a remote agent:
+
+```dart
+void main() async {
+  final identity = SSHIdentity.custom(
+    type: 'ssh-ed25519',
+    publicKey: SSHRawHostKey(rawPublicKeyBytes),
+    signer: (challengeData) async {
+      // Perform signing asynchronously via Hardware Token, OS Keystore, or Secure Enclave
+      final signatureBytes = await myExternalSigner.sign(challengeData);
+      return SSHRawSignature(signatureBytes);
+    },
+    // Set shouldProbe: true to send an unsigned RFC 4252 §7.8 query first,
+    // avoiding PIN prompts or user interaction if the server rejects the key.
+    shouldProbe: true,
+    comment: 'YubiKey 5C NFC',
+  );
+
+  final client = SSHClient(
+    socket,
+    username: '<username>',
+    identities: [identity],
+  );
+}
+```
+
 ### Use encrypted PEM files
 ```dart
 void main() async {
   // Test whether the private key is encrypted.
-  final encrypted = SSHKeyPair.isEncrypted(await File('path/to/id_rsa').readAsString());
+  final encrypted = SSHKeyPair.isEncryptedPem(await File('path/to/id_rsa').readAsString());
   print(encrypted);
 
 // If the private key is encrypted, you need to provide the passphrase.
@@ -702,7 +729,7 @@ void main() async {
   );
 
   // Use the client...
-  client.close();
+  await client.close();
 }
 ```
 
