@@ -633,6 +633,9 @@ class SSHClient {
 
   /// Execute [command] on the remote side non-interactively and return
   /// output together with exit metadata.
+  ///
+  /// If the standard output or standard error stream emits an error, the
+  /// session is closed and that error is rethrown to the caller.
   Future<SSHRunResult> runWithResult(
     String command, {
     bool runInPty = false,
@@ -652,7 +655,7 @@ class SSHClient {
     final stdoutDone = Completer<void>();
     final stderrDone = Completer<void>();
 
-    session.stdout.listen(
+    final stdoutSubscription = session.stdout.listen(
       stdout
           ? (data) {
               outputBuilder.add(data);
@@ -664,7 +667,7 @@ class SSHClient {
       cancelOnError: true,
     );
 
-    session.stderr.listen(
+    final stderrSubscription = session.stderr.listen(
       stderr
           ? (data) {
               outputBuilder.add(data);
@@ -676,9 +679,21 @@ class SSHClient {
       cancelOnError: true,
     );
 
-    await stdoutDone.future;
-    await stderrDone.future;
-    await session.done;
+    // Both futures must be awaited together. Awaiting them one after the other
+    // would leave the second one without an error handler until the first one
+    // completes, turning an error on that stream into an uncaught error.
+    try {
+      await Future.wait(
+        [stdoutDone.future, stderrDone.future],
+        eagerError: true,
+      );
+      await session.done;
+    } catch (_) {
+      await stdoutSubscription.cancel();
+      await stderrSubscription.cancel();
+      session.close();
+      rethrow;
+    }
 
     return SSHRunResult(
       output: outputBuilder.takeBytes(),

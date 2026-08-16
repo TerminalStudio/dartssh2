@@ -1,3 +1,10 @@
+## [3.0.1] - 2026-08-16
+- Fixed X11 forwarding by encoding and decoding the `x11-req` screen number as a `uint32` instead of a string, as required by RFC 4254 §6.3 [#194]. Thanks [@GT-610].
+- Fixed `SSHChannel.remoteChannelId` returning the local channel id instead of the id assigned by the peer [#196]. Thanks [@GT-610].
+- Fixed `SSHClient.run()` and `SSHClient.runWithResult()` hanging forever when the stdout stream emitted an error, by routing stdout errors to the stdout completer [#195]. Thanks [@GT-610].
+- Fixed `SSHClient.run()` and `SSHClient.runWithResult()` raising an uncaught error, instead of throwing to the caller, when the stderr stream emitted an error while stdout was still open. Both streams are now awaited together, and the session is closed on failure so the SSH channel is no longer leaked [#197].
+- Switched SSH protocol randomness to a `Random.secure()` source and widened byte generation to the full `0x00`-`0xff` range, covering key exchange cookies, ephemeral key exchange private values, and OpenSSH private key encryption seeds [#193]. Thanks [@GT-610].
+
 ## [3.0.0] - 2026-08-16
 - **BREAKING**: Changed `SSHClient.identities` getter type from `List<SSHKeyPair>?` to `List<SSHIdentity>?` to support asynchronous external signers (OS agents, hardware tokens, smart cards, Secure Enclave, Android Keystore, and custom signers) [#190]. Constructor invocations passing `List<SSHKeyPair>` remain 100% source-compatible.
 - **BREAKING**: Changed `SSHClient.close()` return type from `void` to `Future<void>` to allow awaiting complete socket and channel teardown.
@@ -290,6 +297,12 @@
 [#176]: https://github.com/TerminalStudio/dartssh2/pull/176
 [#1]: https://github.com/TerminalStudio/dartssh/pull/1/files
 [#188]: https://github.com/TerminalStudio/dartssh2/issues/188
+[#190]: https://github.com/TerminalStudio/dartssh2/issues/190
+[#193]: https://github.com/TerminalStudio/dartssh2/pull/193
+[#194]: https://github.com/TerminalStudio/dartssh2/pull/194
+[#195]: https://github.com/TerminalStudio/dartssh2/pull/195
+[#196]: https://github.com/TerminalStudio/dartssh2/pull/196
+[#197]: https://github.com/TerminalStudio/dartssh2/pull/197
 
 [@linhanyu]: https://github.com/linhanyu
 [@Migarl]: https://github.com/Migarl
