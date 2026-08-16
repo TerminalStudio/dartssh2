@@ -56,9 +56,11 @@ void main() {
 
       // Operations on closed file throw SftpError.
       await expectLater(file.stat(), throwsA(isA<SftpError>()));
-      await expectLater(file.setStat(SftpFileAttrs()), throwsA(isA<SftpError>()));
+      await expectLater(
+          file.setStat(SftpFileAttrs()), throwsA(isA<SftpError>()));
       await expectLater(file.read().toList(), throwsA(isA<SftpError>()));
-      await expectLater(file.writeBytes(Uint8List(0)), throwsA(isA<SftpError>()));
+      await expectLater(
+          file.writeBytes(Uint8List(0)), throwsA(isA<SftpError>()));
 
       harness.dispose();
     });
@@ -141,7 +143,8 @@ void main() {
       expect(readPacket.length, 10);
 
       harness.sendResponsePacket(
-        SftpDataPacket(readPacket.requestId, Uint8List.fromList([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])),
+        SftpDataPacket(readPacket.requestId,
+            Uint8List.fromList([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])),
       );
 
       final chunks = await readFuture;
@@ -163,7 +166,8 @@ void main() {
       final readPacket = SftpReadPacket.decode(packet);
 
       harness.sendResponsePacket(
-        SftpDataPacket(readPacket.requestId, Uint8List.fromList([10, 20, 30, 40])),
+        SftpDataPacket(
+            readPacket.requestId, Uint8List.fromList([10, 20, 30, 40])),
       );
 
       final bytes = await readFuture;
@@ -197,7 +201,8 @@ void main() {
 
     test('statvfs fetches filesystem stats', () async {
       final harness = _SftpTestHarness();
-      await harness.completeHandshake(extensions: {'fstatvfs@openssh.com': '2'});
+      await harness
+          .completeHandshake(extensions: {'fstatvfs@openssh.com': '2'});
       final file = SftpFile(harness.client, Uint8List.fromList([1]));
 
       final statvfsFuture = file.statvfs();
@@ -251,7 +256,8 @@ void main() {
       expect(readPacket.length, 5);
 
       harness.sendResponsePacket(
-        SftpDataPacket(readPacket.requestId, Uint8List.fromList([1, 2, 3, 4, 5])),
+        SftpDataPacket(
+            readPacket.requestId, Uint8List.fromList([1, 2, 3, 4, 5])),
       );
 
       final downloadedBytes = await downloadFuture;
