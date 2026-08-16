@@ -2,11 +2,12 @@ import 'dart:math';
 
 import 'dart:typed_data';
 
+final _secureRandom = Random.secure();
+
 Uint8List randomBytes(int length) {
-  final random = Random();
   final bytes = Uint8List(length);
   for (var i = 0; i < length; i++) {
-    bytes[i] = random.nextInt(255);
+    bytes[i] = _secureRandom.nextInt(256);
   }
   return bytes;
 }
