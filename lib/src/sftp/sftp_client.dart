@@ -572,4 +572,3 @@ class SftpClient {
     _dispatchReply(packet);
   }
 }
-
