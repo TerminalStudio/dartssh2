@@ -147,6 +147,23 @@ void main() {
       client.close();
     });
 
+    test('propagates stdout stream errors', () async {
+      final error = StateError('stdout failed');
+      final harness = _SessionHarness(stdoutError: error);
+      final client = _TestSSHClient(() async {
+        scheduleMicrotask(harness.close);
+        return harness.session;
+      });
+
+      await expectLater(
+        client.runWithResult('cmd').timeout(const Duration(seconds: 1)),
+        throwsA(same(error)),
+      );
+
+      harness.dispose();
+      client.close();
+    });
+
     test('run() returns combined output bytes', () async {
       final harness = _SessionHarness();
       final client = _TestSSHClient(() async {
@@ -190,7 +207,7 @@ class _TestSSHClient extends SSHClient {
 }
 
 class _SessionHarness {
-  _SessionHarness() {
+  _SessionHarness({Object? stdoutError}) {
     _controller = SSHChannelController(
       localId: 1,
       localMaximumPacketSize: 1024 * 1024,
@@ -200,7 +217,9 @@ class _SessionHarness {
       remoteInitialWindowSize: 1024 * 1024,
       sendMessage: (_) {},
     );
-    session = SSHSession(_controller.channel);
+    session = stdoutError == null
+        ? SSHSession(_controller.channel)
+        : _StdoutErrorSSHSession(_controller.channel, stdoutError);
   }
 
   late final SSHChannelController _controller;
@@ -254,6 +273,16 @@ class _SessionHarness {
   void dispose() {
     _controller.destroy();
   }
+}
+
+class _StdoutErrorSSHSession extends SSHSession {
+  _StdoutErrorSSHSession(super.channel, Object error)
+      : _stdout = Stream<Uint8List>.error(error);
+
+  final Stream<Uint8List> _stdout;
+
+  @override
+  Stream<Uint8List> get stdout => _stdout;
 }
 
 class _FakeSSHSocket implements SSHSocket {
