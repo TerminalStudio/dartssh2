@@ -330,6 +330,7 @@ class SftpFile {
 
   /// Writes [data] to the file starting at [offset].
   Future<void> writeBytes(Uint8List data, {int offset = 0}) async {
+    _mustNotBeClosed();
     const maxChunkSize = 16 * 1024;
     var bytesSent = 0;
     final futures = <Future<void>>[];

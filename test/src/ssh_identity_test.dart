@@ -395,6 +395,26 @@ void main() {
 
       await client.close();
     });
+
+    test('ignores unsolicited PK_Ok when no identity was probed', () async {
+      final socket = _FakeSSHSocket();
+      final client = SSHClient(
+        socket,
+        username: 'test-user',
+      );
+      client.sessionId = Uint8List(32);
+
+      // Send unsolicited PK_Ok packet.
+      client.handlePacket(
+        SSH_Message_Userauth_PK_Ok(
+          publicKeyAlgorithm: 'ssh-ed25519',
+          publicKey: Uint8List.fromList([1, 2, 3]),
+        ).encode(),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+      await client.close();
+    });
   });
 }
 
