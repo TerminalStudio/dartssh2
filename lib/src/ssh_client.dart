@@ -660,7 +660,8 @@ class SSHClient {
             }
           : (_) {},
       onDone: stdoutDone.complete,
-      onError: stderrDone.completeError,
+      onError: stdoutDone.completeError,
+      cancelOnError: true,
     );
 
     session.stderr.listen(
@@ -672,6 +673,7 @@ class SSHClient {
           : (_) {},
       onDone: stderrDone.complete,
       onError: stderrDone.completeError,
+      cancelOnError: true,
     );
 
     await stdoutDone.future;
