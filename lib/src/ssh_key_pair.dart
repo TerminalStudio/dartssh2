@@ -11,7 +11,18 @@ export 'package:dartssh2/src/key_pair/openssh_key_pair.dart';
 export 'package:dartssh2/src/key_pair/pkcs1_rsa_key_pair.dart';
 export 'package:dartssh2/src/key_pair/sec1_ec_key_pair.dart';
 
+/// Base interface for in-memory SSH cryptographic key pairs.
+///
+/// Implements [SSHIdentity] for authentication and provides factory methods to
+/// parse OpenSSH, PKCS#1 RSA, and SEC1 EC private key formats.
 abstract class SSHKeyPair implements SSHIdentity {
+  /// Decodes one or more [SSHKeyPair] instances from [pemText].
+  ///
+  /// If the private key is encrypted, [passphrase] is required.
+  /// Supported formats:
+  /// - `OPENSSH PRIVATE KEY` (OpenSSH format, including bcrypt KDF)
+  /// - `RSA PRIVATE KEY` (PKCS#1 format)
+  /// - `EC PRIVATE KEY` (SEC1 format)
   static List<SSHKeyPair> fromPem(String pemText, [String? passphrase]) {
     final pem = SSHPem.decode(pemText);
     switch (pem.type) {
@@ -29,6 +40,7 @@ abstract class SSHKeyPair implements SSHIdentity {
     }
   }
 
+  /// Determines whether the private key in [pemText] is passphrase-protected.
   static bool isEncryptedPem(String pemText) {
     final pem = SSHPem.decode(pemText);
     switch (pem.type) {
@@ -46,27 +58,31 @@ abstract class SSHKeyPair implements SSHIdentity {
     }
   }
 
-  /// [name] is the name of the algorithm used when saving the key. This only
-  /// affects how the key is serialized.
+  /// The algorithm name used when serializing the key (e.g., `ssh-rsa`,
+  /// `ssh-ed25519`, `ecdsa-sha2-nistp256`).
   String get name;
 
-  /// [type] indicates not only the encoding of the key, but also the
-  /// algorithm used when signing. Until now only RSA keys have [type]s that are
-  /// different from [name].
+  /// The signature algorithm name used when signing challenges.
   @override
   String get type;
 
+  /// In-memory key pairs do not use comment probing by default.
   @override
   String? get comment => null;
 
+  /// In-memory key pairs do not require probing by default since signing is
+  /// local and synchronous.
   @override
   bool get shouldProbe => false;
 
+  /// Exports the public key portion of this key pair as an [SSHHostKey].
   @override
   SSHHostKey toPublicKey();
 
+  /// Synchronously signs binary [data] with this private key.
   @override
   SSHSignature sign(Uint8List data);
 
+  /// Encodes this key pair into PEM string format.
   String toPem();
 }

@@ -339,17 +339,24 @@ class SSH_Message_Userauth_Passwd_ChangeReq extends SSHMessage {
   }
 }
 
+/// Sent by the server to indicate that a probed public key is acceptable
+/// for authentication (RFC 4252 §7.8, message ID 60).
 class SSH_Message_Userauth_PK_Ok extends SSHMessage {
   static const messageId = 60;
 
+  /// Public key algorithm name (e.g. `ssh-ed25519`, `ssh-rsa`).
   final String publicKeyAlgorithm;
+
+  /// Raw bytes of the accepted public key.
   final Uint8List publicKey;
 
+  /// Creates an [SSH_Message_Userauth_PK_Ok] message.
   SSH_Message_Userauth_PK_Ok({
     required this.publicKeyAlgorithm,
     required this.publicKey,
   });
 
+  /// Decodes [SSH_Message_Userauth_PK_Ok] from binary [bytes].
   factory SSH_Message_Userauth_PK_Ok.decode(Uint8List bytes) {
     final reader = SSHMessageReader(bytes);
     reader.skip(1);

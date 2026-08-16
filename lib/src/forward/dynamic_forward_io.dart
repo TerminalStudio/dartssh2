@@ -5,11 +5,13 @@ import 'dart:typed_data';
 
 import 'package:dartssh2/src/forward/ssh_forward.dart';
 
+/// Callback invoked to dial an SSH forwarded channel to a target [host] and [port].
 typedef SSHDynamicDial = Future<SSHForwardChannel> Function(
   String host,
   int port,
 );
 
+/// Starts a local SOCKS5 proxy server using [ServerSocket.bind].
 Future<SSHDynamicForward> startDynamicForward({
   required String bindHost,
   required int? bindPort,

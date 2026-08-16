@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:dartssh2/src/ssh_hostkey.dart';
+import 'package:dartssh2/src/ssh_key_pair.dart';
 
 /// Represents an identity capable of authenticating an SSH session.
 ///
@@ -10,6 +11,7 @@ import 'package:dartssh2/src/ssh_hostkey.dart';
 /// asynchronously (e.g., external signers, OS SSH agents, hardware tokens,
 /// smart cards, or secure enclaves).
 abstract class SSHIdentity {
+  /// Base constructor for custom [SSHIdentity] implementations.
   SSHIdentity();
 
   /// The key type or algorithm name (e.g. `ssh-ed25519`, `ssh-rsa`,
@@ -39,6 +41,11 @@ abstract class SSHIdentity {
   /// `Future<SSHSignature>` (asynchronously).
   FutureOr<SSHSignature> sign(Uint8List data);
 
+  /// Creates a custom [SSHIdentity] with the given [type], [publicKey], and
+  /// [signer] function.
+  ///
+  /// If [shouldProbe] is `true`, the SSH client will send a public-key query
+  /// packet first before calling [signer].
   factory SSHIdentity.custom({
     required String type,
     required SSHHostKey publicKey,

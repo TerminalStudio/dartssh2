@@ -1,22 +1,27 @@
 part of 'sftp_client.dart';
 
+/// Represents an opened file handle on the remote SFTP server.
 class SftpFile {
   final Uint8List _handle;
 
   final SftpClient _client;
 
+  /// Creates an [SftpFile] representing an open handle on the remote server.
   SftpFile(this._client, this._handle);
 
   var _isClosed = false;
 
+  /// Whether this file handle has been closed.
   bool get isClosed => _isClosed;
 
+  /// Closes the file handle on the remote SFTP server.
   Future<void> close() async {
     if (_isClosed) return;
     _isClosed = true;
     await _client._close(_handle);
   }
 
+  /// Retrieves metadata and attributes for this open file handle.
   Future<SftpFileAttrs> stat() async {
     _mustNotBeClosed();
     final reply = await _client._sendFStat(_handle);
@@ -25,6 +30,7 @@ class SftpFile {
     throw SftpStatusError.fromStatus(reply);
   }
 
+  /// Updates metadata and attributes for this open file handle.
   Future<void> setStat(SftpFileAttrs attrs) async {
     _mustNotBeClosed();
     final reply = await _client._sendFSetStat(_handle, attrs);
@@ -384,12 +390,15 @@ class SftpFile {
   String toString() => 'SftpFile(0x${hex.encode(_handle)})';
 }
 
-/// Handsake information received from the server.
+/// Handshake information received from the SFTP server.
 class SftpHandsake {
+  /// Negotiated SFTP protocol version.
   final int version;
 
+  /// Map of protocol extension names to version strings supported by server.
   final Map<String, String> extensions;
 
+  /// Creates a container for SFTP handshake details.
   SftpHandsake(this.version, this.extensions);
 
   @override

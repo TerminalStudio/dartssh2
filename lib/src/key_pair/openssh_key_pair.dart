@@ -17,7 +17,9 @@ import 'package:dartssh2/src/utils/list.dart';
 import 'package:pinenacl/ed25519.dart' as ed25519;
 import 'package:pointycastle/export.dart';
 
+/// Container for private keys encoded in OpenSSH format (`openssh-key-v1`).
 class OpenSSHKeyPairs {
+  /// Magic header identifier for OpenSSH private key files.
   static const magic = 'openssh-key-v1';
 
   /// Name of the algorithm used to encrypt the private key. 'none' means no
@@ -31,15 +33,16 @@ class OpenSSHKeyPairs {
   /// Options for the key derivation function.
   final OpenSSHKdfOptions? kdfOptions;
 
-  /// List of public keys.
+  /// List of public keys in SSH wire format.
   final List<Uint8List> publicKeys;
 
-  /// List of private keys.
+  /// Raw bytes of the private key section.
   final Uint8List privateKeyBlob;
 
   /// Whether the private key is encrypted.
   bool get isEncrypted => cipherName != 'none';
 
+  /// Creates an [OpenSSHKeyPairs] container.
   OpenSSHKeyPairs({
     required this.cipherName,
     required this.kdfName,
@@ -48,6 +51,7 @@ class OpenSSHKeyPairs {
     required this.privateKeyBlob,
   });
 
+  /// Creates an unencrypted [OpenSSHKeyPairs] container.
   OpenSSHKeyPairs.unencrypted({
     required this.publicKeys,
     required this.privateKeyBlob,
@@ -55,6 +59,7 @@ class OpenSSHKeyPairs {
         kdfName = 'none',
         kdfOptions = null;
 
+  /// Decodes OpenSSH private key binary [keyBlob].
   factory OpenSSHKeyPairs.decode(Uint8List keyBlob) {
     final reader = SSHMessageReader(keyBlob);
     final actualMagic = reader.readBytes(magic.length);
@@ -93,6 +98,7 @@ class OpenSSHKeyPairs {
     );
   }
 
+  /// Decrypts and parses the private keys contained in this key file.
   List<SSHKeyPair> getPrivateKeys([String? passphrase]) {
     late Uint8List unencryptedKeys;
 
@@ -143,6 +149,7 @@ class OpenSSHKeyPairs {
     return keypairs;
   }
 
+  /// Encodes this container to OpenSSH PEM format.
   String toPem() {
     final writer = SSHMessageWriter();
     writer.writeBytes(Uint8List.fromList(magic.codeUnits));
@@ -203,16 +210,24 @@ class OpenSSHKeyPairs {
   }
 }
 
+/// Abstract base class for OpenSSH key derivation function options.
 abstract class OpenSSHKdfOptions {
+  /// Encodes KDF options to binary format.
   Uint8List encode();
 }
 
+/// Bcrypt key derivation parameters used in OpenSSH private key format.
 class OpenSSHBcryptKdfOptions implements OpenSSHKdfOptions {
+  /// Salt bytes used in bcrypt PBKDF.
   final Uint8List salt;
+
+  /// Iteration rounds for bcrypt PBKDF.
   final int rounds;
 
+  /// Creates a new [OpenSSHBcryptKdfOptions] with [salt] and [rounds].
   OpenSSHBcryptKdfOptions(this.salt, this.rounds);
 
+  /// Decodes [OpenSSHBcryptKdfOptions] from binary [data].
   factory OpenSSHBcryptKdfOptions.decode(Uint8List data) {
     final reader = SSHMessageReader(data);
     final salt = reader.readString();
@@ -234,6 +249,7 @@ class OpenSSHBcryptKdfOptions implements OpenSSHKdfOptions {
   }
 }
 
+/// Mixin for OpenSSH format key pair implementations.
 abstract mixin class OpenSSHKeyPair implements SSHKeyPair {
   @override
   String? get comment => null;
@@ -241,6 +257,7 @@ abstract mixin class OpenSSHKeyPair implements SSHKeyPair {
   @override
   bool get shouldProbe => false;
 
+  /// Serializes private key components into [writer].
   void writeTo(SSHMessageWriter writer);
 
   @override
@@ -265,6 +282,7 @@ abstract mixin class OpenSSHKeyPair implements SSHKeyPair {
   }
 }
 
+/// An RSA private/public key pair encoded in OpenSSH format.
 class OpenSSHRsaKeyPair with OpenSSHKeyPair {
   @override
   final name = 'ssh-rsa';
@@ -272,17 +290,28 @@ class OpenSSHRsaKeyPair with OpenSSHKeyPair {
   @override
   final type = SSHRsaSignatureType.sha256;
 
+  /// Modulus.
   final BigInt n;
+
+  /// Public exponent.
   final BigInt e;
 
+  /// Private exponent.
   final BigInt d;
+
+  /// Inverse of q modulo p.
   final BigInt iqmp;
+
+  /// Prime factor p.
   final BigInt p;
+
+  /// Prime factor q.
   final BigInt q;
 
   @override
   final String comment;
 
+  /// Creates an [OpenSSHRsaKeyPair] with components and key [comment].
   OpenSSHRsaKeyPair(
     this.n,
     this.e,
@@ -293,6 +322,7 @@ class OpenSSHRsaKeyPair with OpenSSHKeyPair {
     this.comment,
   );
 
+  /// Reads an [OpenSSHRsaKeyPair] from an OpenSSH binary [reader].
   factory OpenSSHRsaKeyPair.readFrom(SSHMessageReader reader) {
     final n = reader.readMpint();
     final e = reader.readMpint();
@@ -340,6 +370,7 @@ class OpenSSHRsaKeyPair with OpenSSHKeyPair {
   }
 }
 
+/// An Ed25519 private/public key pair encoded in OpenSSH format.
 class OpenSSHEd25519KeyPair with OpenSSHKeyPair {
   @override
   final name = 'ssh-ed25519';
@@ -347,15 +378,19 @@ class OpenSSHEd25519KeyPair with OpenSSHKeyPair {
   @override
   final type = 'ssh-ed25519';
 
+  /// 32-byte Ed25519 public key.
   final Uint8List publicKey;
 
+  /// 64-byte Ed25519 private key seed / expanded key.
   final Uint8List privateKey;
 
   @override
   final String comment;
 
+  /// Creates an [OpenSSHEd25519KeyPair] with [publicKey], [privateKey], and [comment].
   OpenSSHEd25519KeyPair(this.publicKey, this.privateKey, this.comment);
 
+  /// Reads an [OpenSSHEd25519KeyPair] from an OpenSSH binary [reader].
   factory OpenSSHEd25519KeyPair.readFrom(SSHMessageReader reader) {
     final publicKey = reader.readString();
     final privateKey = reader.readString();
@@ -387,6 +422,7 @@ class OpenSSHEd25519KeyPair with OpenSSHKeyPair {
   }
 }
 
+/// An ECDSA (NIST P-256, P-384, P-521) private/public key pair encoded in OpenSSH format.
 class OpenSSHEcdsaKeyPair with OpenSSHKeyPair {
   @override
   String get name => 'ecdsa-sha2-$curveId';
@@ -394,17 +430,22 @@ class OpenSSHEcdsaKeyPair with OpenSSHKeyPair {
   @override
   String get type => 'ecdsa-sha2-$curveId';
 
+  /// Curve identifier (e.g. `nistp256`, `nistp384`, `nistp521`).
   final String curveId;
 
+  /// Uncompressed public point Q.
   final Uint8List q;
 
+  /// Private scalar d.
   final BigInt d;
 
   @override
   final String comment;
 
+  /// Creates an [OpenSSHEcdsaKeyPair] with [curveId], public point [q], private key [d], and [comment].
   OpenSSHEcdsaKeyPair(this.curveId, this.q, this.d, this.comment);
 
+  /// Reads an [OpenSSHEcdsaKeyPair] from an OpenSSH binary [reader].
   factory OpenSSHEcdsaKeyPair.readFrom(SSHMessageReader reader) {
     final curve = reader.readUtf8();
     final q = reader.readString();

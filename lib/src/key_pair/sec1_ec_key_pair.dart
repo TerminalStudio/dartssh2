@@ -9,13 +9,18 @@ import 'package:dartssh2/src/utils/bigint.dart';
 import 'package:dartssh2/src/utils/list.dart';
 import 'package:pointycastle/export.dart';
 
+/// Container for an elliptic curve private key in SEC1 ASN.1 format (`BEGIN EC PRIVATE KEY`).
 class EcKeyPair {
+  /// Header encryption metadata from PEM DEK-Info header, if encrypted.
   final RsaKeyPairDEKInfo? dekInfo;
 
+  /// Raw bytes of the ASN.1 DER-encoded EC private key blob.
   final Uint8List keyBlob;
 
+  /// Creates an [EcKeyPair] container with optional [dekInfo] and [keyBlob].
   const EcKeyPair(this.dekInfo, this.keyBlob);
 
+  /// Decodes an [EcKeyPair] from a parsed [SSHPem] structure.
   factory EcKeyPair.decode(SSHPem pem) {
     final dekInfoHeader = pem.headers['DEK-Info'];
 
@@ -27,8 +32,10 @@ class EcKeyPair {
     return EcKeyPair(dekInfo, keyBlob);
   }
 
+  /// Whether the EC private key is encrypted with a passphrase.
   bool get isEncrypted => dekInfo != null;
 
+  /// Decodes and returns the ECDSA key pair as an [OpenSSHEcdsaKeyPair].
   OpenSSHEcdsaKeyPair getPrivateKeys([String? passphrase]) {
     if (isEncrypted) {
       throw UnsupportedError(

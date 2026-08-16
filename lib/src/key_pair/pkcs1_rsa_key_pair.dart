@@ -12,13 +12,18 @@ import 'package:dartssh2/src/ssh_pem.dart';
 import 'package:dartssh2/src/utils/cipher_ext.dart';
 import 'package:pointycastle/export.dart';
 
+/// Container for an RSA private key encoded in PKCS#1 format (`BEGIN RSA PRIVATE KEY`).
 class RsaKeyPair {
+  /// Header encryption metadata from PEM DEK-Info header, if encrypted.
   final RsaKeyPairDEKInfo? dekInfo;
 
+  /// Raw bytes of the ASN.1 DER-encoded RSA private key blob.
   final Uint8List keyBlob;
 
+  /// Creates an [RsaKeyPair] container with optional [dekInfo] and [keyBlob].
   const RsaKeyPair(this.dekInfo, this.keyBlob);
 
+  /// Decodes an [RsaKeyPair] from a parsed [SSHPem] structure.
   factory RsaKeyPair.decode(SSHPem pem) {
     final dekInfoHeader = pem.headers['DEK-Info'];
 
@@ -30,8 +35,10 @@ class RsaKeyPair {
     return RsaKeyPair(dekInfo, keyBlob);
   }
 
+  /// Whether the RSA private key is encrypted with a passphrase.
   bool get isEncrypted => dekInfo != null;
 
+  /// Decrypts (if needed) and parses the [RsaPrivateKey].
   RsaPrivateKey getPrivateKeys([String? passphrase]) {
     var keyBlob = this.keyBlob;
 
@@ -111,13 +118,18 @@ class RsaKeyPair {
   }
 }
 
-/// Corresponds to the `DEK-Info` header in PEM.
+/// Represents the `DEK-Info` header in legacy PEM private keys (RFC 1421).
 class RsaKeyPairDEKInfo {
+  /// Encryption algorithm name (e.g. `AES-128-CBC`, `DES-EDE3-CBC`).
   final String algorithm;
+
+  /// Initialization vector.
   final Uint8List iv;
 
+  /// Creates a [RsaKeyPairDEKInfo] with [algorithm] and [iv].
   RsaKeyPairDEKInfo(this.algorithm, this.iv);
 
+  /// Parses a PEM `DEK-Info` header string (e.g. `AES-128-CBC,F18D71E0B...`).
   factory RsaKeyPairDEKInfo.parse(String header) {
     final parts = header.split(',');
     if (parts.length != 2) {
@@ -135,6 +147,7 @@ class RsaKeyPairDEKInfo {
   }
 }
 
+/// An RSA private key decoded from PKCS#1 ASN.1 DER format.
 class RsaPrivateKey implements SSHKeyPair {
   @override
   final name = 'ssh-rsa';
@@ -148,16 +161,34 @@ class RsaPrivateKey implements SSHKeyPair {
   @override
   bool get shouldProbe => false;
 
+  /// ASN.1 syntax version number.
   final BigInt version;
+
+  /// RSA modulus n.
   final BigInt n;
+
+  /// RSA public exponent e.
   final BigInt e;
+
+  /// RSA private exponent d.
   final BigInt d;
+
+  /// Prime factor p.
   final BigInt p;
+
+  /// Prime factor q.
   final BigInt q;
+
+  /// Exponent 1 (d mod (p-1)).
   final BigInt exponent1;
+
+  /// Exponent 2 (d mod (q-1)).
   final BigInt exponent2;
+
+  /// CRT coefficient (inverse of q mod p).
   final BigInt coefficient;
 
+  /// Creates an [RsaPrivateKey] with all RSA CRT components.
   RsaPrivateKey(
     this.version,
     this.n,
@@ -170,6 +201,7 @@ class RsaPrivateKey implements SSHKeyPair {
     this.coefficient,
   );
 
+  /// Decodes an [RsaPrivateKey] from PKCS#1 ASN.1 DER [keyBlob].
   factory RsaPrivateKey.decode(Uint8List keyBlob) {
     final parser = ASN1Parser(keyBlob);
 
