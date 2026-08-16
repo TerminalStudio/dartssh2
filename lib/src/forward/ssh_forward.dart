@@ -9,7 +9,7 @@ import 'package:dartssh2/src/ssh_channel.dart';
 /// Return `true` to allow connecting to `[host]:[port]`, `false` to deny.
 typedef SSHDynamicConnectionFilter = bool Function(String host, int port);
 
-/// Configuration for [SSHClient.forwardDynamic].
+/// Configuration options for dynamic SOCKS forwarding.
 class SSHDynamicForwardOptions {
   /// Maximum time allowed to complete the SOCKS5 handshake and target request.
   final Duration handshakeTimeout;
@@ -20,6 +20,7 @@ class SSHDynamicForwardOptions {
   /// Maximum number of simultaneous SOCKS client connections.
   final int maxConnections;
 
+  /// Creates configuration options for dynamic SOCKS forwarding.
   const SSHDynamicForwardOptions({
     this.handshakeTimeout = const Duration(seconds: 10),
     this.connectTimeout = const Duration(seconds: 15),
@@ -27,7 +28,7 @@ class SSHDynamicForwardOptions {
   }) : assert(maxConnections > 0, 'maxConnections must be greater than zero');
 }
 
-/// A local dynamic forwarding server (SOCKS5 CONNECT) managed by [SSHClient].
+/// A local dynamic forwarding server (SOCKS5 CONNECT) managed by `SSHClient`.
 abstract class SSHDynamicForward {
   /// Host/interface the local SOCKS server is bound to.
   String get host;
@@ -42,9 +43,11 @@ abstract class SSHDynamicForward {
   Future<void> close();
 }
 
+/// Adapts an [SSHChannel] to behave as an [SSHSocket].
 class SSHForwardChannel implements SSHSocket {
   final SSHChannel _channel;
 
+  /// Creates an [SSHForwardChannel] wrapping an underlying [_channel].
   SSHForwardChannel(this._channel) {
     _sinkController.stream
         .map((data) => data is Uint8List ? data : Uint8List.fromList(data))
@@ -85,6 +88,7 @@ class SSHForwardChannel implements SSHSocket {
   }
 }
 
+/// An [SSHForwardChannel] specifically representing an incoming X11 forwarded channel.
 class SSHX11Channel extends SSHForwardChannel {
   /// Originator address reported by the SSH server for this X11 channel.
   final String originatorIP;
@@ -92,6 +96,7 @@ class SSHX11Channel extends SSHForwardChannel {
   /// Originator port reported by the SSH server for this X11 channel.
   final int originatorPort;
 
+  /// Creates an [SSHX11Channel] with [originatorIP] and [originatorPort].
   SSHX11Channel(
     super.channel, {
     required this.originatorIP,

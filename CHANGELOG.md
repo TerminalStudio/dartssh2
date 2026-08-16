@@ -1,3 +1,10 @@
+## [3.0.0] - 2026-08-16
+- **BREAKING**: Changed `SSHClient.identities` getter type from `List<SSHKeyPair>?` to `List<SSHIdentity>?` to support asynchronous external signers (OS agents, hardware tokens, smart cards, Secure Enclave, Android Keystore, and custom signers) [#190]. Constructor invocations passing `List<SSHKeyPair>` remain 100% source-compatible.
+- **BREAKING**: Changed `SSHClient.close()` return type from `void` to `Future<void>` to allow awaiting complete socket and channel teardown.
+- Added `SSHIdentity` abstraction, `SSHRawHostKey`, and `SSHRawSignature` with optional `comment` and `shouldProbe` properties [#190].
+- Added support for Public-Key Probing (RFC 4252 §7.8) with `SSH_Message_Userauth_PK_Ok` and `SSHIdentity.shouldProbe` to check server key acceptance before requesting hardware token / user interaction.
+- Exported `src/ssh_identity.dart` and `src/ssh_hostkey.dart` in `lib/dartssh2.dart`.
+
 ## [2.22.5] - 2026-07-30
 - Exported `src/ssh_userauth.dart` in `lib/dartssh2.dart` to expose `SSHUserInfoRequest`, `SSHUserInfoPrompt`, `SSHAuthMethod`, and `SSHChangePasswordResponse` [#188]. Thanks [@vicajilau].
 

@@ -27,6 +27,7 @@ void main() {
         await SSHSocket.connect('test.rebex.net', 22),
         username: 'demo',
         onPasswordRequest: () => 'password',
+        onUserInfoRequest: (req) => [for (final _ in req.prompts) 'password'],
         onVerifyHostKey: (type, fingerprint) {
           verifyCalled = true;
           hostkeyType = type;

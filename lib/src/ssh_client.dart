@@ -4,15 +4,15 @@ import 'dart:typed_data';
 
 import 'package:dartssh2/src/http/http_client.dart';
 import 'package:dartssh2/src/sftp/sftp_client.dart';
-import 'package:dartssh2/src/dynamic_forward.dart';
+import 'package:dartssh2/src/forward/dynamic_forward.dart';
 import 'package:dartssh2/src/ssh_algorithm.dart';
 import 'package:dartssh2/src/ssh_agent.dart';
 import 'package:dartssh2/src/ssh_channel.dart';
 import 'package:dartssh2/src/ssh_channel_id.dart';
 import 'package:dartssh2/src/ssh_errors.dart';
-import 'package:dartssh2/src/ssh_forward.dart';
+import 'package:dartssh2/src/forward/ssh_forward.dart';
 import 'package:dartssh2/src/ssh_keepalive.dart';
-import 'package:dartssh2/src/ssh_key_pair.dart';
+import 'package:dartssh2/src/ssh_identity.dart';
 import 'package:dartssh2/src/ssh_session.dart';
 import 'package:dartssh2/src/ssh_transport.dart';
 import 'package:dartssh2/src/utils/async_queue.dart';
@@ -144,9 +144,9 @@ class SSHClient {
   /// null, the host key is accepted automatically.
   final SSHHostkeyVerifyHandler? onVerifyHostKey;
 
-  /// List of key pairs to use for authentication. Set this field to enable
-  /// authentication with public key.
-  final List<SSHKeyPair>? identities;
+  /// List of identities (key pairs or external signers) to use for
+  /// authentication. Set this field to enable authentication with public key.
+  final List<SSHIdentity>? identities;
 
   /// Set this field to enable the 'password' authentication method. Return null
   /// to skip to the next available authentication method.
@@ -253,7 +253,7 @@ class SSHClient {
     );
 
     if (identities != null) {
-      _keyPairsLeft.addAll(identities!);
+      _identitiesLeft.addAll(identities!);
     }
 
     final handshakeTimeout = this.handshakeTimeout;
@@ -298,7 +298,7 @@ class SSHClient {
 
   final _authMethodsLeft = Queue<SSHAuthMethod>();
 
-  final _keyPairsLeft = Queue<SSHKeyPair>();
+  final _identitiesLeft = Queue<SSHIdentity>();
 
   final _remoteForwards = <SSHRemoteForward>{};
 
@@ -307,6 +307,8 @@ class SSHClient {
       : null;
 
   SSHAuthMethod? _currentAuthMethod;
+
+  SSHIdentity? _currentProbedIdentity;
 
   var _transportReady = false;
 
@@ -694,11 +696,11 @@ class SSHClient {
 
   /// Shutdown the entire SSH connection. Sessions and channels will also be
   /// closed immediately.
-  void close() {
+  Future<void> close() async {
     _handshakeTimeoutTimer?.cancel();
     _authTimeoutTimer?.cancel();
     _closeChannels();
-    _transport.close();
+    await _transport.close();
   }
 
   /// Force flush any buffered outgoing data to the socket.
@@ -773,6 +775,10 @@ class SSHClient {
   /// Handles a raw SSH packet. This method is only exposed for testing purposes.
   @visibleForTesting
   void handlePacket(Uint8List packet) => _handlePacket(packet);
+
+  /// Sets the session ID on transport. This method is only exposed for testing purposes.
+  @visibleForTesting
+  set sessionId(Uint8List? value) => _transport.sessionId = value;
 
   void _sendMessage(SSHMessage message) {
     printTrace?.call('-> $socket: $message');
@@ -875,6 +881,7 @@ class SSHClient {
     final message = SSH_Message_Userauth_Failure.decode(payload);
     printTrace?.call('<- $socket: $message');
     printDebug?.call('SSHClient._handleUserauthFailure');
+    _currentProbedIdentity = null;
     _tryNextAuthMethod();
   }
 
@@ -886,9 +893,44 @@ class SSHClient {
         return _catch(() => _handleUserauthPasswordChangeRequest(payload));
       case SSHAuthMethod.keyboardInteractive:
         return _catch(() => _handleUserauthInfoRequest(payload));
+      case SSHAuthMethod.publicKey:
+        return _catch(() => _handleUserauthPKOk(payload));
       default:
         printDebug?.call('unknown auth method: $_currentAuthMethod');
     }
+  }
+
+  Future<void> _handleUserauthPKOk(Uint8List payload) async {
+    printDebug?.call('SSHClient._handleUserauthPKOk');
+    final message = SSH_Message_Userauth_PK_Ok.decode(payload);
+    printTrace?.call('<- $socket: $message');
+
+    final identity = _currentProbedIdentity;
+    if (identity == null) return;
+    _currentProbedIdentity = null;
+
+    final publicKeyBlob = identity.toPublicKey().encode();
+    final challenge = _transport.composeChallenge(
+      username: username,
+      service: 'ssh-connection',
+      publicKeyAlgorithm: identity.type,
+      publicKey: publicKeyBlob,
+    );
+
+    final signature = await identity.sign(challenge);
+
+    if (isClosed || _currentAuthMethod != SSHAuthMethod.publicKey) {
+      return;
+    }
+
+    _sendMessage(
+      SSH_Message_Userauth_Request.publicKey(
+        username: username,
+        publicKeyAlgorithm: identity.type,
+        publicKey: publicKeyBlob,
+        signature: signature.encode(),
+      ),
+    );
   }
 
   Future<void> _handleUserauthPasswordChangeRequest(Uint8List payload) async {
@@ -1228,8 +1270,8 @@ class SSHClient {
     printDebug?.call('SSHClient._tryNextAuthenticationMethod');
 
     if (_currentAuthMethod == SSHAuthMethod.publicKey) {
-      if (_keyPairsLeft.isNotEmpty) {
-        return _authWithNextPublicKey();
+      if (_identitiesLeft.isNotEmpty) {
+        return _catch(() => _authWithNextPublicKey());
       }
     }
 
@@ -1249,7 +1291,7 @@ class SSHClient {
       case SSHAuthMethod.password:
         return _catch(() => _authWithPassword());
       case SSHAuthMethod.publicKey:
-        return _authWithNextPublicKey();
+        return _catch(() => _authWithNextPublicKey());
       case SSHAuthMethod.keyboardInteractive:
         return _authWithKeyboardInteractive();
     }
@@ -1274,25 +1316,48 @@ class SSHClient {
     );
   }
 
-  void _authWithNextPublicKey() {
+  Future<void> _authWithNextPublicKey() async {
     printDebug?.call('SSHClient._authWithPublicKey');
 
-    final keyPair = _keyPairsLeft.removeFirst();
+    final identity = _identitiesLeft.removeFirst();
+    final publicKey = identity.toPublicKey();
+    final publicKeyBlob = publicKey.encode();
+
+    if (identity.shouldProbe) {
+      printDebug?.call(
+        'Probing public key for identity: ${identity.comment ?? identity.type}',
+      );
+      _currentProbedIdentity = identity;
+      _sendMessage(
+        SSH_Message_Userauth_Request.publicKey(
+          username: username,
+          publicKeyAlgorithm: identity.type,
+          publicKey: publicKeyBlob,
+          signature: null,
+        ),
+      );
+      return;
+    }
 
     final challenge = _transport.composeChallenge(
       username: username,
       service: 'ssh-connection',
-      publicKeyAlgorithm: keyPair.type,
-      publicKey: keyPair.toPublicKey().encode(),
+      publicKeyAlgorithm: identity.type,
+      publicKey: publicKeyBlob,
     );
+
+    final signature = await identity.sign(challenge);
+
+    if (isClosed || _currentAuthMethod != SSHAuthMethod.publicKey) {
+      return;
+    }
 
     _sendMessage(
       SSH_Message_Userauth_Request.publicKey(
         username: username,
-        publicKeyAlgorithm: keyPair.type,
-        publicKey: keyPair.toPublicKey().encode(),
-        signature: keyPair.sign(challenge).encode(),
-        // signature: null,
+        publicKeyAlgorithm: identity.type,
+        publicKey: publicKeyBlob,
+        signature: signature.encode(),
       ),
     );
   }

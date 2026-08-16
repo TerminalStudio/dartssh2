@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:asn1lib/asn1lib.dart';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:dartssh2/src/hostkey/hostkey_ecdsa.dart';
+import 'package:dartssh2/src/ssh_message.dart';
 import 'package:test/test.dart';
 
 import '../test_utils.dart';
@@ -283,5 +284,160 @@ MAA=
     final signature2 = keypair2.sign(dataToSign);
 
     expect(signature1.signature, signature2.signature);
+  });
+
+  group('SSHKeyPair edge cases and error handling', () {
+    test('SSHKeyPair.fromPem throws UnsupportedError for unknown PEM type', () {
+      const unsupportedPem = '''-----BEGIN CERTIFICATE-----
+MIIB
+-----END CERTIFICATE-----''';
+      expect(
+        () => SSHKeyPair.fromPem(unsupportedPem),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+
+    test(
+        'SSHKeyPair.isEncryptedPem throws UnsupportedError for unknown PEM type',
+        () {
+      const unsupportedPem = '''-----BEGIN CERTIFICATE-----
+MIIB
+-----END CERTIFICATE-----''';
+      expect(
+        () => SSHKeyPair.isEncryptedPem(unsupportedPem),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+
+    test(
+        'SSHKeyPair.isEncryptedPem returns false for unencrypted RSA/EC/OpenSSH',
+        () {
+      expect(SSHKeyPair.isEncryptedPem(rsaPrivate), isFalse);
+      expect(SSHKeyPair.isEncryptedPem(ed25519Private), isFalse);
+      expect(SSHKeyPair.isEncryptedPem(legacyEcPrivateKey), isFalse);
+    });
+
+    test('OpenSSHKeyPairs.decode throws on invalid magic', () {
+      final invalid =
+          Uint8List.fromList('wrong-magic-long-enough\x00'.codeUnits);
+      expect(
+        () => OpenSSHKeyPairs.decode(invalid),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('OpenSSHKeyPairs.decode throws on unsupported KDF', () {
+      final writer = SSHMessageWriter();
+      writer.writeBytes(Uint8List.fromList(OpenSSHKeyPairs.magic.codeUnits));
+      writer.writeUint8(0);
+      writer.writeUtf8('aes256-ctr');
+      writer.writeUtf8('scrypt'); // unsupported KDF
+      writer.writeString(Uint8List(0));
+      writer.writeUint32(0);
+      writer.writeString(Uint8List(0));
+
+      expect(
+        () => OpenSSHKeyPairs.decode(writer.takeBytes()),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+
+    test(
+        'OpenSSHKeyPairs.getPrivateKeys throws when passphrase missing on encrypted key',
+        () {
+      final pairs = OpenSSHKeyPairs(
+        cipherName: 'aes256-ctr',
+        kdfName: 'bcrypt',
+        kdfOptions: OpenSSHBcryptKdfOptions(Uint8List(16), 16),
+        publicKeys: [],
+        privateKeyBlob: Uint8List(32),
+      );
+      expect(() => pairs.getPrivateKeys(), throwsA(isA<SSHKeyDecryptError>()));
+    });
+
+    test(
+        'OpenSSHKeyPairs.getPrivateKeys throws when passphrase provided on unencrypted key',
+        () {
+      final pairs = OpenSSHKeyPairs.unencrypted(
+        publicKeys: [],
+        privateKeyBlob: Uint8List(32),
+      );
+      expect(
+        () => pairs.getPrivateKeys('unneeded-passphrase'),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('OpenSSHKeyPairs and KDF toString work', () {
+      final kdf =
+          OpenSSHBcryptKdfOptions(Uint8List.fromList('salt1234'.codeUnits), 16);
+      expect(kdf.toString(), contains('salt1234'));
+
+      final pairs = OpenSSHKeyPairs.unencrypted(
+        publicKeys: [],
+        privateKeyBlob: Uint8List(0),
+      );
+      expect(pairs.toString(), contains('keys.length: 0'));
+      expect(pairs.isEncrypted, isFalse);
+    });
+
+    test('OpenSSH keypair toString and comment getters work', () {
+      final rsa =
+          SSHKeyPair.fromPem(rsaPrivateOpenSSH).single as OpenSSHRsaKeyPair;
+      expect(rsa.toString(), contains('comment:'));
+      expect(rsa.comment, isNotNull);
+      expect(rsa.shouldProbe, isFalse);
+
+      final ed =
+          SSHKeyPair.fromPem(ed25519Private).single as OpenSSHEd25519KeyPair;
+      expect(ed.toString(), contains('comment:'));
+      expect(ed.shouldProbe, isFalse);
+
+      final ec = SSHKeyPair.fromPem(ecdsaNistP256Private).single
+          as OpenSSHEcdsaKeyPair;
+      expect(ec.toString(), contains('comment:'));
+      expect(ec.shouldProbe, isFalse);
+    });
+
+    test('RsaKeyPairDEKInfo parse throws on invalid format', () {
+      expect(() => RsaKeyPairDEKInfo.parse('invalid'),
+          throwsA(isA<FormatException>()));
+    });
+
+    test('RsaKeyPairDEKInfo toString and RsaPrivateKey toString work', () {
+      final info = RsaKeyPairDEKInfo('AES-128-CBC', Uint8List(16));
+      expect(info.toString(), contains('AES-128-CBC'));
+
+      final rsa = SSHKeyPair.fromPem(rsaPrivate).single as RsaPrivateKey;
+      expect(rsa.toString(), contains('version:'));
+      expect(rsa.comment, isNull);
+      expect(rsa.shouldProbe, isFalse);
+    });
+
+    test(
+        'RsaKeyPair throws ArgumentError when passphrase is missing on encrypted key',
+        () {
+      final pair = RsaKeyPair(
+          RsaKeyPairDEKInfo('AES-128-CBC', Uint8List(16)), Uint8List(32));
+      expect(pair.isEncrypted, isTrue);
+      expect(() => pair.getPrivateKeys(), throwsA(isA<ArgumentError>()));
+    });
+
+    test(
+        'EcKeyPair throws ArgumentError when passphrase passed on unencrypted key',
+        () {
+      final pair = EcKeyPair(null, Uint8List(32));
+      expect(pair.isEncrypted, isFalse);
+      expect(
+          () => pair.getPrivateKeys('unneeded'), throwsA(isA<ArgumentError>()));
+    });
+
+    test('EcKeyPair throws UnsupportedError for encrypted EC PEM', () {
+      final pair = EcKeyPair(
+          RsaKeyPairDEKInfo('DES-EDE3-CBC', Uint8List(8)), Uint8List(32));
+      expect(pair.isEncrypted, isTrue);
+      expect(
+          () => pair.getPrivateKeys('pass'), throwsA(isA<UnsupportedError>()));
+    });
   });
 }

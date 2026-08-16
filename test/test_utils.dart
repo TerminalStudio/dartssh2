@@ -12,6 +12,7 @@ Future<SSHClient> getHoneypotClient({
     await SSHSocket.connect('test.rebex.net', 22),
     username: 'demo',
     onPasswordRequest: () => 'password',
+    onUserInfoRequest: (req) => [for (final _ in req.prompts) 'password'],
     algorithms: algorithms,
   );
 }
@@ -31,6 +32,7 @@ Future<SSHClient> getTestClient() async {
     await SSHSocket.connect('test.rebex.net', 22),
     username: 'demo',
     onPasswordRequest: () => 'password',
+    onUserInfoRequest: (req) => [for (final _ in req.prompts) 'password'],
   );
 }
 
