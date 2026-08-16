@@ -4,12 +4,15 @@ import 'dart:typed_data';
 
 import 'package:asn1lib/asn1lib.dart';
 import 'package:convert/convert.dart';
-import 'package:dartssh2/dartssh2.dart';
+import 'package:dartssh2/src/algorithm/ssh_cipher_type.dart';
 import 'package:dartssh2/src/hostkey/hostkey_ecdsa.dart';
 import 'package:dartssh2/src/hostkey/hostkey_ed25519.dart';
 import 'package:dartssh2/src/hostkey/hostkey_rsa.dart';
+import 'package:dartssh2/src/ssh_errors.dart';
 import 'package:dartssh2/src/ssh_hostkey.dart';
+import 'package:dartssh2/src/ssh_identity.dart';
 import 'package:dartssh2/src/ssh_message.dart';
+import 'package:dartssh2/src/ssh_pem.dart';
 import 'package:dartssh2/src/utils/bigint.dart';
 import 'package:dartssh2/src/utils/bcrypt.dart';
 import 'package:dartssh2/src/utils/cipher_ext.dart';
@@ -17,7 +20,7 @@ import 'package:dartssh2/src/utils/list.dart';
 import 'package:pinenacl/ed25519.dart' as ed25519;
 import 'package:pointycastle/export.dart';
 
-abstract class SSHKeyPair {
+abstract class SSHKeyPair implements SSHIdentity {
   static List<SSHKeyPair> fromPem(String pemText, [String? passphrase]) {
     final pem = SSHPem.decode(pemText);
     switch (pem.type) {
@@ -59,10 +62,19 @@ abstract class SSHKeyPair {
   /// [type] indicates not only the encoding of the key, but also the the
   /// algorithm used when signing. Until now only RSA keys have [type]s that are
   /// different from [name].
+  @override
   String get type;
 
+  @override
+  String? get comment => null;
+
+  @override
+  bool get shouldProbe => false;
+
+  @override
   SSHHostKey toPublicKey();
 
+  @override
   SSHSignature sign(Uint8List data);
 
   String toPem();
@@ -286,6 +298,12 @@ class OpenSSHBcryptKdfOptions implements OpenSSHKdfOptions {
 }
 
 abstract mixin class OpenSSHKeyPair implements SSHKeyPair {
+  @override
+  String? get comment => null;
+
+  @override
+  bool get shouldProbe => false;
+
   void writeTo(SSHMessageWriter writer);
 
   @override
@@ -325,6 +343,7 @@ class OpenSSHRsaKeyPair with OpenSSHKeyPair {
   final BigInt p;
   final BigInt q;
 
+  @override
   final String comment;
 
   OpenSSHRsaKeyPair(
@@ -395,6 +414,7 @@ class OpenSSHEd25519KeyPair with OpenSSHKeyPair {
 
   final Uint8List privateKey;
 
+  @override
   final String comment;
 
   OpenSSHEd25519KeyPair(this.publicKey, this.privateKey, this.comment);
@@ -443,6 +463,7 @@ class OpenSSHEcdsaKeyPair with OpenSSHKeyPair {
 
   final BigInt d;
 
+  @override
   final String comment;
 
   OpenSSHEcdsaKeyPair(this.curveId, this.q, this.d, this.comment);
@@ -639,6 +660,12 @@ class RsaPrivateKey implements SSHKeyPair {
 
   @override
   final type = SSHRsaSignatureType.sha256;
+
+  @override
+  String? get comment => null;
+
+  @override
+  bool get shouldProbe => false;
 
   final BigInt version;
   final BigInt n;

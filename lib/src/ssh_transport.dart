@@ -176,6 +176,10 @@ class SSHTransport {
   /// Used to derive the cipher IV, cipher key and MAC key.
   Uint8List? _sessionId;
 
+  // ignore: unnecessary_getters_setters
+  Uint8List? get sessionId => _sessionId;
+  set sessionId(Uint8List? value) => _sessionId = value;
+
   /// A hash value of various parameters (defined in rfc4253). Kept to derive the
   /// cipher IV, cipher key and MAC key.
   Uint8List? _exchangeHash;
@@ -445,13 +449,13 @@ class SSHTransport {
   }
 
   /// Closes the SSH transport, cancels the socket subscription, and terminates the connection.
-  void close() {
+  Future<void> close() async {
     printDebug?.call('SSHTransport.close');
     if (isClosed) return;
     _socketSubscription?.cancel();
     _socketSubscription = null;
     _doneCompleter.complete();
-    socket.destroy();
+    await socket.close();
   }
 
   /// Closes the SSH transport and completes the [done] future with an [error].
@@ -956,7 +960,7 @@ class SSHTransport {
       sharedSecret: _sharedSecret!,
       exchangeHash: _exchangeHash!,
       keyType: keyType,
-      sessionId: _sessionId!,
+      sessionId: sessionId!,
       keySize: keySize,
     );
   }
@@ -969,7 +973,7 @@ class SSHTransport {
     required Uint8List publicKey,
   }) {
     final writer = SSHMessageWriter();
-    writer.writeString(_sessionId!);
+    writer.writeString(sessionId!);
     writer.writeUint8(SSH_Message_Userauth_Request.messageId);
     writer.writeUtf8(username);
     writer.writeUtf8(service);

@@ -339,6 +339,43 @@ class SSH_Message_Userauth_Passwd_ChangeReq extends SSHMessage {
   }
 }
 
+class SSH_Message_Userauth_PK_Ok extends SSHMessage {
+  static const messageId = 60;
+
+  final String publicKeyAlgorithm;
+  final Uint8List publicKey;
+
+  SSH_Message_Userauth_PK_Ok({
+    required this.publicKeyAlgorithm,
+    required this.publicKey,
+  });
+
+  factory SSH_Message_Userauth_PK_Ok.decode(Uint8List bytes) {
+    final reader = SSHMessageReader(bytes);
+    reader.skip(1);
+    final publicKeyAlgorithm = reader.readUtf8();
+    final publicKey = reader.readString();
+    return SSH_Message_Userauth_PK_Ok(
+      publicKeyAlgorithm: publicKeyAlgorithm,
+      publicKey: publicKey,
+    );
+  }
+
+  @override
+  Uint8List encode() {
+    final writer = SSHMessageWriter();
+    writer.writeUint8(messageId);
+    writer.writeUtf8(publicKeyAlgorithm);
+    writer.writeString(publicKey);
+    return writer.takeBytes();
+  }
+
+  @override
+  String toString() {
+    return 'SSH_Message_Userauth_PK_Ok(publicKeyAlgorithm: $publicKeyAlgorithm)';
+  }
+}
+
 class SSH_Message_Userauth_InfoRequest implements SSHMessage {
   static const messageId = 60;
 
