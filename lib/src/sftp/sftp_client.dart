@@ -292,22 +292,25 @@ class SftpClient {
     _channel.addData(writer.takeBytes());
   }
 
+  Future<SftpResponsePacket> _sendRequest(SftpRequestPacket request) async {
+    await handshake;
+    final reply = _waitReply(request.requestId);
+    _sendPacket(request);
+    return await reply;
+  }
+
   Future<SftpResponsePacket> _sendOpen(
     String path,
     SftpFileOpenMode mode,
     SftpFileAttrs attrs,
   ) async {
-    await handshake;
     final request = SftpOpenPacket(_requestId.next, path, mode.flag, attrs);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendClose(Uint8List handle) async {
-    await handshake;
     final request = SftpClosePacket(_requestId.next, handle);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendRead(
@@ -315,15 +318,13 @@ class SftpClient {
     int offset,
     int length,
   ) async {
-    await handshake;
     final request = SftpReadPacket(
       requestId: _requestId.next,
       handle: handle,
       offset: offset,
       length: length,
     );
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendWrite(
@@ -331,135 +332,103 @@ class SftpClient {
     int offset,
     Uint8List data,
   ) async {
-    await handshake;
     final request = SftpWritePacket(
       requestId: _requestId.next,
       handle: handle,
       offset: offset,
       data: data,
     );
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendLStat(String path) async {
-    await handshake;
     final request = SftpLStatPacket(_requestId.next, path);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendFStat(Uint8List handle) async {
-    await handshake;
     final request = SftpFStatPacket(_requestId.next, handle);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendSetStat(
     String path,
     SftpFileAttrs attrs,
   ) async {
-    await handshake;
     final request = SftpSetStatPacket(_requestId.next, path, attrs);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendFSetStat(
     Uint8List handle,
     SftpFileAttrs attrs,
   ) async {
-    await handshake;
     final request = SftpFSetStatPacket(_requestId.next, handle, attrs);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendOpenDir(String path) async {
-    await handshake;
     final request = SftpOpenDirPacket(_requestId.next, path);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendReadDir(Uint8List handle) async {
-    await handshake;
     final request = SftpReadDirPacket(_requestId.next, handle);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendRemove(String filename) async {
-    await handshake;
     final request = SftpRemovePacket(_requestId.next, filename);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendMakeDir(
     String path,
     SftpFileAttrs attrs,
   ) async {
-    await handshake;
     final request = SftpMkdirPacket(_requestId.next, path, attrs);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendRemoveDir(String path) async {
-    await handshake;
     final request = SftpRmdirPacket(_requestId.next, path);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendRealPath(String path) async {
-    await handshake;
     final request = SftpRealpathPacket(_requestId.next, path);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendStat(String path) async {
-    await handshake;
     final request = SftpStatPacket(_requestId.next, path);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendRename(
     String oldPath,
     String newPath,
   ) async {
-    await handshake;
     final request = SftpRenamePacket(_requestId.next, oldPath, newPath);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendReadLink(String path) async {
-    await handshake;
     final request = SftpReadlinkPacket(_requestId.next, path);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendSymlink(
     String linkPath,
     String targetPath,
   ) async {
-    await handshake;
     final request = SftpSymlinkPacket(_requestId.next, linkPath, targetPath);
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   Future<SftpResponsePacket> _sendExtended(SftpExtendedRequest payload) async {
-    await handshake;
     final request = SftpExtendedPacket(_requestId.next, payload.encode());
-    _sendPacket(request);
-    return await _waitReply(request.requestId);
+    return await _sendRequest(request);
   }
 
   void _dispatchReply(SftpResponsePacket packet) {
