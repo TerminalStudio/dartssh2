@@ -5,8 +5,11 @@
 
 version: 2
 updates:
+  # The package manifest lives at the repository root. /example/ holds loose
+  # .dart files with no pubspec.yaml of their own, so pointing here is what
+  # actually puts asn1lib, pointycastle, pinenacl and convert under watch.
   - package-ecosystem: "pub"
-    directory: "/example/"
+    directory: "/"
     schedule:
       interval: "weekly"
       time: "09:00"
