@@ -17,6 +17,8 @@ import 'package:dartssh2/src/ssh_channel.dart';
 import 'package:dartssh2/src/ssh_transport.dart';
 import 'package:dartssh2/src/utils/chunk_buffer.dart';
 import 'package:dartssh2/src/ssh_message.dart';
+import 'package:dartssh2/src/utils/pending_requests.dart';
+import 'package:dartssh2/src/utils/terminal_state.dart';
 
 part 'sftp_file.dart';
 
@@ -38,19 +40,32 @@ class SftpClient {
   final SSHPrintHandler? printTrace;
 
   SftpClient(this._channel, {this.printDebug, this.printTrace}) {
+    _handshake.future.ignore();
+    _channel.stream.listen(
+      _handleData,
+      onError: (Object error, StackTrace stackTrace) {
+        _closeError(error, stackTrace);
+      },
+      onDone: () {
+        _closeError(SftpAbortError('SFTP channel closed'));
+      },
+    );
     _startHandshake();
-    _channel.stream.listen(_handleData);
   }
 
   final _buffer = ChunkBuffer();
 
   final _handshake = Completer<SftpHandsake>();
 
-  final _done = Completer<void>();
+  final _terminalState = TerminalState();
 
   final _requestId = SftpRequestId();
 
-  final _replyWaiters = <int, Completer<SftpResponsePacket>>{};
+  late final _replyWaiters = PendingRequests<int, SftpResponsePacket>(
+    terminalState: _terminalState,
+  );
+
+  Future<void>? _closeFuture;
 
   /// The handshake information received from the server.
   Future<SftpHandsake> get handshake => _handshake.future;
@@ -240,23 +255,22 @@ class SftpClient {
   /// a fresh session channel, so an application that opens an sftp session per
   /// operation would accumulate open channels on the connection until the
   /// server refuses further `CHANNEL_OPEN`s.
-  Future<void> close() async {
-    if (_done.isCompleted) return;
-    for (var waiter in _replyWaiters.values) {
-      waiter.completeError(SftpAbortError("Connection closed"));
-    }
-    _replyWaiters.clear();
-    _done.complete();
+  Future<void> close() => _closeFuture ??= _closeClient();
+
+  Future<void> _closeClient() async {
+    _closeError(SftpAbortError('SFTP client closed'));
     await _channel.close();
   }
 
   void _closeError(Object error, [StackTrace? stackTrace]) {
     stackTrace ??= StackTrace.current;
-    for (var waiter in _replyWaiters.values) {
-      waiter.completeError(error, stackTrace);
+    final didTerminate = _replyWaiters.closeWithError(error, stackTrace);
+    if (!didTerminate) return;
+
+    _buffer.clear();
+    if (!_handshake.isCompleted) {
+      _handshake.completeError(_terminalState.error, _terminalState.stackTrace);
     }
-    _replyWaiters.clear();
-    _done.completeError(error, stackTrace);
   }
 
   void _startHandshake() {
@@ -288,6 +302,7 @@ class SftpClient {
   }
 
   void _sendPacket(SftpPacket packet) {
+    _terminalState.throwIfTerminated();
     printTrace?.call('-> $_channel: $packet');
     final data = packet.encode();
     final writer = SSHMessageWriter();
@@ -299,7 +314,12 @@ class SftpClient {
   Future<SftpResponsePacket> _sendRequest(SftpRequestPacket request) async {
     await handshake;
     final reply = _waitReply(request.requestId);
-    _sendPacket(request);
+    try {
+      _sendPacket(request);
+    } catch (error, stackTrace) {
+      _replyWaiters.fail(request.requestId, error, stackTrace);
+      _closeError(error, stackTrace);
+    }
     return await reply;
   }
 
@@ -436,14 +456,11 @@ class SftpClient {
   }
 
   void _dispatchReply(SftpResponsePacket packet) {
-    final completer = _replyWaiters.remove(packet.requestId);
-    completer?.complete(packet);
+    _replyWaiters.complete(packet.requestId, packet);
   }
 
   Future<SftpResponsePacket> _waitReply(int requestId) {
-    final completer = Completer<SftpResponsePacket>();
-    _replyWaiters[requestId] = completer;
-    return completer.future;
+    return _replyWaiters.wait(requestId);
   }
 
   Future<void> _checkExtension(String name, String version) async {
@@ -458,8 +475,13 @@ class SftpClient {
   }
 
   void _handleData(SSHChannelData data) {
-    _buffer.add(data.bytes);
-    _handlePackets();
+    if (_terminalState.isTerminated) return;
+    try {
+      _buffer.add(data.bytes);
+      _handlePackets();
+    } catch (error, stackTrace) {
+      _closeError(error, stackTrace);
+    }
   }
 
   void _handlePackets() {
@@ -496,6 +518,11 @@ class SftpClient {
   }
 
   void _handleVersionPacket(Uint8List payload) {
+    if (_handshake.isCompleted) {
+      _closeError(SftpError('Unexpected version packet'));
+      return;
+    }
+
     final packet = SftpVersionPacket.decode(payload);
     printTrace?.call('<- $_channel: $packet');
 
@@ -504,9 +531,7 @@ class SftpClient {
       return _handshake.complete(handshake);
     }
 
-    final error = SftpError('Version mismatch: ${packet.version}');
-    _handshake.completeError(error, StackTrace.current);
-    _closeError(error);
+    _closeError(SftpError('Version mismatch: ${packet.version}'));
   }
 
   void _handleStatusPacket(Uint8List payload) {
