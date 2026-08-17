@@ -12,6 +12,8 @@ import 'package:dartssh2/src/ssh_channel.dart';
 import 'package:dartssh2/src/ssh_message.dart';
 import 'package:test/test.dart';
 
+const _openSshMaxSftpPacketLength = 256 * 1024;
+
 void main() {
   group('SftpClient protocol', () {
     test('handshake completes with version packet', () async {
@@ -29,6 +31,70 @@ void main() {
       expect(handshake.extensions['fstatvfs@openssh.com'], '2');
 
       harness.dispose();
+    });
+
+    test('accepts an incoming packet at the OpenSSH size limit', () async {
+      final harness = _SftpHarness();
+      await harness.nextOutgoingPacket();
+
+      final payload = Uint8List(_openSshMaxSftpPacketLength);
+      payload[0] = 0xff; // Unknown packets are ignored by the client.
+      harness.sendResponsePayload(payload);
+      harness.sendResponsePacket(SftpVersionPacket(3));
+
+      await expectLater(harness.client.handshake, completes);
+      harness.dispose();
+    });
+
+    test('rejects an oversized incoming packet from its length header',
+        () async {
+      final harness = _SftpHarness();
+      await harness.nextOutgoingPacket();
+      harness.sendResponsePacket(SftpVersionPacket(3));
+      await harness.client.handshake;
+
+      final openFuture = harness.client.open('/tmp/file');
+      await harness.nextOutgoingPacket();
+      final openExpectation = expectLater(
+        openFuture,
+        throwsA(
+          isA<SftpError>().having(
+            (error) => error.message,
+            'message',
+            contains('${_openSshMaxSftpPacketLength + 1} bytes'),
+          ),
+        ),
+      );
+
+      harness.sendResponseLength(_openSshMaxSftpPacketLength + 1);
+
+      await openExpectation;
+      await expectLater(harness.channelDone, completes);
+      harness.dispose();
+    });
+
+    test('rejects an outgoing packet over the OpenSSH size limit', () async {
+      final channel = _SynchronousResponseChannel();
+      final client = SftpClient(channel);
+      channel.sendResponsePacket(SftpVersionPacket(3));
+      await client.handshake;
+      final packetsBeforeRequest = channel.outboundPacketCount;
+      final oversizedPathBytes = Uint8List(_openSshMaxSftpPacketLength)
+        ..fillRange(0, _openSshMaxSftpPacketLength, 0x78);
+      final oversizedPath = String.fromCharCodes(oversizedPathBytes);
+
+      await expectLater(
+        client.stat(oversizedPath),
+        throwsA(
+          isA<SftpError>().having(
+            (error) => error.message,
+            'message',
+            contains('Outgoing SFTP packet is too large'),
+          ),
+        ),
+      );
+      expect(channel.outboundPacketCount, packetsBeforeRequest);
+      await client.close();
     });
 
     test('stat uses lstat when followLink is false', () async {
@@ -843,15 +909,28 @@ class _SftpHarness {
   }
 
   void sendResponsePacket(SftpPacket packet) {
-    final payload = packet.encode();
+    sendResponsePayload(packet.encode());
+  }
+
+  void sendResponsePayload(Uint8List payload) {
     final writer = SSHMessageWriter();
     writer.writeUint32(payload.length);
     writer.writeBytes(payload);
 
+    _sendResponseData(writer.takeBytes());
+  }
+
+  void sendResponseLength(int length) {
+    final writer = SSHMessageWriter();
+    writer.writeUint32(length);
+    _sendResponseData(writer.takeBytes());
+  }
+
+  void _sendResponseData(Uint8List data) {
     _controller.handleMessage(
       SSH_Message_Channel_Data(
         recipientChannel: _controller.localId,
-        data: writer.takeBytes(),
+        data: data,
       ),
     );
   }
