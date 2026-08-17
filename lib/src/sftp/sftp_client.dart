@@ -23,6 +23,10 @@ part 'sftp_file.dart';
 const _kVersion = 3;
 const _kReadChunkSize = 16 * 1024;
 const _kReadMaxPendingRequests = 64;
+// Short replies below this size are treated as a hiccup rather than as the
+// server's real read capacity, so they do not shrink later requests.
+// Mirrors `MIN_READ_SIZE` in OpenSSH's `sftp-client.c`.
+const _kMinReadSize = 512;
 const _kDownloadChunkSize = 64 * 1024;
 const _kDownloadMaxPendingRequests = 128;
 
