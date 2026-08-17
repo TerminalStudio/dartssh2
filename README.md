@@ -129,6 +129,42 @@ void main() async {
 
 > `SSHSocket` is an interface and it's possible to implement your own `SSHSocket` if you want to use a different underlying transport rather than standard TCP socket. For example WebSocket or Unix domain socket.
 
+### Verify the host key
+
+The example above authenticates the *server to nobody*: dartssh2 always checks
+that the host key signature is valid, which proves the server owns the private
+key it presented, but it cannot know whether that key is the one you expected.
+Without that second check, an attacker who can intercept the connection can
+present their own key and read the whole session.
+
+Pass `onVerifyHostKey` to decide whether the key is trusted. It receives the
+key type and the OpenSSH-style SHA256 fingerprint, and returning `false`
+aborts the connection:
+
+```dart
+final client = SSHClient(
+  await SSHSocket.connect('localhost', 22),
+  username: '<username>',
+  onPasswordRequest: () => '<password>',
+  onVerifyHostKey: (type, fingerprint) {
+    final expected = knownHosts['localhost']; // your own storage
+    if (expected == null) {
+      // First connection: ask the user, then remember the answer.
+      return promptUserToTrust(type, utf8.decode(fingerprint));
+    }
+    return utf8.decode(fingerprint) == expected;
+  },
+);
+```
+
+The handler may return a `Future<bool>`, so it can await a UI prompt or a
+lookup in persistent storage. When `onVerifyHostKey` is omitted, **every host
+key is accepted**, which is only appropriate for tests and for networks you
+already trust end to end.
+
+> `disableHostkeyVerification: true` is a separate and stronger opt-out: it
+> skips the signature check as well. Do not use it outside of local testing.
+
 ### Web support
 
 Direct native TCP sockets are not available in browsers, so this will fail on
@@ -703,9 +739,35 @@ void main() async {
 - `aes[128|192|256]-ctr`
 - `aes[128|192|256]-cbc`
 
-AES-GCM is currently available as opt-in via `SSHAlgorithms(cipher: ...)`, and is not enabled in the default cipher preference list yet.
+`chacha20-poly1305@openssh.com` is not supported yet.
 
-Example (opt-in AES-GCM with explicit fallback ciphers):
+**Integrity**: 
+- `hmac-sha2-[256|512]-etm@openssh.com`
+- `hmac-sha2-[256|512]`
+- `hmac-sha2-[256|512]-96`
+- `hmac-sha1`
+- `hmac-md5`
+
+### Default preferences
+
+Each list is ordered by preference and the first algorithm the server also
+supports is the one that gets used. The defaults lead with the strongest
+option and keep the weaker ones only as a fallback for old servers:
+
+| | Default order |
+|---|---|
+| **Key exchange** | curve25519 → ECDH NIST → DH group-exchange/group14 SHA-256 → the SHA-1 variants |
+| **Host key** | `ssh-ed25519` → `rsa-sha2-512/256` → ECDSA → `ssh-rsa` |
+| **Cipher** | AES-GCM → AES-CTR → AES-CBC |
+| **Integrity** | ETM variants → `hmac-sha2-256/512` → `hmac-sha1` |
+
+Three groups are implemented but **left out of the defaults**, because they are
+considered broken rather than merely old. Pass them to `SSHAlgorithms`
+explicitly if a legacy server leaves you no choice:
+
+- `diffie-hellman-group1-sha1`, whose 1024-bit group is below any current recommendation.
+- `hmac-md5`.
+- The truncated `hmac-sha2-[256|512]-96` variants.
 
 ```dart
 void main() async {
@@ -714,14 +776,8 @@ void main() async {
     username: '<username>',
     onPasswordRequest: () => '<password>',
     algorithms: const SSHAlgorithms(
-      cipher: [
-        SSHCipherType.aes256gcm,
-        SSHCipherType.aes128gcm,
-        SSHCipherType.aes256ctr,
-        SSHCipherType.aes128ctr,
-        SSHCipherType.aes256cbc,
-        SSHCipherType.aes128cbc,
-      ],
+      // Only do this for a server that supports nothing better.
+      kex: [SSHKexType.dh14Sha1, SSHKexType.dh1Sha1],
     ),
   );
 
@@ -730,12 +786,10 @@ void main() async {
 }
 ```
 
-`chacha20-poly1305@openssh.com` is not supported yet.
+### Protocol hardening
 
-**Integrity**: 
-- `hmac-md5`
-- `hmac-sha1`
-- `hmac-sha2-[256|512]`
+- **Strict key exchange** (`kex-strict-c-v00@openssh.com`) is negotiated automatically and enabled whenever the server supports it. It is the countermeasure against the Terrapin attack ([CVE-2023-48795](https://terrapin-attack.com)): packet sequence numbers are reset after every `SSH_MSG_NEWKEYS`, and the optional `SSH_MSG_IGNORE` / `SSH_MSG_UNIMPLEMENTED` / `SSH_MSG_DEBUG` messages are rejected while a key exchange is running. `SSHClient.strictKex` reports whether it is active on a live connection.
+- **EXT_INFO** ([RFC 8308](https://datatracker.ietf.org/doc/html/rfc8308)) is requested via `ext-info-c`. The signature algorithms the server advertises are exposed as `SSHClient.serverSigAlgs`.
 
 **Private key**:
 

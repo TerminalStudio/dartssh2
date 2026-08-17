@@ -325,6 +325,23 @@ class SSHClient {
   /// completed.
   String? get remoteVersion => _transport.remoteVersion;
 
+  /// Whether strict key exchange is in effect for this connection.
+  ///
+  /// It is negotiated automatically and requires the server to support it too.
+  /// Strict key exchange is the countermeasure against the Terrapin attack
+  /// (CVE-2023-48795), so a `false` here on an untrusted network means the
+  /// connection is only as safe as the negotiated cipher makes it.
+  ///
+  /// Meaningless before the first key exchange completes.
+  bool get strictKex => _transport.strictKex;
+
+  /// The signature algorithms the server accepts for `publickey`
+  /// authentication, taken from the `server-sig-algs` extension of
+  /// SSH_MSG_EXT_INFO (RFC 8308 §3.1).
+  ///
+  /// `null` when the server sent no EXT_INFO or omitted the extension.
+  List<String>? get serverSigAlgs => _transport.serverSigAlgs;
+
   /// Request connections to a port on the other side be forwarded to the local
   /// side.
   /// Set [host] to null to listen on all interfaces, `"0.0.0.0"` to

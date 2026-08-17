@@ -19,6 +19,7 @@ import 'package:dartssh2/src/ssh_packet.dart';
 import 'package:dartssh2/src/utils/int.dart';
 import 'package:dartssh2/src/hostkey/hostkey_ed25519.dart';
 import 'package:dartssh2/src/utils/list.dart';
+import 'package:dartssh2/src/message/msg_ext_info.dart';
 import 'package:dartssh2/src/message/msg_kex.dart';
 import 'package:dartssh2/src/message/msg_kex_dh.dart';
 import 'package:dartssh2/src/message/msg_kex_ecdh.dart';
@@ -47,6 +48,22 @@ Uint8List _hostkeyFingerprint(Uint8List hostkey) {
 typedef SSHTransportReadyHandler = void Function();
 
 typedef SSHPacketHandler = void Function(Uint8List payload);
+
+/// Pseudo algorithm names that are advertised inside the key exchange
+/// name-list without being key exchange algorithms themselves.
+abstract class SSHKexPseudoAlgorithm {
+  /// Sent by a client to signal support for strict key exchange.
+  static const strictKexClient = 'kex-strict-c-v00@openssh.com';
+
+  /// Sent by a server to signal support for strict key exchange.
+  static const strictKexServer = 'kex-strict-s-v00@openssh.com';
+
+  /// Sent by a client to ask for SSH_MSG_EXT_INFO (RFC 8308 §2.2).
+  static const extInfoClient = 'ext-info-c';
+
+  /// Sent by a server to ask for SSH_MSG_EXT_INFO (RFC 8308 §2.2).
+  static const extInfoServer = 'ext-info-s';
+}
 
 class SSHTransport {
   /// Version of the SSH software. By default "DartSSH_2.0"
@@ -246,6 +263,38 @@ class SSHTransport {
   /// Whether we have already sent our SSH_MSG_KEXINIT for the ongoing key
   /// exchange round. This is reset when the exchange finishes.
   bool _sentKexInit = false;
+
+  /// Whether the initial key exchange is still running. The strict key exchange
+  /// and EXT_INFO indicators are only valid in the first SSH_MSG_KEXINIT, so
+  /// they are advertised and read while this is `true`.
+  bool _isFirstKex = true;
+
+  /// Whether both peers advertised strict key exchange and it is therefore in
+  /// effect for this connection.
+  ///
+  /// Strict key exchange is the countermeasure against the Terrapin attack
+  /// (CVE-2023-48795). It removes the attacker's ability to delete packets
+  /// from the start of the connection undetected, by resetting the packet
+  /// sequence numbers after every SSH_MSG_NEWKEYS and by forbidding the
+  /// optional messages that made the injection possible.
+  bool get strictKex => _strictKex;
+  var _strictKex = false;
+
+  /// Set when a received SSH_MSG_NEWKEYS asks for a sequence number reset, so
+  /// that the reset happens after [_processPackets] is done with the packet
+  /// rather than being undone by the trailing increment.
+  var _resetRemotePacketSN = false;
+
+  /// Extensions sent by the server in SSH_MSG_EXT_INFO (RFC 8308), or `null`
+  /// if the server sent none.
+  Map<String, Uint8List>? get extInfo => _extInfo;
+  Map<String, Uint8List>? _extInfo;
+
+  /// The signature algorithms the server accepts for `publickey`
+  /// authentication, as advertised through the `server-sig-algs` extension.
+  /// `null` when the server did not send it.
+  List<String>? get serverSigAlgs => _serverSigAlgs;
+  List<String>? _serverSigAlgs;
 
   /// Packets queued during key exchange that will be sent after NEW_KEYS
   final List<Uint8List> _rekeyPendingPackets = [];
@@ -596,7 +645,12 @@ class SSHTransport {
 
       await _handleMessage(payload);
 
-      _remotePacketSN.increase();
+      if (_resetRemotePacketSN) {
+        _resetRemotePacketSN = false;
+        _remotePacketSN.reset();
+      } else {
+        _remotePacketSN.increase();
+      }
     }
   }
 
@@ -1029,8 +1083,7 @@ class SSHTransport {
     _sentKexInit = true;
 
     final message = SSH_Message_KexInit(
-      kexAlgorithms: algorithms.kex.toNameList(),
-      // kexAlgorithms: ['curve25519-sha256'],
+      kexAlgorithms: _localKexAlgorithmNames(),
       serverHostKeyAlgorithms: algorithms.hostkey.toNameList(),
       encryptionClientToServer: algorithms.cipher.toNameList(),
       encryptionServerToClient: algorithms.cipher.toNameList(),
@@ -1046,6 +1099,28 @@ class SSHTransport {
 
     sendPacket(payload);
     printTrace?.call('-> $socket: $message');
+  }
+
+  /// The key exchange name-list we advertise, including the pseudo algorithms
+  /// that signal strict key exchange and EXT_INFO support.
+  ///
+  /// Both indicators are only meaningful in the first SSH_MSG_KEXINIT, so they
+  /// are dropped once the initial key exchange is done. Sending them on a
+  /// re-key would be ignored at best and confusing at worst.
+  List<String> _localKexAlgorithmNames() {
+    final names = algorithms.kex.toNameList();
+    if (!_isFirstKex) return names;
+    names.add(
+      isServer
+          ? SSHKexPseudoAlgorithm.strictKexServer
+          : SSHKexPseudoAlgorithm.strictKexClient,
+    );
+    names.add(
+      isServer
+          ? SSHKexPseudoAlgorithm.extInfoServer
+          : SSHKexPseudoAlgorithm.extInfoClient,
+    );
+    return names;
   }
 
   /// Send diffie-hellman key exchange message. The exact message format depends
@@ -1103,11 +1178,31 @@ class SSHTransport {
     final message = SSH_Message_NewKeys();
     printTrace?.call('-> $socket: $message');
     sendPacket(message.encode());
+
+    // [sendPacket] already advanced the sequence number past NEWKEYS, so under
+    // strict key exchange the reset belongs right here: the next packet we
+    // send is the first one of the new keys and must be number zero.
+    if (_strictKex) {
+      _localPacketSN.reset();
+    }
   }
 
   /// Dispatches the incoming decrypted packet payload to the appropriate message handler.
   Future<void> _handleMessage(Uint8List message) async {
     final messageId = SSHMessage.readMessageId(message);
+
+    // Under strict key exchange the optional transport messages are not
+    // allowed to appear between KEXINIT and NEWKEYS. Receiving one there means
+    // someone is padding the transcript, so the connection is torn down.
+    if (_strictKex &&
+        _kexInProgress &&
+        _isForbiddenDuringStrictKex(messageId)) {
+      throw SSHHandshakeError(
+        'Strict key exchange violation: message $messageId received during '
+        'key exchange',
+      );
+    }
+
     switch (messageId) {
       case SSH_Message_KexInit.messageId:
         return _handleMessageKexInit(message);
@@ -1116,9 +1211,57 @@ class SSHTransport {
         return _handleMessageKexReply(message);
       case SSH_Message_NewKeys.messageId:
         return _handleMessageNewKeys(message);
+      case SSH_Message_ExtInfo.messageId:
+        return _handleMessageExtInfo(message);
       default:
         onPacket?.call(message);
     }
+  }
+
+  /// Records the extensions advertised by the peer in SSH_MSG_EXT_INFO.
+  void _handleMessageExtInfo(Uint8List payload) {
+    final message = SSH_Message_ExtInfo.decode(payload);
+    printDebug?.call('SSHTransport._handleMessageExtInfo');
+    printTrace?.call('<- $socket: $message');
+
+    _extInfo = message.extensions;
+    _serverSigAlgs = message.serverSigAlgs;
+  }
+
+  /// Enables strict key exchange when the peer advertised it in its first
+  /// SSH_MSG_KEXINIT, and validates the preconditions the mode requires.
+  ///
+  /// Strict key exchange is the Terrapin (CVE-2023-48795) countermeasure. Once
+  /// both sides have advertised it, the first SSH_MSG_KEXINIT must be the very
+  /// first packet of the connection: if it is not, packets were inserted or
+  /// removed before it and the exchange hash no longer covers the real
+  /// transcript.
+  void _negotiateStrictKex(SSH_Message_KexInit message) {
+    final peerIndicator = isServer
+        ? SSHKexPseudoAlgorithm.strictKexClient
+        : SSHKexPseudoAlgorithm.strictKexServer;
+
+    _strictKex = message.kexAlgorithms.contains(peerIndicator);
+    printDebug?.call('SSHTransport._strictKex = $_strictKex');
+
+    if (!_strictKex) return;
+
+    if (_remotePacketSN.value != 0) {
+      throw SSHHandshakeError(
+        'Strict key exchange violation: KEXINIT was not the first packet '
+        '(sequence number ${_remotePacketSN.value})',
+      );
+    }
+  }
+
+  /// Whether [messageId] is one of the optional transport messages that strict
+  /// key exchange forbids while a key exchange is running.
+  ///
+  /// SSH_MSG_IGNORE (2), SSH_MSG_UNIMPLEMENTED (3) and SSH_MSG_DEBUG (4) carry
+  /// no meaning for the exchange but do advance the sequence numbers, which is
+  /// exactly what the Terrapin attack abuses.
+  static bool _isForbiddenDuringStrictKex(int messageId) {
+    return messageId >= 2 && messageId <= 4;
   }
 
   /// Processes the KEXINIT message received from the remote peer and negotiates algorithms.
@@ -1140,6 +1283,10 @@ class SSHTransport {
     final message = SSH_Message_KexInit.decode(payload);
     printTrace?.call('<- $socket: $message');
     _remoteKexInit = payload;
+
+    if (_isFirstKex) {
+      _negotiateStrictKex(message);
+    }
 
     _kexType = SSHKexUtils.selectAlgorithm(
       localAlgorithms: algorithms.kex,
@@ -1360,7 +1507,15 @@ class SSHTransport {
     // Key exchange round finished.
     _kexInProgress = false;
     _sentKexInit = false;
+    _isFirstKex = false;
     _kex = null;
+
+    // The reset is deferred to [_processPackets]: this handler runs before the
+    // trailing increment for the NEWKEYS packet, so resetting here would be
+    // undone immediately.
+    if (_strictKex) {
+      _resetRemotePacketSN = true;
+    }
 
     // Flush any pending packets
     final pending = List<Uint8List>.from(_rekeyPendingPackets);

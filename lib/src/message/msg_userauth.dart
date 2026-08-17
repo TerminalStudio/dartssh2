@@ -121,32 +121,36 @@ class SSH_Message_Userauth_Request extends SSHMessage {
     switch (methodName) {
       case 'password':
         final hasNewPassword = reader.readBool();
-        final password = reader.readUtf8();
         if (hasNewPassword) {
+          // RFC 4252 §8 puts the old password on the wire first, then the new
+          // one.
           final oldPassword = reader.readUtf8();
+          final newPassword = reader.readUtf8();
           return SSH_Message_Userauth_Request.newPassword(
             user: user,
             oldPassword: oldPassword,
-            newPassword: password,
+            newPassword: newPassword,
             serviceName: serviceName,
           );
         } else {
           return SSH_Message_Userauth_Request.password(
             user: user,
-            password: password,
+            password: reader.readUtf8(),
             serviceName: serviceName,
           );
         }
       case 'publickey':
+        // RFC 4252 §7: the boolean says whether a signature follows the public
+        // key, and it precedes the algorithm name.
+        final hasSignature = reader.readBool();
         final publicKeyAlgorithm = reader.readUtf8();
         final publicKey = reader.readString();
-        final signature = reader.readString();
         return SSH_Message_Userauth_Request.publicKey(
           username: user,
           serviceName: serviceName,
           publicKeyAlgorithm: publicKeyAlgorithm,
           publicKey: publicKey,
-          signature: signature,
+          signature: hasSignature ? reader.readString() : null,
         );
       case 'keyboard-interactive':
         final languageTag = reader.readUtf8();
