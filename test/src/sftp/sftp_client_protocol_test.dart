@@ -179,6 +179,30 @@ void main() {
       harness.dispose();
     });
 
+    test('a one-off tiny reply does not shrink later reads', () async {
+      final lengths = await _recordReadLengths(
+        totalLength: 8192 * 3,
+        chunkSize: 8192,
+        firstReplyLength: 1,
+      );
+
+      // The suffix is retried, and the reads after it stay at full size
+      // instead of being pinned to the 512 byte floor.
+      expect(lengths, [8192, 8191, 8192, 8192]);
+    });
+
+    test('a large short reply clamps later reads, as OpenSSH does', () async {
+      final lengths = await _recordReadLengths(
+        totalLength: 8192 * 3,
+        chunkSize: 8192,
+        firstReplyLength: 4096,
+      );
+
+      // A reply this size reads as the server's real capacity, so the client
+      // settles there and stops asking for more than the server will give.
+      expect(lengths, [8192, 4096, 4096, 4096, 4096, 4096]);
+    });
+
     test('read retries the missing suffix after a short data packet', () async {
       final harness = _SftpHarness();
       await harness.nextOutgoingPacket();
@@ -618,6 +642,72 @@ class _CollectingSink implements StreamSink<List<int>> {
 
   @override
   Future<void> get done => _done.future;
+}
+
+/// Downloads [totalLength] bytes, answering the first read with only
+/// [firstReplyLength] bytes and filling every read after it, and returns the
+/// length the client asked for on each read request.
+Future<List<int>> _recordReadLengths({
+  required int totalLength,
+  required int chunkSize,
+  required int firstReplyLength,
+}) async {
+  final harness = _SftpHarness();
+  await harness.nextOutgoingPacket();
+  harness.sendResponsePacket(SftpVersionPacket(3));
+  await harness.client.handshake;
+
+  final sink = _CollectingSink();
+  final downloadFuture = harness.client.download(
+    '/tmp/file',
+    sink,
+    length: totalLength,
+    chunkSize: chunkSize,
+    maxPendingRequests: 1,
+  );
+
+  final open = SftpOpenPacket.decode(await harness.nextOutgoingPacket());
+  harness.sendResponsePacket(
+    SftpHandlePacket(open.requestId, Uint8List.fromList([1, 2, 3])),
+  );
+
+  final requestedLengths = <int>[];
+  var delivered = 0;
+
+  while (delivered < totalLength) {
+    final packet = await harness.nextOutgoingPacket();
+    if (packet[0] != SftpReadPacket.packetType) break;
+
+    final read = SftpReadPacket.decode(packet);
+    requestedLengths.add(read.length);
+
+    final replyLength = requestedLengths.length == 1
+        ? firstReplyLength
+        : read.length;
+    delivered += replyLength;
+
+    harness.sendResponsePacket(
+      SftpDataPacket(
+        read.requestId,
+        Uint8List.fromList(List<int>.filled(replyLength, 7)),
+      ),
+    );
+  }
+
+  final close = SftpClosePacket.decode(await harness.nextOutgoingPacket());
+  harness.sendResponsePacket(
+    SftpStatusPacket(
+      requestId: close.requestId,
+      code: SftpStatusCode.ok,
+      message: 'ok',
+    ),
+  );
+
+  expect(await downloadFuture, totalLength);
+  expect(sink.bytes, hasLength(totalLength));
+
+  harness.dispose();
+  return requestedLengths;
 }
 
 class _SftpHarness {

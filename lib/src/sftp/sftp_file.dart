@@ -159,10 +159,17 @@ class SftpFile {
           completedReads[startOffset] = chunk;
 
           if (chunk.length < requestLength) {
-            effectiveChunkSize = min(
-              chunkSize,
-              max(_kMinReadSize, chunk.length),
-            );
+            // OpenSSH clamps the request size down to a short reply, with a
+            // 512 byte floor (`MIN_READ_SIZE` in `sftp-client.c`). We clamp
+            // the same way, but only when the reply is large enough to look
+            // like the server's real capacity. Clamping to the floor instead
+            // would let a single tiny reply pin every later request at 512
+            // bytes for the rest of the transfer, which costs far more here
+            // than it does in OpenSSH: this pipeline defaults to 64 KB reads
+            // with up to 128 of them in flight.
+            if (chunk.length >= _kMinReadSize) {
+              effectiveChunkSize = min(effectiveChunkSize, chunk.length);
+            }
             issueRead(
               startOffset + chunk.length,
               requestLength - chunk.length,
