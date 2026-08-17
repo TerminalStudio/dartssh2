@@ -288,23 +288,51 @@ class SSHChannelController {
 
     final dataKind = type == null ? 'data' : 'extended data';
     if (data.length > localMaximumPacketSize) {
-      throw SSHStateError(
-        'Received channel $dataKind packet of ${data.length} bytes, '
-        'exceeding maximum packet size $localMaximumPacketSize on '
-        'channel $localId',
+      _failChannel(
+        'Channel $localId closed: the peer sent a $dataKind packet of '
+        '${data.length} bytes, over the maximum packet size of '
+        '$localMaximumPacketSize it was given',
       );
+      return;
     }
 
     if (data.length > _localWindow) {
-      throw SSHStateError(
-        'Received channel $dataKind packet of ${data.length} bytes, '
-        'exceeding remaining window $_localWindow on channel $localId',
+      _failChannel(
+        'Channel $localId closed: the peer sent a $dataKind packet of '
+        '${data.length} bytes, over the $_localWindow bytes left in the '
+        'window it was granted',
       );
+      return;
     }
 
     _localWindow -= data.length;
     _remoteStream.add(SSHChannelData(data, type: type));
     _sendWindowAdjustIfNeeded();
+  }
+
+  /// Tears down this channel after the peer violated the channel protocol,
+  /// leaving the SSH connection and its other channels untouched.
+  ///
+  /// The error is delivered to whoever is reading the channel, so a caller
+  /// waiting on an SFTP download or a shell stream finds out instead of
+  /// receiving a silently truncated result. OpenSSH logs and discards the
+  /// offending packet here, which is reasonable for an interactive client but
+  /// not for a library that hands the bytes to an application.
+  ///
+  /// Failing the whole connection is the other extreme: applications
+  /// multiplex a shell, SFTP and port forwards over a single connection, and
+  /// one peer miscounting a window on one channel should not take the rest
+  /// down with it.
+  void _failChannel(String message) {
+    printDebug?.call('SSHChannel._failChannel: $message');
+
+    if (!_remoteStream.isClosed) {
+      _remoteStream.addError(SSHStateError(message));
+    }
+
+    // Sends EOF and CHANNEL_CLOSE to the peer and completes [done]. The peer's
+    // CHANNEL_CLOSE reply is what removes the channel from the client.
+    destroy();
   }
 
   void _handleRequestMessage(SSH_Message_Channel_Request request) {

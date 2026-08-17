@@ -60,7 +60,8 @@ void main() {
       );
     });
 
-    test('rejects data larger than the advertised maximum packet size', () {
+    test('fails the channel on data larger than the maximum packet size',
+        () async {
       final sent = <SSHMessage>[];
       final controller = _createController(
         localInitialWindowSize: 8,
@@ -68,19 +69,24 @@ void main() {
         sendMessage: sent.add,
       );
 
-      expect(
-        () => controller.handleMessage(
-          SSH_Message_Channel_Data(
-            recipientChannel: 1,
-            data: Uint8List(5),
-          ),
-        ),
-        throwsA(isA<SSHStateError>()),
+      final error = expectLater(
+        controller.channel.stream,
+        emitsError(isA<SSHStateError>()),
       );
-      expect(sent, isEmpty);
+
+      // The violation must not escape as an exception: it would travel up to
+      // the transport and take the whole connection down with it.
+      controller.handleMessage(
+        SSH_Message_Channel_Data(recipientChannel: 1, data: Uint8List(5)),
+      );
+
+      await error;
+      expect(controller.channel.done, completes);
+      expect(sent.whereType<SSH_Message_Channel_Close>(), hasLength(1));
     });
 
-    test('rejects data larger than the remaining local window', () {
+    test('fails the channel on data larger than the remaining window',
+        () async {
       final sent = <SSHMessage>[];
       final controller = _createController(
         localInitialWindowSize: 4,
@@ -88,16 +94,18 @@ void main() {
         sendMessage: sent.add,
       );
 
-      expect(
-        () => controller.handleMessage(
-          SSH_Message_Channel_Data(
-            recipientChannel: 1,
-            data: Uint8List(5),
-          ),
-        ),
-        throwsA(isA<SSHStateError>()),
+      final error = expectLater(
+        controller.channel.stream,
+        emitsError(isA<SSHStateError>()),
       );
-      expect(sent, isEmpty);
+
+      controller.handleMessage(
+        SSH_Message_Channel_Data(recipientChannel: 1, data: Uint8List(5)),
+      );
+
+      await error;
+      expect(controller.channel.done, completes);
+      expect(sent.whereType<SSH_Message_Channel_Close>(), hasLength(1));
     });
 
     test('applies packet and window limits to extended data', () async {
@@ -120,34 +128,41 @@ void main() {
       final adjustment = sent.single as SSH_Message_Channel_Window_Adjust;
       expect(adjustment.bytesToAdd, 4);
 
-      expect(
-        () => controller.handleMessage(
-          SSH_Message_Channel_Extended_Data(
-            recipientChannel: 1,
-            dataTypeCode: SSH_Message_Channel_Extended_Data.dataTypeStderr,
-            data: Uint8List(5),
-          ),
-        ),
-        throwsA(isA<SSHStateError>()),
+      await subscription.cancel();
+
+      final oversized = _createController(
+        localInitialWindowSize: 4,
+        localMaximumPacketSize: 4,
       );
-      expect(sent, hasLength(1));
+      final oversizedError = expectLater(
+        oversized.channel.stream,
+        emitsError(isA<SSHStateError>()),
+      );
+      oversized.handleMessage(
+        SSH_Message_Channel_Extended_Data(
+          recipientChannel: 1,
+          dataTypeCode: SSH_Message_Channel_Extended_Data.dataTypeStderr,
+          data: Uint8List(5),
+        ),
+      );
+      await oversizedError;
 
       final windowController = _createController(
         localInitialWindowSize: 4,
         localMaximumPacketSize: 8,
       );
-      expect(
-        () => windowController.handleMessage(
-          SSH_Message_Channel_Extended_Data(
-            recipientChannel: 1,
-            dataTypeCode: SSH_Message_Channel_Extended_Data.dataTypeStderr,
-            data: Uint8List(5),
-          ),
-        ),
-        throwsA(isA<SSHStateError>()),
+      final windowError = expectLater(
+        windowController.channel.stream,
+        emitsError(isA<SSHStateError>()),
       );
-
-      await subscription.cancel();
+      windowController.handleMessage(
+        SSH_Message_Channel_Extended_Data(
+          recipientChannel: 1,
+          dataTypeCode: SSH_Message_Channel_Extended_Data.dataTypeStderr,
+          data: Uint8List(5),
+        ),
+      );
+      await windowError;
     });
   });
 }
