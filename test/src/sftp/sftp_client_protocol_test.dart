@@ -114,7 +114,8 @@ void main() {
       harness.dispose();
     });
 
-    test('download keeps chunk order with pipelined reads', () async {
+    test('read ramps and replenishes its pipeline for out-of-order replies',
+        () async {
       final harness = _SftpHarness();
       await harness.nextOutgoingPacket();
       harness.sendResponsePacket(SftpVersionPacket(3));
@@ -124,7 +125,7 @@ void main() {
       final downloadFuture = harness.client.download(
         '/tmp/file',
         sink,
-        length: 8,
+        length: 16,
         chunkSize: 4,
         maxPendingRequests: 2,
       );
@@ -135,16 +136,31 @@ void main() {
       );
 
       final read1 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
-      final read2 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
-
       expect(read1.offset, 0);
-      expect(read2.offset, 4);
 
-      harness.sendResponsePacket(
-        SftpDataPacket(read2.requestId, Uint8List.fromList('EFGH'.codeUnits)),
-      );
+      final nextReads = harness.nextOutgoingPackets(2);
       harness.sendResponsePacket(
         SftpDataPacket(read1.requestId, Uint8List.fromList('ABCD'.codeUnits)),
+      );
+
+      final reads = (await nextReads).map(SftpReadPacket.decode).toList();
+      final read2 = reads[0];
+      final read3 = reads[1];
+      expect(read2.offset, 4);
+      expect(read3.offset, 8);
+
+      final read4Future = harness.nextOutgoingPacket();
+      harness.sendResponsePacket(
+        SftpDataPacket(read3.requestId, Uint8List.fromList('IJKL'.codeUnits)),
+      );
+      final read4 = SftpReadPacket.decode(await read4Future);
+      expect(read4.offset, 12);
+
+      harness.sendResponsePacket(
+        SftpDataPacket(read4.requestId, Uint8List.fromList('MNOP'.codeUnits)),
+      );
+      harness.sendResponsePacket(
+        SftpDataPacket(read2.requestId, Uint8List.fromList('EFGH'.codeUnits)),
       );
 
       final close = SftpClosePacket.decode(await harness.nextOutgoingPacket());
@@ -157,8 +173,81 @@ void main() {
       );
 
       final bytes = await downloadFuture;
-      expect(bytes, 8);
-      expect(sink.bytes, Uint8List.fromList('ABCDEFGH'.codeUnits));
+      expect(bytes, 16);
+      expect(sink.bytes, Uint8List.fromList('ABCDEFGHIJKLMNOP'.codeUnits));
+
+      harness.dispose();
+    });
+
+    test('read retries the missing suffix after a short data packet', () async {
+      final harness = _SftpHarness();
+      await harness.nextOutgoingPacket();
+      harness.sendResponsePacket(SftpVersionPacket(3));
+      await harness.client.handshake;
+
+      final sink = _CollectingSink();
+      final downloadFuture = harness.client.download(
+        '/tmp/file',
+        sink,
+        length: 1536,
+        chunkSize: 1024,
+        maxPendingRequests: 2,
+      );
+
+      final open = SftpOpenPacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpHandlePacket(open.requestId, Uint8List.fromList([1, 2, 3])),
+      );
+
+      final read1 = SftpReadPacket.decode(await harness.nextOutgoingPacket());
+      expect(read1.offset, 0);
+      expect(read1.length, 1024);
+
+      final nextReads = harness.nextOutgoingPackets(2);
+      harness.sendResponsePacket(
+        SftpDataPacket(read1.requestId, Uint8List.fromList([1])),
+      );
+
+      final reads = (await nextReads).map(SftpReadPacket.decode).toList();
+      final retry = reads[0];
+      final read2 = reads[1];
+      expect(retry.offset, 1);
+      expect(retry.length, 1023);
+      expect(read2.offset, 1024);
+      expect(read2.length, 512);
+
+      harness.sendResponsePacket(
+        SftpDataPacket(
+          read2.requestId,
+          Uint8List.fromList(List<int>.filled(512, 3)),
+        ),
+      );
+      harness.sendResponsePacket(
+        SftpDataPacket(
+          retry.requestId,
+          Uint8List.fromList(List<int>.filled(1023, 2)),
+        ),
+      );
+
+      final close = SftpClosePacket.decode(await harness.nextOutgoingPacket());
+      harness.sendResponsePacket(
+        SftpStatusPacket(
+          requestId: close.requestId,
+          code: SftpStatusCode.ok,
+          message: 'ok',
+        ),
+      );
+
+      final bytes = await downloadFuture;
+      expect(bytes, 1536);
+      expect(
+        sink.bytes,
+        Uint8List.fromList([
+          1,
+          ...List<int>.filled(1023, 2),
+          ...List<int>.filled(512, 3),
+        ]),
+      );
 
       harness.dispose();
     });
@@ -560,6 +649,9 @@ class _SftpHarness {
   }
 
   Future<Uint8List> nextOutgoingPacket() => _outgoing.stream.first;
+
+  Future<List<Uint8List>> nextOutgoingPackets(int count) =>
+      _outgoing.stream.take(count).toList();
 
   Future<void> get channelDone => _controller.channel.done;
 

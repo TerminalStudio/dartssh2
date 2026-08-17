@@ -23,6 +23,8 @@ part 'sftp_file.dart';
 const _kVersion = 3;
 const _kReadChunkSize = 16 * 1024;
 const _kReadMaxPendingRequests = 64;
+// Keep adaptive reads from collapsing to tiny packets after a short reply.
+const _kMinReadSize = 512;
 const _kDownloadChunkSize = 64 * 1024;
 const _kDownloadMaxPendingRequests = 128;
 
