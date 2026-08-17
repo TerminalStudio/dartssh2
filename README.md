@@ -12,9 +12,6 @@
   <a href="https://github.com/vicajilau/dartssh2/actions/workflows/dart.yml">
     <img src="https://github.com/vicajilau/dartssh2/actions/workflows/dart.yml/badge.svg" alt="DartSSH2 GitHub Actions workflow status">
   </a>
-  <a href="https://ko-fi.com/F1F61K6BL">
-    <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-F16061?style=flat&logo=buy-me-a-coffee&logoColor=white&labelColor=555555" alt="Support me on Ko-fi">
-  </a>
 </p>
 
 <p style="text-align: center;">
