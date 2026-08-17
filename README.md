@@ -777,6 +777,7 @@ void main() async {
 ## Credits
 
 - [https://github.com/GreenAppers/dartssh](https://github.com/GreenAppers/dartssh) by GreenAppers.
+- dartssh2 was created at [TerminalStudio](https://github.com/TerminalStudio), where it was developed and maintained up to version 3.0.1, before moving to this repository.
 
 ## License
 
