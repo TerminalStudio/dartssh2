@@ -1,3 +1,13 @@
+## [3.1.0] - 2026-08-17
+- Added strict key exchange (`kex-strict-c-v00@openssh.com`), the countermeasure against the Terrapin attack (CVE-2023-48795). It is negotiated automatically and, when the server supports it, packet sequence numbers are reset after every `SSH_MSG_NEWKEYS`, `SSH_MSG_IGNORE` / `SSH_MSG_UNIMPLEMENTED` / `SSH_MSG_DEBUG` are rejected during a key exchange, and the first `SSH_MSG_KEXINIT` is required to be the first packet of the connection. Exposed as `SSHClient.strictKex`.
+- Added `SSH_MSG_EXT_INFO` support (RFC 8308). The client advertises `ext-info-c` and exposes the signature algorithms the server accepts as `SSHClient.serverSigAlgs`.
+- **Changed the default algorithm preferences.** AES-GCM is now the preferred cipher instead of being opt-in, encrypt-then-MAC is preferred over encrypt-and-MAC, and `ssh-rsa` (SHA-1) is now last among the host key algorithms. CBC ciphers and `hmac-sha1` remain available but are only reached when a server offers nothing better.
+- **Removed three broken algorithms from the defaults**: `diffie-hellman-group1-sha1` (1024-bit group), `hmac-md5`, and the truncated `hmac-sha2-[256|512]-96` variants. They are still implemented and can be re-enabled by passing them to `SSHAlgorithms` explicitly.
+- Fixed `SSH_Message_Userauth_Request.decode()` swapping the old and new password when decoding a password change request, contrary to RFC 4252 §8.
+- Fixed `SSH_Message_Userauth_Request.decode()` not reading the boolean that precedes the algorithm name in a `publickey` request (RFC 4252 §7), which misparsed every signed request and could not represent an unsigned probe.
+- Added a `SECURITY.md` with a private vulnerability reporting process.
+- Documented `onVerifyHostKey` in the README. Host key signatures were and are always verified, but deciding whether the key is the expected one is the caller's job, and omitting the handler accepts any host key.
+
 ## [3.0.2] - 2026-08-17
 - Fixed silent data loss in SFTP reads when a server returned fewer bytes than requested, which the protocol allows: the missing suffix is now retried instead of skipped, so `SftpFile.read()` and `SftpClient.download()` no longer return truncated, misaligned data [#200] [#203]. Thanks [@GT-610].
 - Fixed NIST ECDH private scalar generation, which sampled only 65 bytes for P-521 and could therefore never set the 521st bit, and replaced the modulo reduction with rejection sampling for a uniform scalar in `1 <= x < n` [#201]. Thanks [@GT-610].
