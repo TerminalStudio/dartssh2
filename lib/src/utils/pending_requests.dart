@@ -5,7 +5,7 @@ import 'package:dartssh2/src/utils/terminal_state.dart';
 /// Futures waiting for replies identified by a request key.
 class PendingRequests<K, V> {
   PendingRequests({TerminalState? terminalState})
-    : terminalState = terminalState ?? TerminalState();
+      : terminalState = terminalState ?? TerminalState();
 
   final TerminalState terminalState;
 

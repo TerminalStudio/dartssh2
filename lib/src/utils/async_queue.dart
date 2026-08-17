@@ -7,7 +7,7 @@ import 'package:dartssh2/src/utils/terminal_state.dart';
 /// A queue that consumers can wait asynchronously for items to be added.
 class AsyncQueue<T> {
   AsyncQueue({TerminalState? terminalState})
-    : terminalState = terminalState ?? TerminalState();
+      : terminalState = terminalState ?? TerminalState();
 
   final TerminalState terminalState;
 

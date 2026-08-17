@@ -18,19 +18,18 @@ void main() {
     final socket = _FakeSSHSocket();
     final client = SSHClient(socket, username: 'demo', keepAliveInterval: null);
     final clientMirror = reflect(client);
-    final authenticated =
-        clientMirror.getField(privateSymbol('_authenticated')).reflectee
-            as Completer<void>;
+    final authenticated = clientMirror
+        .getField(privateSymbol('_authenticated'))
+        .reflectee as Completer<void>;
     authenticated.complete();
 
     final channelController =
         clientMirror.invoke(privateSymbol('_acceptChannel'), const [], {
-              #localChannelId: 99,
-              #remoteChannelId: 100,
-              #remoteInitialWindowSize: 0,
-              #remoteMaximumPacketSize: 1024,
-            }).reflectee
-            as SSHChannelController;
+      #localChannelId: 99,
+      #remoteChannelId: 100,
+      #remoteInitialWindowSize: 0,
+      #remoteMaximumPacketSize: 1024,
+    }).reflectee as SSHChannelController;
 
     final ping = client.ping();
     final open = client.forwardLocal('example.com', 22);
