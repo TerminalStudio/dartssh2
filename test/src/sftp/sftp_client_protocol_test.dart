@@ -704,9 +704,8 @@ Future<List<int>> _recordReadLengths({
     final read = SftpReadPacket.decode(packet);
     requestedLengths.add(read.length);
 
-    final replyLength = requestedLengths.length == 1
-        ? firstReplyLength
-        : read.length;
+    final replyLength =
+        requestedLengths.length == 1 ? firstReplyLength : read.length;
     delivered += replyLength;
 
     harness.sendResponsePacket(
