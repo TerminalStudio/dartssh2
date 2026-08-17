@@ -57,6 +57,14 @@ jobs:
         run: dart test --tags=integration
 
       - name: Upload coverage
+        # Dependabot pull requests run without access to repository secrets, so
+        # CODECOV_TOKEN arrives empty and Codecov rejects the upload with
+        # "Token required because branch is protected". Combined with
+        # fail_ci_if_error that turns every dependency bump red for a reason
+        # that has nothing to do with the change. Pull requests from forks are
+        # not affected: they upload without a token because the head branch
+        # does not belong to this repository.
+        if: github.actor != 'dependabot[bot]'
         uses: codecov/codecov-action@v7
         with:
           # Fail loudly. With this off, the upload 404'd for every run after
