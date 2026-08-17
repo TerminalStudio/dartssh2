@@ -58,8 +58,8 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
   <tr> 
     <!-- ServerBox -->
     <td>
-      <img src="https://raw.githubusercontent.com/vicajilau/dartssh2/master/media/showcase-1-serverbox.1.jpg" width="150px" alt="ServerBox interface displaying connection management options">
-      <img src="https://raw.githubusercontent.com/vicajilau/dartssh2/master/media/showcase-1-serverbox.2.png" width="150px" alt="ServerBox user interface for server control and monitoring">
+      <img src="https://raw.githubusercontent.com/vicajilau/dartssh2/main/media/showcase-1-serverbox.1.jpg" width="150px" alt="ServerBox interface displaying connection management options">
+      <img src="https://raw.githubusercontent.com/vicajilau/dartssh2/main/media/showcase-1-serverbox.2.png" width="150px" alt="ServerBox user interface for server control and monitoring">
     </td>
     <!-- NoPorts -->
     <td>
@@ -666,20 +666,20 @@ void main() async {
 
 ### SSH client:
 
-- [example/example.dart](https://github.com/vicajilau/dartssh2/blob/master/example/example.dart)
-- [example/execute.dart](https://github.com/vicajilau/dartssh2/blob/master/example/execute.dart)
-- [example/forward_local.dart](https://github.com/vicajilau/dartssh2/blob/master/example/forward_local.dart)
-- [example/forward_remote.dart](https://github.com/vicajilau/dartssh2/blob/master/example/forward_remote.dart)
-- [example/pubkey.dart](https://github.com/vicajilau/dartssh2/blob/master/example/pubkey.dart)
-- [example/shell.dart](https://github.com/vicajilau/dartssh2/blob/master/example/shell.dart)
-- [example/ssh_jump.dart](https://github.com/vicajilau/dartssh2/blob/master/example/ssh_jump.dart)
+- [example/example.dart](https://github.com/vicajilau/dartssh2/blob/main/example/example.dart)
+- [example/execute.dart](https://github.com/vicajilau/dartssh2/blob/main/example/execute.dart)
+- [example/forward_local.dart](https://github.com/vicajilau/dartssh2/blob/main/example/forward_local.dart)
+- [example/forward_remote.dart](https://github.com/vicajilau/dartssh2/blob/main/example/forward_remote.dart)
+- [example/pubkey.dart](https://github.com/vicajilau/dartssh2/blob/main/example/pubkey.dart)
+- [example/shell.dart](https://github.com/vicajilau/dartssh2/blob/main/example/shell.dart)
+- [example/ssh_jump.dart](https://github.com/vicajilau/dartssh2/blob/main/example/ssh_jump.dart)
 
 ### SFTP:
-- [example/sftp_read.dart](https://github.com/vicajilau/dartssh2/blob/master/example/sftp_read.dart)
-- [example/sftp_list.dart](https://github.com/vicajilau/dartssh2/blob/master/example/sftp_list.dart)
-- [example/sftp_stat.dart](https://github.com/vicajilau/dartssh2/blob/master/example/sftp_stat.dart)
-- [example/sftp_upload.dart](https://github.com/vicajilau/dartssh2/blob/master/example/sftp_upload.dart)
-- [example/sftp_filetype.dart](https://github.com/vicajilau/dartssh2/blob/master/example/sftp_filetype.dart)
+- [example/sftp_read.dart](https://github.com/vicajilau/dartssh2/blob/main/example/sftp_read.dart)
+- [example/sftp_list.dart](https://github.com/vicajilau/dartssh2/blob/main/example/sftp_list.dart)
+- [example/sftp_stat.dart](https://github.com/vicajilau/dartssh2/blob/main/example/sftp_stat.dart)
+- [example/sftp_upload.dart](https://github.com/vicajilau/dartssh2/blob/main/example/sftp_upload.dart)
+- [example/sftp_filetype.dart](https://github.com/vicajilau/dartssh2/blob/main/example/sftp_filetype.dart)
 
 
 
