@@ -66,6 +66,13 @@ void main() {
       expect(privateKey < kex.curve.n, isTrue,
           reason: 'Private key should be less than curve order.');
     });
+
+    test('generate P-521 private key within valid range', () {
+      final kex = SSHKexNist.p521();
+
+      expect(kex.privateKey, greaterThan(BigInt.zero));
+      expect(kex.privateKey, lessThan(kex.curve.n));
+    });
   });
 
   group('SSHKexNist (Async)', () {
@@ -94,6 +101,14 @@ void main() {
       final secret1 = await kex1.computeSecretAsync(kex2.publicKey);
       final secret2 = await kex2.computeSecretAsync(kex1.publicKey);
       expect(secret1, equals(secret2));
+    });
+
+    test('generate P-521 private key within valid range asynchronously',
+        () async {
+      final kex = await SSHKexNist.p521Async();
+
+      expect(kex.privateKey, greaterThan(BigInt.zero));
+      expect(kex.privateKey, lessThan(kex.curve.n));
     });
   });
 }

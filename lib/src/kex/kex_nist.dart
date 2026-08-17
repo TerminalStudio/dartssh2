@@ -1,8 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:dartssh2/src/kex/private_scalar.dart';
 import 'package:dartssh2/src/ssh_kex.dart';
-import 'package:dartssh2/src/utils/bigint.dart';
-import 'package:dartssh2/src/utils/list.dart';
 import 'package:dartssh2/src/utils/compute.dart';
 import 'package:pointycastle/ecc/curves/secp256r1.dart';
 import 'package:pointycastle/ecc/curves/secp384r1.dart';
@@ -27,7 +26,7 @@ class SSHKexNist implements SSHKexECDH {
   late final Uint8List publicKey;
 
   SSHKexNist({required this.curve, required this.secretBits}) {
-    privateKey = _generatePrivateKey();
+    privateKey = generateEcPrivateScalar(curve.n);
     final c = curve.G * privateKey;
     publicKey = c!.getEncoded(false);
   }
@@ -78,14 +77,6 @@ class SSHKexNist implements SSHKexECDH {
       (curveName, privateKey, remotePublicKey),
     );
   }
-
-  BigInt _generatePrivateKey() {
-    late BigInt x;
-    do {
-      x = decodeBigIntWithSign(1, randomBytes(secretBits ~/ 8)) % curve.n;
-    } while (x == BigInt.zero);
-    return x;
-  }
 }
 
 ECDomainParameters _getCurveByName(String name) {
@@ -123,12 +114,7 @@ String _getNameByCurve(ECDomainParameters curve) {
 
 (BigInt, Uint8List) _computeNistKeyPair(String curveName) {
   final curve = _getCurveByName(curveName);
-  final secretBits = _getSecretBitsByName(curveName);
-
-  late BigInt x;
-  do {
-    x = decodeBigIntWithSign(1, randomBytes(secretBits ~/ 8)) % curve.n;
-  } while (x == BigInt.zero);
+  final x = generateEcPrivateScalar(curve.n);
 
   final c = curve.G * x;
   final publicKey = c!.getEncoded(false);
