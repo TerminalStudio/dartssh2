@@ -1,3 +1,11 @@
+## [3.0.2] - 2026-08-17
+- Fixed silent data loss in SFTP reads when a server returned fewer bytes than requested, which the protocol allows: the missing suffix is now retried instead of skipped, so `SftpFile.read()` and `SftpClient.download()` no longer return truncated, misaligned data [#200] [#203]. Thanks [@GT-610].
+- Fixed NIST ECDH private scalar generation, which sampled only 65 bytes for P-521 and could therefore never set the 521st bit, and replaced the modulo reduction with rejection sampling for a uniform scalar in `1 <= x < n` [#201]. Thanks [@GT-610].
+- Changed `SftpFile.read()` to process pipelined read replies as they arrive while still emitting chunks ordered by file offset [#200]. Thanks [@GT-610].
+- Changed `SftpFile.read()` to throw `SftpError` when a server returns more bytes than requested, instead of silently truncating the surplus [#200]. Thanks [@GT-610].
+- Registered SFTP reply waiters before sending each request, so a reply can no longer be discarded by a channel that delivers it synchronously [#199]. Thanks [@GT-610].
+- Limited SFTP read resizing to short replies of at least 512 bytes, so a single tiny reply no longer pins every later request to that floor for the rest of a transfer [#203].
+
 ## [3.0.1] - 2026-08-16
 - Fixed X11 forwarding by encoding and decoding the `x11-req` screen number as a `uint32` instead of a string, as required by RFC 4254 §6.3 [#194]. Thanks [@GT-610].
 - Fixed `SSHChannel.remoteChannelId` returning the local channel id instead of the id assigned by the peer [#196]. Thanks [@GT-610].
@@ -305,6 +313,10 @@
 [#196]: https://github.com/vicajilau/dartssh2/pull/196
 [#197]: https://github.com/vicajilau/dartssh2/pull/197
 [#198]: https://github.com/vicajilau/dartssh2/pull/198
+[#199]: https://github.com/vicajilau/dartssh2/pull/199
+[#200]: https://github.com/vicajilau/dartssh2/pull/200
+[#201]: https://github.com/vicajilau/dartssh2/pull/201
+[#203]: https://github.com/vicajilau/dartssh2/pull/203
 
 [@linhanyu]: https://github.com/linhanyu
 [@Migarl]: https://github.com/Migarl
