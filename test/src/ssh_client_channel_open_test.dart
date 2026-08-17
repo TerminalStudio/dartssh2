@@ -170,6 +170,54 @@ void main() {
       expect(_pendingChannelOpens(client), isEmpty);
       expect(_allocatedChannelIds(client), isEmpty);
     });
+
+    test('a channel protocol violation does not take the connection down',
+        () async {
+      _disableRekeyBuffer(client);
+
+      final first = _openSessionChannel(client);
+      client.handlePacket(_confirmation(0).encode());
+      final firstChannel = await first;
+
+      final second = _openSessionChannel(client);
+      client.handlePacket(_confirmation(1).encode());
+      final secondChannel = await second;
+
+      final failed = expectLater(
+        firstChannel.channel.stream,
+        emitsError(isA<SSHStateError>()),
+      );
+
+      // The peer overruns the maximum packet size the client advertised
+      // (32768) on the first channel. That channel has to fail, but the
+      // connection carries other channels and must survive.
+      client.handlePacket(
+        SSH_Message_Channel_Data(
+          recipientChannel: 0,
+          data: Uint8List(40000),
+        ).encode(),
+      );
+
+      await failed;
+      expect(client.isClosed, isFalse);
+
+      // The surviving channel still delivers data.
+      client.handlePacket(
+        SSH_Message_Channel_Data(
+          recipientChannel: 1,
+          data: Uint8List.fromList([7, 8, 9]),
+        ).encode(),
+      );
+
+      expect(
+        await secondChannel.channel.stream.first,
+        isA<SSHChannelData>().having(
+          (data) => data.bytes,
+          'bytes',
+          orderedEquals([7, 8, 9]),
+        ),
+      );
+    });
   });
 }
 
