@@ -69,4 +69,13 @@ class SSHPacketSN {
       _value++;
     }
   }
+
+  /// Resets the sequence number back to zero.
+  ///
+  /// Used by the strict key exchange mode, which resets both sequence numbers
+  /// after every SSH_MSG_NEWKEYS instead of letting them run monotonically for
+  /// the whole session.
+  void reset() {
+    _value = 0;
+  }
 }
