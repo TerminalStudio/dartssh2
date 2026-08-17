@@ -38,8 +38,9 @@ class SftpFile {
     SftpStatusError.check(reply);
   }
 
-  /// Reads at most [count] bytes from the file starting at [offset]. If
-  /// [length] is null, reads until end of file.  Returns a [Stream] of chunks.
+  /// Reads at most [length] bytes from the file starting at [offset]. If
+  /// [length] is null, reads until end of file. Returns a [Stream] of chunks
+  /// ordered by file offset, even if the server replies out of order.
   /// [onProgress] is called with the total number of bytes already read.
   /// Use [readBytes] if you want a single Uint8List.
   Stream<Uint8List> read({
@@ -80,35 +81,146 @@ class SftpFile {
     }
 
     final endOffset = offset + length;
-    final pendingReads = <Future<Uint8List?>>[];
-    var nextOffset = offset;
+    final completedReads = <int, Uint8List?>{};
+    var reservedOffset = offset;
     var bytesRead = 0;
+    var nextOutputOffset = offset;
+    var pendingReadCount = 0;
+    var activeReadLimit = 1;
+    var effectiveChunkSize = chunkSize;
+    var stopScheduling = false;
+    var outputEnded = false;
+    Object? pendingError;
+    StackTrace? pendingStackTrace;
+    Completer<void>? completionSignal;
+
+    void notifyReadComplete() {
+      final signal = completionSignal;
+      if (signal != null && !signal.isCompleted) {
+        signal.complete();
+      }
+    }
+
+    Future<void> waitForReadComplete() {
+      final signal = completionSignal = Completer<void>();
+      return signal.future.whenComplete(() {
+        if (identical(completionSignal, signal)) {
+          completionSignal = null;
+        }
+      });
+    }
+
+    void recordError(Object error, StackTrace stackTrace) {
+      if (pendingError != null) return;
+      pendingError = error;
+      pendingStackTrace = stackTrace;
+      stopScheduling = true;
+    }
+
+    void issueRead(int startOffset, int requestLength) {
+      pendingReadCount++;
+      _readChunk(requestLength, startOffset).then(
+        (chunk) {
+          pendingReadCount--;
+
+          if (pendingError != null) {
+            notifyReadComplete();
+            return;
+          }
+
+          if (chunk == null) {
+            stopScheduling = true;
+            completedReads[startOffset] = null;
+            notifyReadComplete();
+            return;
+          }
+
+          if (chunk.length > requestLength) {
+            recordError(
+              SftpError(
+                'Received ${chunk.length} bytes for a $requestLength-byte read',
+              ),
+              StackTrace.current,
+            );
+            notifyReadComplete();
+            return;
+          }
+
+          if (chunk.isEmpty) {
+            recordError(
+              SftpError('Unexpected empty data chunk before EOF'),
+              StackTrace.current,
+            );
+            notifyReadComplete();
+            return;
+          }
+
+          activeReadLimit = min(maxPendingRequests, activeReadLimit + 1);
+          completedReads[startOffset] = chunk;
+
+          if (chunk.length < requestLength) {
+            effectiveChunkSize = min(
+              chunkSize,
+              max(_kMinReadSize, chunk.length),
+            );
+            issueRead(
+              startOffset + chunk.length,
+              requestLength - chunk.length,
+            );
+          }
+
+          notifyReadComplete();
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          pendingReadCount--;
+          recordError(error, stackTrace);
+          notifyReadComplete();
+        },
+      );
+    }
+
+    void scheduleReads() {
+      while (!stopScheduling &&
+          reservedOffset < endOffset &&
+          pendingReadCount < activeReadLimit &&
+          completedReads.length < maxPendingRequests) {
+        final startOffset = reservedOffset;
+        final requestLength =
+            min(effectiveChunkSize, endOffset - reservedOffset);
+        issueRead(startOffset, requestLength);
+        reservedOffset += requestLength;
+      }
+    }
+
+    scheduleReads();
 
     while (bytesRead < length) {
-      while (
-          nextOffset < endOffset && pendingReads.length < maxPendingRequests) {
-        final requestLength = min(chunkSize, endOffset - nextOffset);
-        pendingReads.add(_readChunk(requestLength, nextOffset));
-        nextOffset += requestLength;
+      if (pendingError != null) {
+        Error.throwWithStackTrace(pendingError!, pendingStackTrace!);
       }
 
-      if (pendingReads.isEmpty) break;
+      if (!outputEnded && completedReads.containsKey(nextOutputOffset)) {
+        final chunk = completedReads.remove(nextOutputOffset);
+        if (chunk == null) {
+          outputEnded = true;
+        } else {
+          nextOutputOffset += chunk.length;
+          bytesRead += chunk.length;
+          scheduleReads();
 
-      final chunk = await pendingReads.removeAt(0);
-      if (chunk == null) break;
-      if (chunk.isEmpty) {
-        throw SftpError('Unexpected empty data chunk before EOF');
+          yield chunk;
+          onProgress?.call(bytesRead);
+          continue;
+        }
       }
 
-      final remaining = length - bytesRead;
-      final outputChunk = chunk.length <= remaining
-          ? chunk
-          : Uint8List.sublistView(chunk, 0, remaining);
-
-      yield outputChunk;
-
-      bytesRead += outputChunk.length;
-      onProgress?.call(bytesRead);
+      scheduleReads();
+      if (outputEnded) {
+        if (pendingReadCount == 0) break;
+      } else if (pendingReadCount == 0) {
+        break;
+      }
+      await waitForReadComplete();
     }
   }
 
