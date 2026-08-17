@@ -7,8 +7,11 @@ import 'package:dartssh2/src/ssh_channel_id.dart';
 import 'package:dartssh2/src/ssh_transport.dart';
 import 'package:dartssh2/src/utils/async_queue.dart';
 import 'package:dartssh2/src/message/msg_channel.dart';
+import 'package:dartssh2/src/ssh_errors.dart';
 import 'package:dartssh2/src/ssh_message.dart';
 import 'package:dartssh2/src/utils/stream.dart';
+
+const _maxChannelWindow = 0xffffffff;
 
 /// Handler of channel requests. Return true if the request was handled, false
 /// if the request was not recognized or could not be handled.
@@ -260,7 +263,15 @@ class SSHChannelController {
       throw ArgumentError.value(bytesToAdd, 'bytesToAdd', 'must be positive');
     }
 
-    _remoteWindow += bytesToAdd;
+    final adjustedWindow = _remoteWindow + bytesToAdd;
+    if (adjustedWindow > _maxChannelWindow) {
+      throw SSHStateError(
+        'Remote window overflow on channel $localId: '
+        '$_remoteWindow + $bytesToAdd exceeds $_maxChannelWindow',
+      );
+    }
+
+    _remoteWindow = adjustedWindow;
 
     if (_remoteWindow > 0) {
       _uploadLoop.activate();
@@ -275,13 +286,24 @@ class SSHChannelController {
       return;
     }
 
-    _remoteStream.add(SSHChannelData(data, type: type));
-
-    _localWindow -= data.length;
-    if (_localWindow < 0) {
-      // Maybe we should close the channel here?
+    final dataKind = type == null ? 'data' : 'extended data';
+    if (data.length > localMaximumPacketSize) {
+      throw SSHStateError(
+        'Received channel $dataKind packet of ${data.length} bytes, '
+        'exceeding maximum packet size $localMaximumPacketSize on '
+        'channel $localId',
+      );
     }
 
+    if (data.length > _localWindow) {
+      throw SSHStateError(
+        'Received channel $dataKind packet of ${data.length} bytes, '
+        'exceeding remaining window $_localWindow on channel $localId',
+      );
+    }
+
+    _localWindow -= data.length;
+    _remoteStream.add(SSHChannelData(data, type: type));
     _sendWindowAdjustIfNeeded();
   }
 
@@ -354,9 +376,10 @@ class SSHChannelController {
 
     if (_done.isCompleted) return;
     if (_remoteStream.isPaused) return;
-    if (_localWindow <= 0) return;
 
     final bytesToAdd = localInitialWindowSize - _localWindow;
+    if (bytesToAdd <= 0) return;
+
     _localWindow = localInitialWindowSize;
 
     sendMessage(

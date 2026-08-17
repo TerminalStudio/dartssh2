@@ -292,7 +292,10 @@ class SSHClient {
 
   final _channelIdAllocator = SSHChannelIdAllocator();
 
-  final _channelOpenReplyWaiters = <int, Completer<SSHMessage>>{};
+  /// Channels for which SSH_MSG_CHANNEL_OPEN has been sent and a matching
+  /// confirmation or failure has not yet been received.
+  final _pendingChannelOpens =
+      <SSHChannelId, Completer<SSHChannelController>>{};
 
   final _channels = <int, SSHChannelController>{};
 
@@ -780,16 +783,17 @@ class SSHClient {
     }
     _keepAlive?.stop();
 
-    // Complete any pending channel-open waiters so callers (e.g.
-    // forwardLocalUnix) don't hang forever when the connection drops.
-    for (final entry in _channelOpenReplyWaiters.entries) {
+    for (final entry in _pendingChannelOpens.entries) {
       if (!entry.value.isCompleted) {
         entry.value.completeError(
-          SSHStateError('Connection closed while waiting for channel open'),
+          SSHStateError(
+            'Connection closed while opening channel ${entry.key}',
+          ),
         );
       }
+      _channelIdAllocator.release(entry.key);
     }
-    _channelOpenReplyWaiters.clear();
+    _pendingChannelOpens.clear();
 
     try {
       _closeChannels();
@@ -1099,14 +1103,14 @@ class SSHClient {
       data: Uint8List(0),
     );
 
-    _sendMessage(confirmation);
-
     final channelController = _acceptChannel(
       localChannelId: localChannelId,
       remoteChannelId: message.senderChannel,
       remoteInitialWindowSize: message.initialWindowSize,
       remoteMaximumPacketSize: message.maximumPacketSize,
     );
+
+    _sendMessage(confirmation);
 
     remoteForward._connections.add(
       SSHForwardChannel(channelController.channel),
@@ -1136,14 +1140,14 @@ class SSHClient {
       data: Uint8List(0),
     );
 
-    _sendMessage(confirmation);
-
     final channelController = _acceptChannel(
       localChannelId: localChannelId,
       remoteChannelId: message.senderChannel,
       remoteInitialWindowSize: message.initialWindowSize,
       remoteMaximumPacketSize: message.maximumPacketSize,
     );
+
+    _sendMessage(confirmation);
 
     onX11Forward!(
       SSHX11Channel(
@@ -1175,14 +1179,14 @@ class SSHClient {
       maximumPacketSize: _maximumPacketSize,
       data: Uint8List(0),
     );
-    _sendMessage(confirmation);
-
     final channelController = _acceptChannel(
       localChannelId: localChannelId,
       remoteChannelId: message.senderChannel,
       remoteInitialWindowSize: message.initialWindowSize,
       remoteMaximumPacketSize: message.maximumPacketSize,
     );
+
+    _sendMessage(confirmation);
 
     SSHAgentChannel(
       channelController.channel,
@@ -1202,24 +1206,39 @@ class SSHClient {
   void _handleChannelConfirmation(Uint8List payload) {
     final message = SSH_Message_Channel_Confirmation.decode(payload);
     printTrace?.call('<- $socket: $message');
-    // Register the channel synchronously BEFORE completing the future.
-    // CHANNEL_DATA for this channel may arrive in the same TCP segment as
-    // the CONFIRMATION. If we defer registration to the async continuation
-    // of _waitChannelOpen, that data hits _handleChannelData while
-    // _channels[id] is still null and is silently dropped.
-    _acceptChannel(
+
+    final pending = _requirePendingChannelOpen(
+      message.recipientChannel,
+      'confirmation',
+    );
+
+    // Register synchronously before completing the future. CHANNEL_DATA may
+    // immediately follow the confirmation in the same transport input.
+    final channelController = _acceptChannel(
       localChannelId: message.recipientChannel,
       remoteChannelId: message.senderChannel,
       remoteInitialWindowSize: message.initialWindowSize,
       remoteMaximumPacketSize: message.maximumPacketSize,
     );
-    _dispatchChannelOpenReply(message.recipientChannel, message);
+
+    _pendingChannelOpens.remove(message.recipientChannel);
+    pending.complete(channelController);
   }
 
   void _handleChannelOpenFailure(Uint8List payload) {
     final message = SSH_Message_Channel_Open_Failure.decode(payload);
     printTrace?.call('<- $socket: $message');
-    _dispatchChannelOpenReply(message.recipientChannel, message);
+
+    final pending = _requirePendingChannelOpen(
+      message.recipientChannel,
+      'failure',
+    );
+
+    _pendingChannelOpens.remove(message.recipientChannel);
+    _channelIdAllocator.release(message.recipientChannel);
+    pending.completeError(
+      SSHChannelOpenError(message.reasonCode, message.description),
+    );
   }
 
   void _handleChannelWindowAdjust(Uint8List payload) {
@@ -1403,7 +1422,7 @@ class SSHClient {
     );
   }
 
-  Future<SSHChannelController> _openSessionChannel() async {
+  Future<SSHChannelController> _openSessionChannel() {
     final localChannelId = _channelIdAllocator.allocate();
 
     final request = SSH_Message_Channel_Open.session(
@@ -1411,9 +1430,7 @@ class SSHClient {
       initialWindowSize: _initialWindowSize,
       maximumPacketSize: _maximumPacketSize,
     );
-    _sendMessage(request);
-
-    return await _waitChannelOpen(localChannelId);
+    return _sendChannelOpen(request);
   }
 
   Future<SSHChannelController> _openForwardLocalChannel(
@@ -1421,7 +1438,7 @@ class SSHClient {
     int bindPort,
     String remoteAddress,
     int remotePort,
-  ) async {
+  ) {
     final localChannelId = _channelIdAllocator.allocate();
 
     final request = SSH_Message_Channel_Open.directTcpip(
@@ -1433,14 +1450,12 @@ class SSHClient {
       originatorIP: bindAddress,
       originatorPort: bindPort,
     );
-    _sendMessage(request);
-
-    return await _waitChannelOpen(localChannelId);
+    return _sendChannelOpen(request);
   }
 
   Future<SSHChannelController> _openForwardLocalUnixChannel(
     String socketPath,
-  ) async {
+  ) {
     final localChannelId = _channelIdAllocator.allocate();
 
     final request = SSH_Message_Channel_Open.directStreamLocal(
@@ -1449,21 +1464,31 @@ class SSHClient {
       maximumPacketSize: _maximumPacketSize,
       socketPath: socketPath,
     );
-    _sendMessage(request);
-
-    return await _waitChannelOpen(localChannelId);
+    return _sendChannelOpen(request);
   }
 
-  Future<SSHChannelController> _waitChannelOpen(
-    SSHChannelId localChannelId,
-  ) async {
-    final message = await _waitChannelOpenReply(localChannelId);
-    if (message is SSH_Message_Channel_Open_Failure) {
-      throw SSHChannelOpenError(message.reasonCode, message.description);
+  Future<SSHChannelController> _sendChannelOpen(
+    SSH_Message_Channel_Open request,
+  ) {
+    final localChannelId = request.senderChannel;
+    if (_pendingChannelOpens.containsKey(localChannelId) ||
+        _channels.containsKey(localChannelId)) {
+      throw SSHStateError('Channel $localChannelId is already in use');
     }
 
-    // Channel was already registered synchronously in _handleChannelConfirmation.
-    return _channels[localChannelId]!;
+    final pending = Completer<SSHChannelController>();
+    _pendingChannelOpens[localChannelId] = pending;
+
+    try {
+      _sendMessage(request);
+    } catch (_) {
+      if (identical(_pendingChannelOpens.remove(localChannelId), pending)) {
+        _channelIdAllocator.release(localChannelId);
+      }
+      rethrow;
+    }
+
+    return pending.future;
   }
 
   SSHChannelController _acceptChannel({
@@ -1472,6 +1497,10 @@ class SSHClient {
     required int remoteInitialWindowSize,
     required int remoteMaximumPacketSize,
   }) {
+    if (_channels.containsKey(localChannelId)) {
+      throw SSHStateError('Channel $localChannelId is already open');
+    }
+
     final channelController = SSHChannelController(
       localId: localChannelId,
       localInitialWindowSize: _initialWindowSize,
@@ -1488,23 +1517,17 @@ class SSHClient {
     return channelController;
   }
 
-  Future<SSHMessage> _waitChannelOpenReply(SSHChannelId id) async {
-    if (_channelOpenReplyWaiters.containsKey(id)) {
-      printDebug?.call('_waitChannelOpenReply: already waiting for $id');
-      return _channelOpenReplyWaiters[id]!.future;
+  Completer<SSHChannelController> _requirePendingChannelOpen(
+    SSHChannelId id,
+    String replyType,
+  ) {
+    final pending = _pendingChannelOpens[id];
+    if (pending == null) {
+      throw SSHStateError(
+        'Received channel open $replyType for non-opening channel $id',
+      );
     }
-    final replyCompleter = Completer<SSHMessage>();
-    _channelOpenReplyWaiters[id] = replyCompleter;
-    return replyCompleter.future;
-  }
-
-  void _dispatchChannelOpenReply(SSHChannelId id, SSHMessage message) {
-    if (!_channelOpenReplyWaiters.containsKey(id)) {
-      printDebug?.call('_dispatchChannelOpenReply: no pending request for $id');
-      return;
-    }
-    final replyCompleter = _channelOpenReplyWaiters.remove(id)!;
-    replyCompleter.complete(message);
+    return pending;
   }
 }
 
