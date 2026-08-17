@@ -8,6 +8,12 @@ on:
     branches:
       - main
 
+# This workflow only reads the repository: it checks out, analyzes, tests, and
+# uploads coverage with a token of its own. The Codecov token comes from
+# secrets rather than from the GITHUB_TOKEN, so read access is all it needs.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}
