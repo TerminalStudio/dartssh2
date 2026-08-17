@@ -53,7 +53,9 @@ jobs:
       - name: Upload coverage
         uses: codecov/codecov-action@v7
         with:
-          fail_ci_if_error: false # optional (default = false)
+          # Fail loudly. With this off, the upload 404'd for every run after
+          # the repository moved owners and the step still reported success.
+          fail_ci_if_error: true
           files: ./coverage/lcov.info # optional
           flags: unittests # optional
           name: codecov-umbrella # optional
