@@ -114,6 +114,29 @@ void main() {
       harness.dispose();
     });
 
+    test('request waiter is registered before packet is sent', () async {
+      final channel = _SynchronousResponseChannel();
+      final client = SftpClient(channel);
+
+      channel.sendResponsePacket(SftpVersionPacket(3));
+      await client.handshake;
+
+      channel.respondDuringAddData((payload) {
+        final stat = SftpStatPacket.decode(payload);
+        return SftpAttrsPacket(
+          stat.requestId,
+          SftpFileAttrs(size: 9, mode: const SftpFileMode.value(1 << 15)),
+        );
+      });
+
+      final attrs = await client.stat('/tmp/file').timeout(
+            const Duration(seconds: 1),
+          );
+      expect(attrs.size, 9);
+
+      await client.close();
+    });
+
     test('download keeps chunk order with pipelined reads', () async {
       final harness = _SftpHarness();
       await harness.nextOutgoingPacket();
@@ -591,4 +614,53 @@ class _SftpHarness {
     _controller.destroy();
     _outgoing.close();
   }
+}
+
+class _SynchronousResponseChannel extends SSHChannel {
+  _SynchronousResponseChannel()
+      : super(
+          SSHChannelController(
+            localId: 1,
+            localMaximumPacketSize: 1024 * 1024,
+            localInitialWindowSize: 1024 * 1024,
+            remoteId: 2,
+            remoteMaximumPacketSize: 1024 * 1024,
+            remoteInitialWindowSize: 0,
+            sendMessage: (_) {},
+          ),
+        );
+
+  final _incoming = StreamController<SSHChannelData>(sync: true);
+  SftpPacket Function(Uint8List payload)? _outboundResponder;
+
+  @override
+  Stream<SSHChannelData> get stream => _incoming.stream;
+
+  @override
+  void addData(Uint8List data, {int? type}) {
+    final reader = SSHMessageReader(data);
+    final length = reader.readUint32();
+    final payload = reader.readBytes(length);
+    final response = _outboundResponder?.call(payload);
+    if (response != null) {
+      sendResponsePacket(response);
+    }
+  }
+
+  void respondDuringAddData(
+    SftpPacket Function(Uint8List payload) responder,
+  ) {
+    _outboundResponder = responder;
+  }
+
+  void sendResponsePacket(SftpPacket packet) {
+    final payload = packet.encode();
+    final writer = SSHMessageWriter();
+    writer.writeUint32(payload.length);
+    writer.writeBytes(payload);
+    _incoming.add(SSHChannelData(writer.takeBytes()));
+  }
+
+  @override
+  Future<void> close() => _incoming.close();
 }
