@@ -238,7 +238,7 @@ class SSHClient {
       algorithms: algorithms,
       onVerifyHostKey: onVerifyHostKey,
       onReady: _handleTransportReady,
-      onPacket: _handlePacket,
+      onMessage: _handlePacket,
       disableHostkeyVerification: disableHostkeyVerification,
       version: ident,
     );
@@ -822,9 +822,9 @@ class SSHClient {
     return await reply;
   }
 
-  void _handlePacket(Uint8List payload) {
+  bool _handlePacket(Uint8List payload) {
     try {
-      _dispatchMessage(payload);
+      return _dispatchMessage(payload);
     } catch (e) {
       rethrow;
     }
@@ -849,49 +849,69 @@ class SSHClient {
     });
   }
 
-  void _dispatchMessage(Uint8List message) {
+  bool _dispatchMessage(Uint8List message) {
     final messageId = SSHMessage.readMessageId(message);
     switch (messageId) {
       case SSH_Message_Service_Accept.messageId:
-        return _handleServiceAccept(message);
+        _handleServiceAccept(message);
+        return true;
       case SSH_Message_Userauth_Success.messageId:
-        return _handleUserauthSuccess();
+        _handleUserauthSuccess();
+        return true;
       case SSH_Message_Userauth_Failure.messageId:
-        return _handleUserauthFailure(message);
+        _handleUserauthFailure(message);
+        return true;
       case SSH_Message_Userauth_Passwd_ChangeReq.messageId:
-        return _handleUserauthIntermidiate(message);
+        _handleUserauthIntermidiate(message);
+        return true;
       case SSH_Message_Userauth_Banner.messageId:
-        return _handleUserauthBanner(message);
+        _handleUserauthBanner(message);
+        return true;
       case SSH_Message_Global_Request.messageId:
-        return _handleGlobalRequest(message);
+        _handleGlobalRequest(message);
+        return true;
       case SSH_Message_Request_Success.messageId:
-        return _handleGlobalRequestSuccess(message);
+        _handleGlobalRequestSuccess(message);
+        return true;
       case SSH_Message_Request_Failure.messageId:
-        return _handleGlobalRequestFailure(message);
+        _handleGlobalRequestFailure(message);
+        return true;
       case SSH_Message_Channel_Open.messageId:
-        return _handleChannelOpen(message);
+        _handleChannelOpen(message);
+        return true;
       case SSH_Message_Channel_Confirmation.messageId:
-        return _handleChannelConfirmation(message);
+        _handleChannelConfirmation(message);
+        return true;
       case SSH_Message_Channel_Open_Failure.messageId:
-        return _handleChannelOpenFailure(message);
+        _handleChannelOpenFailure(message);
+        return true;
       case SSH_Message_Channel_Window_Adjust.messageId:
-        return _handleChannelWindowAdjust(message);
+        _handleChannelWindowAdjust(message);
+        return true;
       case SSH_Message_Channel_Success.messageId:
-        return _handleChannelSuccess(message);
+        _handleChannelSuccess(message);
+        return true;
       case SSH_Message_Channel_Failure.messageId:
-        return _handleChannelFailure(message);
+        _handleChannelFailure(message);
+        return true;
       case SSH_Message_Channel_Data.messageId:
-        return _handleChannelData(message);
+        _handleChannelData(message);
+        return true;
       case SSH_Message_Channel_Extended_Data.messageId:
-        return _handleChannelExtendedData(message);
+        _handleChannelExtendedData(message);
+        return true;
       case SSH_Message_Channel_EOF.messageId:
-        return _handleChannelEOF(message);
+        _handleChannelEOF(message);
+        return true;
       case SSH_Message_Channel_Close.messageId:
-        return _handleChannelClose(message);
+        _handleChannelClose(message);
+        return true;
       case SSH_Message_Channel_Request.messageId:
-        return _handleChannelRequest(message);
+        _handleChannelRequest(message);
+        return true;
       default:
         printDebug?.call('unknown messageId: $messageId');
+        return false;
     }
   }
 
