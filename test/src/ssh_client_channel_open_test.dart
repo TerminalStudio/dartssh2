@@ -31,7 +31,7 @@ void main() {
       _disableRekeyBuffer(client);
       var pendingAtSend = false;
       socket.onWrite = (_) {
-        pendingAtSend = _pendingChannelOpens(client).containsKey(0);
+        pendingAtSend = _pendingChannelOpens(client).contains(0);
       };
 
       final openFuture = _openSessionChannel(client);
@@ -237,10 +237,11 @@ Future<SSHChannelController> _openSessionChannel(SSHClient client) {
       as Future<SSHChannelController>;
 }
 
-Map _pendingChannelOpens(SSHClient client) {
-  return reflect(client)
-      .getField(_clientSymbol('_pendingChannelOpens'))
-      .reflectee as Map;
+/// The channel IDs with an open still awaiting a confirmation or failure.
+Iterable _pendingChannelOpens(SSHClient client) {
+  final pending =
+      reflect(client).getField(_clientSymbol('_pendingChannelOpens')).reflectee;
+  return reflect(pending).getField(#keys).reflectee as Iterable;
 }
 
 Map _openChannels(SSHClient client) {

@@ -16,6 +16,8 @@ import 'package:dartssh2/src/ssh_identity.dart';
 import 'package:dartssh2/src/ssh_session.dart';
 import 'package:dartssh2/src/ssh_transport.dart';
 import 'package:dartssh2/src/utils/async_queue.dart';
+import 'package:dartssh2/src/utils/pending_requests.dart';
+import 'package:dartssh2/src/utils/terminal_state.dart';
 import 'package:dartssh2/src/message/msg_channel.dart';
 import 'package:dartssh2/src/message/msg_request.dart';
 import 'package:dartssh2/src/message/msg_service.dart';
@@ -243,8 +245,9 @@ class SSHClient {
 
     _transport.done.then(
       (_) => _handleTransportClosed(null),
-      onError: (e) => _handleTransportClosed(
-        e is SSHError ? e : SSHSocketError(e),
+      onError: (Object error, StackTrace stackTrace) => _handleTransportClosed(
+        error is SSHError ? error : SSHSocketError(error),
+        stackTrace,
       ),
     );
 
@@ -288,14 +291,20 @@ class SSHClient {
   /// completes with an error if the client could not authenticate.
   final _authenticated = Completer<void>();
 
-  final _globalRequestReplyQueue = AsyncQueue<SSHMessage>();
+  final _terminalState = TerminalState();
+
+  late final _globalRequestReplyQueue = AsyncQueue<SSHMessage>(
+    terminalState: _terminalState,
+  );
 
   final _channelIdAllocator = SSHChannelIdAllocator();
 
   /// Channels for which SSH_MSG_CHANNEL_OPEN has been sent and a matching
   /// confirmation or failure has not yet been received.
-  final _pendingChannelOpens =
-      <SSHChannelId, Completer<SSHChannelController>>{};
+  late final _pendingChannelOpens =
+      PendingRequests<SSHChannelId, SSHChannelController>(
+    terminalState: _terminalState,
+  );
 
   final _channels = <int, SSHChannelController>{};
 
@@ -364,8 +373,9 @@ class SSHClient {
     // Lisning on a random port if not specified.
     port ??= 0;
 
-    _sendMessage(SSH_Message_Global_Request.tcpipForward(host, port));
-    final reply = await _globalRequestReplyQueue.next;
+    final reply = await _sendGlobalRequest(
+      SSH_Message_Global_Request.tcpipForward(host, port),
+    );
 
     if (reply is SSH_Message_Request_Failure) return null;
 
@@ -390,14 +400,13 @@ class SSHClient {
 
     if (!_remoteForwards.remove(forward)) return false;
 
-    _sendMessage(
+    final reply = await _sendGlobalRequest(
       SSH_Message_Global_Request.cancelTcpipForward(
         bindAddress: forward.host,
         bindPort: forward.port,
       ),
     );
 
-    final reply = await _globalRequestReplyQueue.next;
     if (reply is SSH_Message_Request_Failure) {
       return false;
     }
@@ -727,8 +736,7 @@ class SSHClient {
   /// Send a empty message to the server to keep the connection alive.
   Future<void> ping() async {
     await _authenticated.future;
-    _sendMessage(SSH_Message_Global_Request.keepAlive());
-    await _globalRequestReplyQueue.next;
+    await _sendGlobalRequest(SSH_Message_Global_Request.keepAlive());
   }
 
   /// Shutdown the entire SSH connection. Sessions and channels will also be
@@ -736,7 +744,9 @@ class SSHClient {
   Future<void> close() async {
     _handshakeTimeoutTimer?.cancel();
     _authTimeoutTimer?.cancel();
-    _closeChannels();
+    final error = SSHStateError('SSH client closed');
+    _terminatePendingOperations(error);
+    _closeChannels(error);
     await _transport.close();
   }
 
@@ -746,9 +756,9 @@ class SSHClient {
   }
 
   /// Close all channels that are currently open.
-  void _closeChannels() {
+  void _closeChannels([Object? error, StackTrace? stackTrace]) {
     for (final channel in _channels.values) {
-      channel.destroy();
+      channel.destroy(error, stackTrace);
       _channelIdAllocator.release(channel.localId);
     }
 
@@ -769,7 +779,7 @@ class SSHClient {
     _requestAuthentication();
   }
 
-  void _handleTransportClosed(SSHError? error) {
+  void _handleTransportClosed(SSHError? error, [StackTrace? stackTrace]) {
     printDebug?.call('SSHClient._onTransportClosed');
     _handshakeTimeoutTimer?.cancel();
     _handshakeTimeoutTimer = null;
@@ -783,23 +793,33 @@ class SSHClient {
     }
     _keepAlive?.stop();
 
-    for (final entry in _pendingChannelOpens.entries) {
-      if (!entry.value.isCompleted) {
-        entry.value.completeError(
-          SSHStateError(
-            'Connection closed while opening channel ${entry.key}',
-          ),
-        );
-      }
-      _channelIdAllocator.release(entry.key);
-    }
-    _pendingChannelOpens.clear();
+    final terminalError = error ?? SSHStateError('SSH connection closed');
+    _terminatePendingOperations(terminalError, stackTrace);
 
     try {
-      _closeChannels();
+      _closeChannels(terminalError, stackTrace);
     } catch (e) {
       printDebug?.call("SSHClient::_handleTransportClosed - error: $e");
     }
+  }
+
+  void _terminatePendingOperations(Object error, [StackTrace? stackTrace]) {
+    _globalRequestReplyQueue.closeWithError(error, stackTrace);
+
+    for (final id in _pendingChannelOpens.keys) {
+      _channelIdAllocator.release(id);
+    }
+    _pendingChannelOpens.closeWithError(error, stackTrace);
+  }
+
+  Future<SSHMessage> _sendGlobalRequest(SSHMessage request) async {
+    final reply = _globalRequestReplyQueue.next;
+    try {
+      _sendMessage(request);
+    } catch (error, stackTrace) {
+      _terminatePendingOperations(error, stackTrace);
+    }
+    return await reply;
   }
 
   void _handlePacket(Uint8List payload) {
@@ -1207,10 +1227,7 @@ class SSHClient {
     final message = SSH_Message_Channel_Confirmation.decode(payload);
     printTrace?.call('<- $socket: $message');
 
-    final pending = _requirePendingChannelOpen(
-      message.recipientChannel,
-      'confirmation',
-    );
+    _requirePendingChannelOpen(message.recipientChannel, 'confirmation');
 
     // Register synchronously before completing the future. CHANNEL_DATA may
     // immediately follow the confirmation in the same transport input.
@@ -1221,22 +1238,18 @@ class SSHClient {
       remoteMaximumPacketSize: message.maximumPacketSize,
     );
 
-    _pendingChannelOpens.remove(message.recipientChannel);
-    pending.complete(channelController);
+    _pendingChannelOpens.complete(message.recipientChannel, channelController);
   }
 
   void _handleChannelOpenFailure(Uint8List payload) {
     final message = SSH_Message_Channel_Open_Failure.decode(payload);
     printTrace?.call('<- $socket: $message');
 
-    final pending = _requirePendingChannelOpen(
-      message.recipientChannel,
-      'failure',
-    );
+    _requirePendingChannelOpen(message.recipientChannel, 'failure');
 
-    _pendingChannelOpens.remove(message.recipientChannel);
     _channelIdAllocator.release(message.recipientChannel);
-    pending.completeError(
+    _pendingChannelOpens.fail(
+      message.recipientChannel,
       SSHChannelOpenError(message.reasonCode, message.description),
     );
   }
@@ -1430,7 +1443,7 @@ class SSHClient {
       initialWindowSize: _initialWindowSize,
       maximumPacketSize: _maximumPacketSize,
     );
-    return _sendChannelOpen(request);
+    return _openChannel(localChannelId, request);
   }
 
   Future<SSHChannelController> _openForwardLocalChannel(
@@ -1450,7 +1463,7 @@ class SSHClient {
       originatorIP: bindAddress,
       originatorPort: bindPort,
     );
-    return _sendChannelOpen(request);
+    return _openChannel(localChannelId, request);
   }
 
   Future<SSHChannelController> _openForwardLocalUnixChannel(
@@ -1464,31 +1477,32 @@ class SSHClient {
       maximumPacketSize: _maximumPacketSize,
       socketPath: socketPath,
     );
-    return _sendChannelOpen(request);
+    return _openChannel(localChannelId, request);
   }
 
-  Future<SSHChannelController> _sendChannelOpen(
+  Future<SSHChannelController> _openChannel(
+    SSHChannelId localChannelId,
     SSH_Message_Channel_Open request,
   ) {
-    final localChannelId = request.senderChannel;
-    if (_pendingChannelOpens.containsKey(localChannelId) ||
+    if (_pendingChannelOpens.isWaiting(localChannelId) ||
         _channels.containsKey(localChannelId)) {
       throw SSHStateError('Channel $localChannelId is already in use');
     }
 
-    final pending = Completer<SSHChannelController>();
-    _pendingChannelOpens[localChannelId] = pending;
+    // Registered before sending so a reply delivered synchronously by the
+    // transport still finds its waiter.
+    final reply = _pendingChannelOpens.wait(localChannelId);
 
     try {
       _sendMessage(request);
-    } catch (_) {
-      if (identical(_pendingChannelOpens.remove(localChannelId), pending)) {
+    } catch (error, stackTrace) {
+      if (_pendingChannelOpens.fail(localChannelId, error, stackTrace)) {
         _channelIdAllocator.release(localChannelId);
       }
       rethrow;
     }
 
-    return pending.future;
+    return reply;
   }
 
   SSHChannelController _acceptChannel({
@@ -1517,17 +1531,11 @@ class SSHClient {
     return channelController;
   }
 
-  Completer<SSHChannelController> _requirePendingChannelOpen(
-    SSHChannelId id,
-    String replyType,
-  ) {
-    final pending = _pendingChannelOpens[id];
-    if (pending == null) {
-      throw SSHStateError(
-        'Received channel open $replyType for non-opening channel $id',
-      );
-    }
-    return pending;
+  void _requirePendingChannelOpen(SSHChannelId id, String replyType) {
+    if (_pendingChannelOpens.isWaiting(id)) return;
+    throw SSHStateError(
+      'Received channel open $replyType for non-opening channel $id',
+    );
   }
 }
 

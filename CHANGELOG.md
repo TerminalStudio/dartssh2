@@ -1,4 +1,6 @@
 ## [3.1.0] - 2026-08-17
+- Fixed operations hanging forever when the component they were waiting on terminated. A channel request, a global request or a channel open whose reply could no longer arrive now fails with the error that ended the connection or the channel, instead of leaving the caller awaiting a reply that will never come [#212]. Thanks [@GT-610].
+- Changed `SSH_MSG_CHANNEL_CLOSE`, channel destruction and transport termination to be terminal for pending replies, while `SSH_MSG_CHANNEL_EOF` remains non-terminal, since RFC 4254 allows request replies to arrive after EOF [#212]. Thanks [@GT-610].
 - Fixed a channel stalling forever once a slow reader paused the stream: the receive window was never replenished after it reached zero, so the channel could not accept another byte for the rest of its life. This affected any slow consumer, such as an SFTP download or shell output [#210]. Thanks [@GT-610].
 - Added the channel limits required by RFC 4254 §5.2: data beyond the advertised maximum packet size or beyond the remaining receive window is rejected, and a window adjustment that would overflow the 32-bit window is refused [#210]. Thanks [@GT-610].
 - Changed a peer that breaks those limits to fail only the affected channel, raising the error on its stream so the caller finds out, while the connection and its other channels stay alive.

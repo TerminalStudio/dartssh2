@@ -99,6 +99,75 @@ void main() {
       harness.dispose();
     });
 
+    test('remote channel close aborts the handshake', () async {
+      final harness = _SftpHarness();
+      await harness.nextOutgoingPacket();
+      final handshakeExpectation = expectLater(
+        harness.client.handshake,
+        throwsA(isA<SftpAbortError>()),
+      );
+
+      harness.closeRemote();
+
+      await handshakeExpectation;
+      harness.dispose();
+    });
+
+    test('remote channel close aborts pending requests', () async {
+      final harness = _SftpHarness();
+      await harness.nextOutgoingPacket();
+      harness.sendResponsePacket(SftpVersionPacket(3));
+      await harness.client.handshake;
+
+      final openFuture = harness.client.open('/tmp/f');
+      await harness.nextOutgoingPacket();
+      final openExpectation = expectLater(
+        openFuture,
+        throwsA(isA<SftpAbortError>()),
+      );
+
+      harness.closeRemote();
+
+      await openExpectation;
+      harness.dispose();
+    });
+
+    test('stream error and done terminate the client only once', () async {
+      final channel = _SynchronousResponseChannel();
+      final client = SftpClient(channel);
+      final error = StateError('stream failed');
+      final handshakeExpectation = expectLater(
+        client.handshake,
+        throwsA(same(error)),
+      );
+
+      channel.fail(error);
+      await channel.finish();
+
+      await handshakeExpectation;
+      await expectLater(client.close(), completes);
+      await expectLater(client.close(), completes);
+    });
+
+    test('requests after stream termination fail before sending a packet',
+        () async {
+      final channel = _SynchronousResponseChannel();
+      final client = SftpClient(channel);
+      channel.sendResponsePacket(SftpVersionPacket(3));
+      await client.handshake;
+
+      await channel.finish();
+      await Future<void>.delayed(Duration.zero);
+      final packetsBeforeRequest = channel.outboundPacketCount;
+
+      await expectLater(
+        client.stat('/tmp/f'),
+        throwsA(isA<SftpAbortError>()),
+      );
+      expect(channel.outboundPacketCount, packetsBeforeRequest);
+      await client.close();
+    });
+
     test('close closes the underlying channel', () async {
       final harness = _SftpHarness();
       await harness.nextOutgoingPacket();
@@ -813,12 +882,14 @@ class _SynchronousResponseChannel extends SSHChannel {
 
   final _incoming = StreamController<SSHChannelData>(sync: true);
   SftpPacket Function(Uint8List payload)? _outboundResponder;
+  var outboundPacketCount = 0;
 
   @override
   Stream<SSHChannelData> get stream => _incoming.stream;
 
   @override
   void addData(Uint8List data, {int? type}) {
+    outboundPacketCount++;
     final reader = SSHMessageReader(data);
     final length = reader.readUint32();
     final payload = reader.readBytes(length);
@@ -841,6 +912,12 @@ class _SynchronousResponseChannel extends SSHChannel {
     writer.writeBytes(payload);
     _incoming.add(SSHChannelData(writer.takeBytes()));
   }
+
+  void fail(Object error, [StackTrace? stackTrace]) {
+    _incoming.addError(error, stackTrace ?? StackTrace.current);
+  }
+
+  Future<void> finish() => _incoming.close();
 
   @override
   Future<void> close() => _incoming.close();
