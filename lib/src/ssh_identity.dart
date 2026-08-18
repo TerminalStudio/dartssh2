@@ -14,8 +14,12 @@ abstract class SSHIdentity {
   /// Base constructor for custom [SSHIdentity] implementations.
   SSHIdentity();
 
-  /// The key type or algorithm name (e.g. `ssh-ed25519`, `ssh-rsa`,
-  /// `ecdsa-sha2-nistp256`).
+  /// The signature/public-key algorithm name used for authentication (e.g.
+  /// `ssh-ed25519`, `rsa-sha2-256`, `ecdsa-sha2-nistp256`).
+  ///
+  /// This can differ from the type encoded in [toPublicKey]. For example, an
+  /// RSA identity may use `rsa-sha2-256` here while its key blob starts with
+  /// `ssh-rsa` (RFC 8332).
   String get type;
 
   /// Optional comment or human-readable label associated with this identity

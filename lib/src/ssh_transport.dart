@@ -1038,6 +1038,28 @@ class SSHTransport {
     return writer.takeBytes();
   }
 
+  /// Composes the RFC 4252 hostbased authentication data to be signed.
+  Uint8List composeHostbasedChallenge({
+    required String username,
+    required String service,
+    required String hostKeyAlgorithm,
+    required Uint8List hostKey,
+    required String clientHostName,
+    required String clientUsername,
+  }) {
+    final writer = SSHMessageWriter();
+    writer.writeString(sessionId!);
+    writer.writeUint8(SSH_Message_Userauth_Request.messageId);
+    writer.writeUtf8(username);
+    writer.writeUtf8(service);
+    writer.writeUtf8('hostbased');
+    writer.writeUtf8(hostKeyAlgorithm);
+    writer.writeString(hostKey);
+    writer.writeUtf8(clientHostName);
+    writer.writeUtf8(clientUsername);
+    return writer.takeBytes();
+  }
+
   /// Verifies the server's public host key signature against the computed exchange hash.
   bool _verifyHostkey({
     required Uint8List keyBytes,

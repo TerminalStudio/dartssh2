@@ -23,10 +23,17 @@ class SSH_Message_Userauth_Request extends SSHMessage {
   final Uint8List? publicKey;
   final Uint8List? signature;
 
-  /* 'publickey' method specific fields */
+  /* 'keyboard-interactive' method specific fields */
 
   final String? languageTag;
   final String? submethods;
+
+  /* 'hostbased' method specific fields */
+
+  final String? hostKeyAlgorithm;
+  final Uint8List? hostKey;
+  final String? clientHostName;
+  final String? clientUsername;
 
   SSH_Message_Userauth_Request({
     required this.user,
@@ -39,6 +46,10 @@ class SSH_Message_Userauth_Request extends SSHMessage {
     this.signature,
     this.languageTag,
     this.submethods,
+    this.hostKeyAlgorithm,
+    this.hostKey,
+    this.clientHostName,
+    this.clientUsername,
   });
 
   factory SSH_Message_Userauth_Request.password({
@@ -98,6 +109,27 @@ class SSH_Message_Userauth_Request extends SSHMessage {
       languageTag: languageTag,
       submethods: submethods,
       methodName: 'keyboard-interactive',
+    );
+  }
+
+  factory SSH_Message_Userauth_Request.hostbased({
+    required String username,
+    required String hostKeyAlgorithm,
+    required Uint8List hostKey,
+    required String clientHostName,
+    required String clientUsername,
+    required Uint8List signature,
+    String serviceName = 'ssh-connection',
+  }) {
+    return SSH_Message_Userauth_Request(
+      serviceName: serviceName,
+      user: username,
+      methodName: 'hostbased',
+      hostKeyAlgorithm: hostKeyAlgorithm,
+      hostKey: hostKey,
+      clientHostName: clientHostName,
+      clientUsername: clientUsername,
+      signature: signature,
     );
   }
 
@@ -161,6 +193,16 @@ class SSH_Message_Userauth_Request extends SSHMessage {
           languageTag: languageTag,
           submethods: submethods,
         );
+      case 'hostbased':
+        return SSH_Message_Userauth_Request.hostbased(
+          username: user,
+          serviceName: serviceName,
+          hostKeyAlgorithm: reader.readUtf8(),
+          hostKey: reader.readString(),
+          clientHostName: reader.readUtf8(),
+          clientUsername: reader.readUtf8(),
+          signature: reader.readString(),
+        );
       case 'none':
         return SSH_Message_Userauth_Request.none(
           user: user,
@@ -198,6 +240,13 @@ class SSH_Message_Userauth_Request extends SSHMessage {
       case 'keyboard-interactive':
         writer.writeUtf8(languageTag!);
         writer.writeUtf8(submethods!);
+        break;
+      case 'hostbased':
+        writer.writeUtf8(hostKeyAlgorithm!);
+        writer.writeString(hostKey!);
+        writer.writeUtf8(clientHostName!);
+        writer.writeUtf8(clientUsername!);
+        writer.writeString(signature!);
         break;
       case 'none':
         break;
