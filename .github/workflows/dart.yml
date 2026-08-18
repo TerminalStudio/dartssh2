@@ -58,7 +58,9 @@ jobs:
 
       - name: Show the server's effective algorithms
         if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-        run: docker exec dartssh2-test-sshd sshd -T | grep -iE '^(kexalgorithms|ciphers|macs)' || true
+        run: |
+          ssh -vv -p 2222 -o StrictHostKeyChecking=no -o BatchMode=yes \
+            dartssh2@127.0.0.1 exit 2>&1 | grep -iE 'peer server KEXINIT|kex algorithms|host key algorithms|ciphers ctos|MACs ctos' || true
 
       - name: Run integration tests
         if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
