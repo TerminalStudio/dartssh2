@@ -1,0 +1,25 @@
+# Deliberately explicit: every algorithm the interop matrix exercises is listed
+# here, so a handshake failure means the client is wrong, never that the server
+# quietly dropped support for something.
+
+Port 2222
+ListenAddress 0.0.0.0
+
+PasswordAuthentication yes
+PermitRootLogin no
+PermitEmptyPasswords no
+UsePAM no
+
+HostKey /etc/ssh/ssh_host_ed25519_key
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+
+KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group14-sha256
+
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+
+MACs hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha2-256,hmac-sha2-512
+
+Subsystem sftp /usr/lib/ssh/sftp-server
+
+LogLevel VERBOSE
