@@ -81,6 +81,7 @@ class SSHAlgorithms {
     this.cipher = const [
       SSHCipherType.aes256gcm,
       SSHCipherType.aes128gcm,
+      SSHCipherType.chacha20poly1305,
       SSHCipherType.aes256ctr,
       SSHCipherType.aes128ctr,
       // CBC in SSH is vulnerable to the plaintext-recovery attack described in

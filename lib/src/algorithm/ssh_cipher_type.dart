@@ -7,6 +7,7 @@ class SSHCipherType extends SSHAlgorithm {
   static const values = [
     aes128gcm,
     aes256gcm,
+    chacha20poly1305,
     aes128cbc,
     aes192cbc,
     aes256cbc,
@@ -48,6 +49,15 @@ class SSHCipherType extends SSHAlgorithm {
     isAead: true,
     ivSize: 12,
     blockSize: 16,
+    aeadTagSize: 16,
+  );
+
+  static const chacha20poly1305 = SSHCipherType._(
+    name: 'chacha20-poly1305@openssh.com',
+    keySize: 64,
+    isAead: true,
+    ivSize: 0,
+    blockSize: 8,
     aeadTagSize: 16,
   );
 

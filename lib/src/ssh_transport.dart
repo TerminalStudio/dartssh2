@@ -19,6 +19,7 @@ import 'package:dartssh2/src/ssh_packet.dart';
 import 'package:dartssh2/src/utils/int.dart';
 import 'package:dartssh2/src/hostkey/hostkey_ed25519.dart';
 import 'package:dartssh2/src/utils/list.dart';
+import 'package:dartssh2/src/utils/openssh_chacha20_poly1305.dart';
 import 'package:dartssh2/src/message/msg_ext_info.dart';
 import 'package:dartssh2/src/message/msg_kex.dart';
 import 'package:dartssh2/src/message/msg_kex_dh.dart';
@@ -180,11 +181,23 @@ class SSHTransport {
   /// The decryption cipher algorithm type selected for server-to-client communication.
   SSHCipherType? _serverCipherType;
 
+  /// Cipher currently active for packets sent to the other side.
+  SSHCipherType? _localCipherType;
+
+  /// Cipher currently active for packets received from the other side.
+  SSHCipherType? _remoteCipherType;
+
   /// The MAC algorithm type selected for client-to-server integrity verification.
   SSHMacType? _clientMacType;
 
   /// The MAC algorithm type selected for server-to-client integrity verification.
   SSHMacType? _serverMacType;
+
+  /// MAC currently active for packets sent to the other side.
+  SSHMacType? _localMacType;
+
+  /// MAC currently active for packets received from the other side.
+  SSHMacType? _remoteMacType;
 
   /// The active key exchange algorithm implementation instance.
   SSHKex? _kex;
@@ -214,6 +227,12 @@ class SSHTransport {
 
   /// A [BlockCipher] to decrypt data sent from the other side.
   BlockCipher? _decryptCipher;
+
+  /// OpenSSH ChaCha20-Poly1305 context for packets sent to the other side.
+  OpenSSHChaCha20Poly1305? _localChaChaCipher;
+
+  /// OpenSSH ChaCha20-Poly1305 context for packets received from the other side.
+  OpenSSHChaCha20Poly1305? _remoteChaChaCipher;
 
   /// The cipher key derived for encrypting outgoing data.
   Uint8List? _localCipherKey;
@@ -316,10 +335,16 @@ class SSHTransport {
     }
 
     // Check if encryption is enabled and if we have MAC types initialized
-    final clientMacType = _clientMacType;
-    final serverMacType = _serverMacType;
-    final macType = isClient ? clientMacType : serverMacType;
-    final localCipherType = isClient ? _clientCipherType : _serverCipherType;
+    final macType = _localMacType;
+    final localCipherType = _localCipherType;
+
+    final localChaChaCipher = _localChaChaCipher;
+    if (localCipherType == SSHCipherType.chacha20poly1305 &&
+        localChaChaCipher != null) {
+      _sendChaChaPacket(data, localChaChaCipher);
+      _localPacketSN.increase();
+      return;
+    }
 
     if (localCipherType != null &&
         localCipherType.isAead &&
@@ -420,6 +445,29 @@ class SSHTransport {
     }
 
     _localPacketSN.increase();
+  }
+
+  /// Sends a packet using the OpenSSH ChaCha20-Poly1305 construction.
+  void _sendChaChaPacket(
+    Uint8List data,
+    OpenSSHChaCha20Poly1305 cipher,
+  ) {
+    final paddingLength = _alignedPaddingLength(
+      data.length,
+      OpenSSHChaCha20Poly1305.blockSize,
+    );
+    final packetLength = 1 + data.length + paddingLength;
+    final packet = Uint8List(4 + packetLength);
+    ByteData.sublistView(packet, 0, 4).setUint32(0, packetLength);
+    packet[4] = paddingLength;
+    packet.setRange(5, 5 + data.length, data);
+    packet.setRange(
+      5 + data.length,
+      packet.length,
+      randomBytes(paddingLength),
+    );
+
+    socket.sink.add(cipher.encryptPacket(packet, _localPacketSN.value));
   }
 
   /// Sends a packet encrypted using AEAD (e.g. AES-GCM).
@@ -658,9 +706,77 @@ class SSHTransport {
   /// WITHOUT `packet length`, `padding length`, `padding` and `MAC`. Returns
   /// `null` if there is not enough data in the buffer to read the packet.
   Uint8List? _consumePacket() {
+    if (_remoteCipherType == SSHCipherType.chacha20poly1305 &&
+        _remoteChaChaCipher != null) {
+      return _consumeChaChaPacket();
+    }
     return (_decryptCipher == null && _remoteCipherKey == null)
         ? _consumeClearTextPacket()
         : _consumeEncryptedPacket();
+  }
+
+  /// Consumes and decrypts one OpenSSH ChaCha20-Poly1305 packet.
+  Uint8List? _consumeChaChaPacket() {
+    if (_buffer.length < OpenSSHChaCha20Poly1305.encryptedLengthSize) {
+      return null;
+    }
+
+    final cipher = _remoteChaChaCipher!;
+    final packetLength = cipher.decryptPacketLength(
+      _buffer.view(0, OpenSSHChaCha20Poly1305.encryptedLengthSize),
+      _remotePacketSN.value,
+    );
+    _verifyPacketLength(packetLength);
+    if (packetLength < 5) {
+      throw SSHPacketError('Packet too short: $packetLength');
+    }
+    if (packetLength % OpenSSHChaCha20Poly1305.blockSize != 0) {
+      throw SSHPacketError(
+        'Invalid packet alignment: $packetLength is not a multiple of '
+        '${OpenSSHChaCha20Poly1305.blockSize}',
+      );
+    }
+
+    final encryptedPacketLength = OpenSSHChaCha20Poly1305.encryptedLengthSize +
+        packetLength +
+        OpenSSHChaCha20Poly1305.tagSize;
+    if (_buffer.length < encryptedPacketLength) {
+      return null;
+    }
+
+    late Uint8List packet;
+    try {
+      packet = cipher.decryptPacket(
+        _buffer.view(0, encryptedPacketLength),
+        _remotePacketSN.value,
+      );
+    } on InvalidCipherTextException {
+      throw SSHPacketError('AEAD authentication failed');
+    }
+    _buffer.consume(encryptedPacketLength);
+
+    if (SSHPacket.readPacketLength(packet) != packetLength) {
+      throw SSHPacketError('Decrypted packet length changed unexpectedly');
+    }
+    final paddingLength = SSHPacket.readPaddingLength(packet);
+    final payloadLength = packetLength - paddingLength - 1;
+    if (payloadLength < 0) {
+      throw SSHPacketError(
+        'Invalid padding length: $paddingLength for packet length $packetLength',
+      );
+    }
+
+    final minimumPaddingLength = _alignedPaddingLength(
+      payloadLength,
+      OpenSSHChaCha20Poly1305.blockSize,
+    );
+    if (paddingLength < minimumPaddingLength) {
+      throw SSHPacketError(
+        'Invalid padding length: $paddingLength, expected: $minimumPaddingLength',
+      );
+    }
+
+    return Uint8List.sublistView(packet, 5, 5 + payloadLength);
   }
 
   /// Consumes and returns a single unencrypted packet payload from the buffer.
@@ -690,7 +806,7 @@ class SSHTransport {
   Uint8List? _consumeEncryptedPacket() {
     printDebug?.call('SSHTransport._consumeEncryptedPacket');
 
-    final remoteCipherType = isClient ? _serverCipherType : _clientCipherType;
+    final remoteCipherType = _remoteCipherType;
     if (remoteCipherType != null &&
         remoteCipherType.isAead &&
         _remoteCipherKey != null &&
@@ -703,7 +819,7 @@ class SSHTransport {
       return null;
     }
 
-    final macType = isClient ? _serverMacType! : _clientMacType!;
+    final macType = _remoteMacType!;
     final isEtm = macType.isEtm;
     final macLength = _remoteMac!.macSize;
 
@@ -937,25 +1053,48 @@ class SSHTransport {
     final cipherType = isClient ? _clientCipherType : _serverCipherType;
     if (cipherType == null) throw StateError('No cipher type selected');
 
-    _localCipherKey = _deriveKey(
-      isClient ? SSHDeriveKeyType.clientKey : SSHDeriveKeyType.serverKey,
-      cipherType.keySize,
-    );
-    _localIV = _deriveKey(
-      isClient ? SSHDeriveKeyType.clientIV : SSHDeriveKeyType.serverIV,
-      cipherType.ivSize,
-    );
+    if (cipherType == SSHCipherType.chacha20poly1305) {
+      final key = _deriveKey(
+        isClient ? SSHDeriveKeyType.clientKey : SSHDeriveKeyType.serverKey,
+        OpenSSHChaCha20Poly1305.keySize,
+      );
+      final chachaCipher = OpenSSHChaCha20Poly1305(key);
 
-    if (cipherType.isAead) {
+      _localCipherType = cipherType;
+      _localMacType = null;
+      _localChaChaCipher = chachaCipher;
+      _localCipherKey = null;
+      _localIV = null;
       _encryptCipher = null;
       _localMac = null;
       _localAeadPacketCount = 0;
       return;
     }
 
-    _encryptCipher = cipherType.createCipher(
-      _localCipherKey!,
-      _localIV!,
+    final cipherKey = _deriveKey(
+      isClient ? SSHDeriveKeyType.clientKey : SSHDeriveKeyType.serverKey,
+      cipherType.keySize,
+    );
+    final iv = _deriveKey(
+      isClient ? SSHDeriveKeyType.clientIV : SSHDeriveKeyType.serverIV,
+      cipherType.ivSize,
+    );
+
+    if (cipherType.isAead) {
+      _localCipherType = cipherType;
+      _localMacType = null;
+      _localChaChaCipher = null;
+      _localCipherKey = cipherKey;
+      _localIV = iv;
+      _encryptCipher = null;
+      _localMac = null;
+      _localAeadPacketCount = 0;
+      return;
+    }
+
+    final encryptCipher = cipherType.createCipher(
+      cipherKey,
+      iv,
       forEncryption: true,
     );
 
@@ -966,8 +1105,16 @@ class SSHTransport {
       isClient ? SSHDeriveKeyType.clientMacKey : SSHDeriveKeyType.serverMacKey,
       macType.keySize,
     );
+    final mac = macType.createMac(macKey);
 
-    _localMac = macType.createMac(macKey);
+    _localCipherType = cipherType;
+    _localMacType = macType;
+    _localChaChaCipher = null;
+    _localCipherKey = cipherKey;
+    _localIV = iv;
+    _encryptCipher = encryptCipher;
+    _localMac = mac;
+    _localAeadPacketCount = 0;
   }
 
   /// Derives and applies the decryption and MAC keys for remote-to-local communication.
@@ -975,25 +1122,48 @@ class SSHTransport {
     final cipherType = isClient ? _serverCipherType : _clientCipherType;
     if (cipherType == null) throw StateError('No cipher type selected');
 
-    _remoteCipherKey = _deriveKey(
-      isClient ? SSHDeriveKeyType.serverKey : SSHDeriveKeyType.clientKey,
-      cipherType.keySize,
-    );
-    _remoteIV = _deriveKey(
-      isClient ? SSHDeriveKeyType.serverIV : SSHDeriveKeyType.clientIV,
-      cipherType.ivSize,
-    );
+    if (cipherType == SSHCipherType.chacha20poly1305) {
+      final key = _deriveKey(
+        isClient ? SSHDeriveKeyType.serverKey : SSHDeriveKeyType.clientKey,
+        OpenSSHChaCha20Poly1305.keySize,
+      );
+      final chachaCipher = OpenSSHChaCha20Poly1305(key);
 
-    if (cipherType.isAead) {
+      _remoteCipherType = cipherType;
+      _remoteMacType = null;
+      _remoteChaChaCipher = chachaCipher;
+      _remoteCipherKey = null;
+      _remoteIV = null;
       _decryptCipher = null;
       _remoteMac = null;
       _remoteAeadPacketCount = 0;
       return;
     }
 
-    _decryptCipher = cipherType.createCipher(
-      _remoteCipherKey!,
-      _remoteIV!,
+    final cipherKey = _deriveKey(
+      isClient ? SSHDeriveKeyType.serverKey : SSHDeriveKeyType.clientKey,
+      cipherType.keySize,
+    );
+    final iv = _deriveKey(
+      isClient ? SSHDeriveKeyType.serverIV : SSHDeriveKeyType.clientIV,
+      cipherType.ivSize,
+    );
+
+    if (cipherType.isAead) {
+      _remoteCipherType = cipherType;
+      _remoteMacType = null;
+      _remoteChaChaCipher = null;
+      _remoteCipherKey = cipherKey;
+      _remoteIV = iv;
+      _decryptCipher = null;
+      _remoteMac = null;
+      _remoteAeadPacketCount = 0;
+      return;
+    }
+
+    final decryptCipher = cipherType.createCipher(
+      cipherKey,
+      iv,
       forEncryption: false,
     );
 
@@ -1004,7 +1174,16 @@ class SSHTransport {
       isClient ? SSHDeriveKeyType.serverMacKey : SSHDeriveKeyType.clientMacKey,
       macType.keySize,
     );
-    _remoteMac = macType.createMac(macKey);
+    final mac = macType.createMac(macKey);
+
+    _remoteCipherType = cipherType;
+    _remoteMacType = macType;
+    _remoteChaChaCipher = null;
+    _remoteCipherKey = cipherKey;
+    _remoteIV = iv;
+    _decryptCipher = decryptCipher;
+    _remoteMac = mac;
+    _remoteAeadPacketCount = 0;
   }
 
   /// Derives a cryptographic key/IV of [keySize] bytes using KDF rules for the given [keyType].
