@@ -1,3 +1,11 @@
+## [3.2.0] - 2026-08-18
+- Added the `chacha20-poly1305@openssh.com` packet cipher, implemented as OpenSSH's own construction rather than the RFC 8439 AEAD: two independent ChaCha20 keys, a separately encrypted packet length, and Poly1305 over the raw encrypted length and body. It joins the default cipher list in third place, after the two AES-GCM variants, so it is negotiated with servers that do not offer AES-GCM [#217]. Thanks [@GT-610].
+- Added RFC 4252 hostbased authentication through the asynchronous `SSHIdentity` API, with the new `SSHClient.hostbasedIdentities`, `SSHClient.hostName` and `SSHClient.userNameOnClientHost` options. The host key blob type is kept separate from the signature algorithm, so RSA SHA-2 signatures work [#218]. Thanks [@GT-610].
+- Changed the authentication state machine to treat the server's `methodsLeft` as an allow-list while keeping the client's own preference order, to keep publickey and hostbased available only while identities remain, and to reset publickey state after a partial success, as OpenSSH does [#218]. Thanks [@GT-610].
+- Added RFC 4253 `SSH_MSG_UNIMPLEMENTED` handling. Genuinely unrecognized messages are now reported with the rejected packet's own sequence number, while `SSH_MSG_IGNORE`, `SSH_MSG_DEBUG` and incoming `SSH_MSG_UNIMPLEMENTED` are consumed without creating reply loops. Unexpected messages during the initial strict key exchange disconnect, matching OpenSSH, while rekeys reply instead [#216]. Thanks [@GT-610].
+- Added `SSHTransport.onMessage`, a handler that reports whether it recognized a message so the transport knows when to reply `SSH_MSG_UNIMPLEMENTED`. The existing `onPacket` keeps working unchanged and assumes every packet it receives is handled [#216]. Thanks [@GT-610].
+- Added a 256 KiB limit on SFTP packets in both directions, matching `SFTP_MAX_MSG_LENGTH` in OpenSSH, with the four-byte length prefix excluded. Without it a peer could declare an arbitrarily large packet and make the client buffer indefinitely while waiting for a body that never arrives [#215]. Thanks [@GT-610].
+
 ## [3.1.0] - 2026-08-17
 - Fixed operations hanging forever when the component they were waiting on terminated. A channel request, a global request or a channel open whose reply could no longer arrive now fails with the error that ended the connection or the channel, instead of leaving the caller awaiting a reply that will never come [#212]. Thanks [@GT-610].
 - Changed `SSH_MSG_CHANNEL_CLOSE`, channel destruction and transport termination to be terminal for pending replies, while `SSH_MSG_CHANNEL_EOF` remains non-terminal, since RFC 4254 allows request replies to arrive after EOF [#212]. Thanks [@GT-610].
@@ -334,6 +342,27 @@
 [#200]: https://github.com/vicajilau/dartssh2/pull/200
 [#201]: https://github.com/vicajilau/dartssh2/pull/201
 [#203]: https://github.com/vicajilau/dartssh2/pull/203
+[#115]: https://github.com/vicajilau/dartssh2/pull/115
+[#116]: https://github.com/vicajilau/dartssh2/issues/116
+[#162]: https://github.com/vicajilau/dartssh2/pull/162
+[#168]: https://github.com/vicajilau/dartssh2/issues/168
+[#170]: https://github.com/vicajilau/dartssh2/pull/170
+[#171]: https://github.com/vicajilau/dartssh2/pull/171
+[#172]: https://github.com/vicajilau/dartssh2/pull/172
+[#173]: https://github.com/vicajilau/dartssh2/pull/173
+[#179]: https://github.com/vicajilau/dartssh2/pull/179
+[#182]: https://github.com/vicajilau/dartssh2/pull/182
+[#183]: https://github.com/vicajilau/dartssh2/issues/183
+[#186]: https://github.com/vicajilau/dartssh2/pull/186
+[#187]: https://github.com/vicajilau/dartssh2/pull/187
+[#207]: https://github.com/vicajilau/dartssh2/pull/207
+[#210]: https://github.com/vicajilau/dartssh2/pull/210
+[#212]: https://github.com/vicajilau/dartssh2/pull/212
+[#213]: https://github.com/vicajilau/dartssh2/pull/213
+[#215]: https://github.com/vicajilau/dartssh2/pull/215
+[#216]: https://github.com/vicajilau/dartssh2/pull/216
+[#217]: https://github.com/vicajilau/dartssh2/pull/217
+[#218]: https://github.com/vicajilau/dartssh2/pull/218
 
 [@linhanyu]: https://github.com/linhanyu
 [@Migarl]: https://github.com/Migarl
