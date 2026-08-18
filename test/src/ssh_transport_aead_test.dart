@@ -93,6 +93,9 @@ void main() {
         '_remoteChaChaCipher',
         OpenSSHChaCha20Poly1305(key),
       );
+      // The receiver must be past key exchange, otherwise the packet is
+      // treated as an unexpected message during kex and never delivered.
+      setPrivate(receiver, '_kexInProgress', false);
       setSequenceValue(receiver, '_remotePacketSN', 7);
 
       receiverSocket.addIncomingBytes(
