@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
 import 'package:dartssh2/src/message/msg_debug.dart';
+import 'package:dartssh2/src/message/msg_disconnect.dart';
 import 'package:dartssh2/src/message/msg_ignore.dart';
 import 'package:dartssh2/src/message/msg_unimplemented.dart';
 import 'package:dartssh2/src/ssh_packet.dart';
@@ -99,6 +100,35 @@ void main() {
       expect(sentUnimplemented(socket.packets.single).sequenceNumber, 37);
 
       await transport.close();
+    });
+
+    test('surfaces the reason the peer gave for disconnecting', () async {
+      final socket = _CaptureSSHSocket();
+      final transport = SSHTransport(socket);
+      setPrivate(transport, '_kexInProgress', false);
+
+      final expectation = expectLater(
+        transport.done,
+        throwsA(
+          isA<SSHDisconnectError>()
+              .having((e) => e.reasonCode, 'reasonCode', 2)
+              .having(
+                (e) => e.message,
+                'message',
+                'no matching key exchange method found',
+              ),
+        ),
+      );
+
+      await invokeHandleMessage(
+        transport,
+        SSH_Message_Disconnect(
+          reasonCode: 2,
+          description: 'no matching key exchange method found',
+        ).encode(),
+      );
+
+      await expectation;
     });
 
     test('does not reply when the upper layer handles the message', () async {

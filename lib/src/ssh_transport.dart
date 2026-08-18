@@ -1433,7 +1433,14 @@ class SSHTransport {
       case SSH_Message_Disconnect.messageId:
         final disconnect = SSH_Message_Disconnect.decode(message);
         printTrace?.call('<- $socket: $disconnect');
-        return close();
+        // The peer said why it is going away. Surface that instead of letting
+        // the caller see an unexplained disconnection.
+        return closeWithError(
+          SSHDisconnectError(
+            disconnect.reasonCode,
+            disconnect.description,
+          ),
+        );
       case SSH_Message_Ignore.messageId:
         final ignore = SSH_Message_Ignore.decode(message);
         printTrace?.call('<- $socket: $ignore');

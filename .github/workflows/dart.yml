@@ -52,9 +52,19 @@ jobs:
       - name: Build LCOV report
         run: dart pub global run coverage:format_coverage --lcov --in=coverage/test --out=coverage/lcov.info --packages=.dart_tool/package_config.json --report-on=lib
 
+      - name: Start a local OpenSSH server
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        run: tool/start_test_sshd.sh
+
       - name: Run integration tests
         if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        env:
+          DARTSSH2_LOCAL_SSHD: '1'
         run: dart test --tags=integration
+
+      - name: Stop the local OpenSSH server
+        if: always()
+        run: docker rm -f dartssh2-test-sshd || true
 
       - name: Upload coverage
         uses: codecov/codecov-action@v7

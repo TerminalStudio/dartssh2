@@ -1,3 +1,13 @@
+## [3.3.0] - 2026-08-18
+- Added `SSHDisconnectError`, so the reason the peer gave for terminating the connection reaches the caller. `SSH_MSG_DISCONNECT` carries a reason code and a description, which is where OpenSSH puts lines such as "no matching key exchange method found"; the transport used to log it and close cleanly, leaving an unexplained disconnection [#224].
+- Fixed `SSHMessageReader.readBytes()` indexing the underlying buffer instead of the message, so it returned the wrong bytes whenever the message was a view into a larger buffer, which is what every SSH and SFTP payload is. Only OpenSSH private key decoding called it, on a freshly decoded blob where the two coincide, so nothing was broken in practice [#223].
+- Changed malformed packets to raise `SSHPacketError` instead of `RangeError` or `IndexError`. Every decoder that parses peer-supplied bytes went through the latter, which are how Dart reports a bug in the caller: a handler catching `SSHError` missed them, and inside a stream callback they escaped as uncaught errors [#223].
+- Deprecated `SSHTransport.onPacket` in favour of `onMessage`, which reports whether it recognized a message so the transport can answer unknown ones as RFC 4253 requires. `onPacket` keeps working [#221].
+- Added interop tests that run a real dartssh2 client against a real OpenSSH server, forcing one algorithm per connection across the ciphers, key exchanges and MACs, plus a command and an SFTP round trip. Unit tests can only show the library agrees with itself, which is how the X11 screen number stayed a string until #194 [#224].
+- Removed the last test helper pointing at infrastructure belonging to the previous maintainer's organisation. It was unused [#224].
+- Added regression tests pinning how many requests an SFTP download costs, so a repeat of the 3.0.2 read size collapse fails a test rather than needing to be found by hand [#222].
+- Documented hostbased authentication in the README, which 3.2.0 added without mentioning it anywhere outside the changelog [#220].
+
 ## [3.2.0] - 2026-08-18
 - Added the `chacha20-poly1305@openssh.com` packet cipher, implemented as OpenSSH's own construction rather than the RFC 8439 AEAD: two independent ChaCha20 keys, a separately encrypted packet length, and Poly1305 over the raw encrypted length and body. It joins the default cipher list in third place, after the two AES-GCM variants, so it is negotiated with servers that do not offer AES-GCM [#217]. Thanks [@GT-610].
 - Added RFC 4252 hostbased authentication through the asynchronous `SSHIdentity` API, with the new `SSHClient.hostbasedIdentities`, `SSHClient.hostName` and `SSHClient.userNameOnClientHost` options. The host key blob type is kept separate from the signature algorithm, so RSA SHA-2 signatures work [#218]. Thanks [@GT-610].
@@ -363,6 +373,11 @@
 [#216]: https://github.com/vicajilau/dartssh2/pull/216
 [#217]: https://github.com/vicajilau/dartssh2/pull/217
 [#218]: https://github.com/vicajilau/dartssh2/pull/218
+[#220]: https://github.com/vicajilau/dartssh2/pull/220
+[#221]: https://github.com/vicajilau/dartssh2/pull/221
+[#222]: https://github.com/vicajilau/dartssh2/pull/222
+[#223]: https://github.com/vicajilau/dartssh2/pull/223
+[#224]: https://github.com/vicajilau/dartssh2/pull/224
 
 [@linhanyu]: https://github.com/linhanyu
 [@Migarl]: https://github.com/Migarl
