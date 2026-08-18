@@ -3,7 +3,7 @@
 - Fixed `SSHMessageReader.readBytes()` indexing the underlying buffer instead of the message, so it returned the wrong bytes whenever the message was a view into a larger buffer, which is what every SSH and SFTP payload is. Only OpenSSH private key decoding called it, on a freshly decoded blob where the two coincide, so nothing was broken in practice [#223].
 - Changed malformed packets to raise `SSHPacketError` instead of `RangeError` or `IndexError`. Every decoder that parses peer-supplied bytes went through the latter, which are how Dart reports a bug in the caller: a handler catching `SSHError` missed them, and inside a stream callback they escaped as uncaught errors [#223].
 - Deprecated `SSHTransport.onPacket` in favour of `onMessage`, which reports whether it recognized a message so the transport can answer unknown ones as RFC 4253 requires. `onPacket` keeps working [#221].
-- Added interop tests that run a real dartssh2 client against a real OpenSSH server, forcing one algorithm per connection across the ciphers, key exchanges and MACs, plus a command and an SFTP round trip. Unit tests can only show the library agrees with itself, which is how the X11 screen number stayed a string until #194 [#224].
+- Added interop tests that run a real dartssh2 client against a real OpenSSH server, forcing one algorithm per connection across the ciphers, key exchanges and MACs, plus a command and an SFTP round trip. Unit tests can only show the library agrees with itself, which is how the X11 screen number stayed a string until #194 [#224] [#225].
 - Removed the last test helper pointing at infrastructure belonging to the previous maintainer's organisation. It was unused [#224].
 - Added regression tests pinning how many requests an SFTP download costs, so a repeat of the 3.0.2 read size collapse fails a test rather than needing to be found by hand [#222].
 - Documented hostbased authentication in the README, which 3.2.0 added without mentioning it anywhere outside the changelog [#220].
@@ -378,6 +378,7 @@
 [#222]: https://github.com/vicajilau/dartssh2/pull/222
 [#223]: https://github.com/vicajilau/dartssh2/pull/223
 [#224]: https://github.com/vicajilau/dartssh2/pull/224
+[#225]: https://github.com/vicajilau/dartssh2/pull/225
 
 [@linhanyu]: https://github.com/linhanyu
 [@Migarl]: https://github.com/Migarl

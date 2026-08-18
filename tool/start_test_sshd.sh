@@ -1,32 +1,28 @@
 #!/usr/bin/env bash
-# Starts the OpenSSH server the interop tests run against.
+# Builds and starts the OpenSSH server the interop tests run against.
 #
-# The tests connect a real dartssh2 client to a real sshd, so a mistake in what
-# we put on the wire fails here rather than in someone's application. Run this,
-# then `DARTSSH2_LOCAL_SSHD=1 dart test --tags=integration`.
+# The image is built from tool/test-sshd so the algorithms the server offers
+# are known exactly. Run this, then:
+#
+#   DARTSSH2_LOCAL_SSHD=1 dart test --tags=integration
 set -euo pipefail
 
 NAME="${SSHD_CONTAINER_NAME:-dartssh2-test-sshd}"
 PORT="${SSHD_PORT:-2222}"
-IMAGE="${SSHD_IMAGE:-lscr.io/linuxserver/openssh-server:latest}"
+TAG="${SSHD_IMAGE_TAG:-dartssh2-test-sshd:local}"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 docker rm -f "$NAME" >/dev/null 2>&1 || true
-
-docker run -d --name "$NAME" \
-  -e PUID=1000 \
-  -e PGID=1000 \
-  -e PASSWORD_ACCESS=true \
-  -e USER_NAME=dartssh2 \
-  -e USER_PASSWORD=dartssh2-test-password \
-  -e SUDO_ACCESS=false \
-  -p "127.0.0.1:${PORT}:2222" \
-  "$IMAGE" >/dev/null
+docker build -t "$TAG" "$HERE/test-sshd"
+docker run -d --name "$NAME" -p "127.0.0.1:${PORT}:2222" "$TAG" >/dev/null
 
 echo "Waiting for sshd on 127.0.0.1:${PORT}..."
 for _ in $(seq 1 60); do
   if (exec 3<>"/dev/tcp/127.0.0.1/${PORT}") 2>/dev/null; then
     exec 3<&- 3>&-
-    echo "sshd is up"
+    echo "sshd is up. Algorithms it offers:"
+    docker exec "$NAME" /usr/sbin/sshd -T -f /etc/ssh/sshd_config \
+      | grep -iE '^(kexalgorithms|ciphers|macs) '
     exit 0
   fi
   sleep 1
