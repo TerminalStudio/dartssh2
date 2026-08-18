@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:dartssh2/src/message/msg_service.dart';
 import 'package:dartssh2/src/message/msg_userauth.dart';
+import 'package:dartssh2/src/ssh_message.dart';
 import 'package:test/test.dart';
 
 import '../test_utils.dart';
@@ -413,6 +414,224 @@ void main() {
       );
 
       await Future<void>.delayed(Duration.zero);
+      await client.close();
+    });
+
+    test('hostbased signs the RFC 4252 challenge with an async identity',
+        () async {
+      final socket = _FakeSSHSocket();
+      final sessionId = Uint8List.fromList([1, 2, 3, 4]);
+      final hostKeyWriter = SSHMessageWriter()..writeUtf8('ssh-rsa');
+      final hostKey = hostKeyWriter.takeBytes();
+      late Uint8List signedChallenge;
+
+      final identity = SSHIdentity.custom(
+        type: 'rsa-sha2-512',
+        publicKey: SSHRawHostKey(hostKey),
+        signer: (challenge) async {
+          signedChallenge = challenge;
+          return SSHRawSignature(Uint8List.fromList([9, 8, 7]));
+        },
+      );
+      final client = SSHClient(
+        socket,
+        username: 'remote-user',
+        hostbasedIdentities: [identity],
+        hostName: 'client.example.com.',
+        userNameOnClientHost: 'local-user',
+      );
+      client.sessionId = sessionId;
+
+      client.handlePacket(SSH_Message_Service_Accept('ssh-userauth').encode());
+      await Future<void>.delayed(Duration.zero);
+
+      final reader = SSHMessageReader(signedChallenge);
+      expect(reader.readString(), sessionId);
+      expect(reader.readUint8(), SSH_Message_Userauth_Request.messageId);
+      expect(reader.readUtf8(), 'remote-user');
+      expect(reader.readUtf8(), 'ssh-connection');
+      expect(reader.readUtf8(), 'hostbased');
+      expect(reader.readUtf8(), 'rsa-sha2-512');
+      expect(reader.readString(), hostKey);
+      expect(SSHHostKey.getType(hostKey), 'ssh-rsa');
+      expect(reader.readUtf8(), 'client.example.com.');
+      expect(reader.readUtf8(), 'local-user');
+
+      client.handlePacket(SSH_Message_Userauth_Success().encode());
+      await client.authenticated;
+      await client.close();
+    });
+
+    test('methodsLeft preserves client preference and drops exhausted keys',
+        () async {
+      final socket = _FakeSSHSocket();
+      final attempts = <String>[];
+      var passwordRequests = 0;
+
+      SSHIdentity identity(String name) => SSHIdentity.custom(
+            type: 'ssh-ed25519',
+            publicKey: SSHRawHostKey(Uint8List.fromList([name.length])),
+            signer: (challenge) {
+              attempts.add(name);
+              return SSHRawSignature(Uint8List.fromList([name.length]));
+            },
+          );
+
+      final client = SSHClient(
+        socket,
+        username: 'test-user',
+        identities: [identity('first'), identity('second')],
+        onPasswordRequest: () {
+          passwordRequests++;
+          return 'secret';
+        },
+      );
+      client.sessionId = Uint8List(32);
+
+      client.handlePacket(SSH_Message_Service_Accept('ssh-userauth').encode());
+      await Future<void>.delayed(Duration.zero);
+      expect(attempts, ['first']);
+
+      client.handlePacket(
+        SSH_Message_Userauth_Failure(
+          methodsLeft: const ['password', 'publickey'],
+        ).encode(),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(attempts, ['first', 'second']);
+      expect(passwordRequests, 0);
+
+      client.handlePacket(
+        SSH_Message_Userauth_Failure(
+          methodsLeft: const ['publickey', 'password'],
+        ).encode(),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(attempts, ['first', 'second']);
+      expect(passwordRequests, 1);
+
+      client.handlePacket(SSH_Message_Userauth_Success().encode());
+      await client.authenticated;
+      await client.close();
+    });
+
+    test('methodsLeft stops an identity method the server no longer allows',
+        () async {
+      final socket = _FakeSSHSocket();
+      final signedIdentities = <int>[];
+      var passwordRequests = 0;
+
+      SSHIdentity identity(int id) => SSHIdentity.custom(
+            type: 'ssh-ed25519',
+            publicKey: SSHRawHostKey(Uint8List.fromList([id])),
+            signer: (challenge) {
+              signedIdentities.add(id);
+              return SSHRawSignature(Uint8List.fromList([id]));
+            },
+          );
+
+      final client = SSHClient(
+        socket,
+        username: 'test-user',
+        identities: [identity(1), identity(2)],
+        onPasswordRequest: () {
+          passwordRequests++;
+          return 'secret';
+        },
+      );
+      client.sessionId = Uint8List(32);
+
+      client.handlePacket(SSH_Message_Service_Accept('ssh-userauth').encode());
+      await Future<void>.delayed(Duration.zero);
+      expect(signedIdentities, [1]);
+
+      client.handlePacket(
+        SSH_Message_Userauth_Failure(
+          methodsLeft: const ['password'],
+        ).encode(),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(signedIdentities, [1]);
+      expect(passwordRequests, 1);
+
+      client.handlePacket(SSH_Message_Userauth_Success().encode());
+      await client.authenticated;
+      await client.close();
+    });
+
+    test('hostbased remains available while an identity is untried', () async {
+      final socket = _FakeSSHSocket();
+      final attempts = <int>[];
+
+      SSHIdentity identity(int id) => SSHIdentity.custom(
+            type: 'ssh-ed25519',
+            publicKey: SSHRawHostKey(Uint8List.fromList([id])),
+            signer: (challenge) {
+              attempts.add(id);
+              return SSHRawSignature(Uint8List.fromList([id]));
+            },
+          );
+
+      final client = SSHClient(
+        socket,
+        username: 'remote-user',
+        hostbasedIdentities: [identity(1), identity(2)],
+        hostName: 'client.example.com.',
+        userNameOnClientHost: 'local-user',
+      );
+      client.sessionId = Uint8List(32);
+
+      client.handlePacket(SSH_Message_Service_Accept('ssh-userauth').encode());
+      await Future<void>.delayed(Duration.zero);
+      expect(attempts, [1]);
+
+      client.handlePacket(
+        SSH_Message_Userauth_Failure(
+          methodsLeft: const ['hostbased'],
+        ).encode(),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(attempts, [1, 2]);
+
+      client.handlePacket(SSH_Message_Userauth_Success().encode());
+      await client.authenticated;
+      await client.close();
+    });
+
+    test('partial success resets publickey identities for the next factor',
+        () async {
+      final socket = _FakeSSHSocket();
+      var signCount = 0;
+      final identity = SSHIdentity.custom(
+        type: 'ssh-ed25519',
+        publicKey: SSHRawHostKey(Uint8List.fromList([1, 2, 3])),
+        signer: (challenge) {
+          signCount++;
+          return SSHRawSignature(Uint8List.fromList([4, 5, 6]));
+        },
+      );
+      final client = SSHClient(
+        socket,
+        username: 'test-user',
+        identities: [identity],
+      );
+      client.sessionId = Uint8List(32);
+
+      client.handlePacket(SSH_Message_Service_Accept('ssh-userauth').encode());
+      await Future<void>.delayed(Duration.zero);
+      expect(signCount, 1);
+
+      client.handlePacket(
+        SSH_Message_Userauth_Failure(
+          methodsLeft: const ['publickey'],
+          partialSuccess: true,
+        ).encode(),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(signCount, 2);
+
+      client.handlePacket(SSH_Message_Userauth_Success().encode());
+      await client.authenticated;
       await client.close();
     });
   });

@@ -16,6 +16,7 @@ import 'package:dartssh2/src/ssh_identity.dart';
 import 'package:dartssh2/src/ssh_session.dart';
 import 'package:dartssh2/src/ssh_transport.dart';
 import 'package:dartssh2/src/utils/async_queue.dart';
+import 'package:dartssh2/src/utils/auth_methods.dart';
 import 'package:dartssh2/src/utils/pending_requests.dart';
 import 'package:dartssh2/src/utils/terminal_state.dart';
 import 'package:dartssh2/src/message/msg_channel.dart';
@@ -150,6 +151,18 @@ class SSHClient {
   /// authentication. Set this field to enable authentication with public key.
   final List<SSHIdentity>? identities;
 
+  /// Identities to use for RFC 4252 hostbased authentication.
+  ///
+  /// Unlike [identities], these represent keys belonging to the client host,
+  /// not the user logging in to the server.
+  final List<SSHIdentity>? hostbasedIdentities;
+
+  /// Fully qualified client host name sent during hostbased authentication.
+  final String? hostName;
+
+  /// Local account name sent during hostbased authentication.
+  final String? userNameOnClientHost;
+
   /// Set this field to enable the 'password' authentication method. Return null
   /// to skip to the next available authentication method.
   final SSHPasswordRequestHandler? onPasswordRequest;
@@ -217,6 +230,9 @@ class SSHClient {
     this.algorithms = const SSHAlgorithms(),
     this.onVerifyHostKey,
     this.identities,
+    this.hostbasedIdentities,
+    this.hostName,
+    this.userNameOnClientHost,
     this.onPasswordRequest,
     this.onChangePasswordRequest,
     this.onUserInfoRequest,
@@ -257,6 +273,10 @@ class SSHClient {
 
     if (identities != null) {
       _identitiesLeft.addAll(identities!);
+    }
+
+    if (hostbasedIdentities != null) {
+      _hostbasedIdentitiesLeft.addAll(hostbasedIdentities!);
     }
 
     final handshakeTimeout = this.handshakeTimeout;
@@ -310,7 +330,13 @@ class SSHClient {
 
   final _authMethodsLeft = Queue<SSHAuthMethod>();
 
+  final _preferredAuthMethods = <SSHAuthMethod>[];
+
+  final _exhaustedAuthMethods = <SSHAuthMethod>{};
+
   final _identitiesLeft = Queue<SSHIdentity>();
+
+  final _hostbasedIdentitiesLeft = Queue<SSHIdentity>();
 
   final _remoteForwards = <SSHRemoteForward>{};
 
@@ -940,6 +966,27 @@ class SSHClient {
     printTrace?.call('<- $socket: $message');
     printDebug?.call('SSHClient._handleUserauthFailure');
     _currentProbedIdentity = null;
+
+    if (message.partialSuccess) {
+      printDebug?.call(
+        'Authentication partially succeeded with '
+        '${_currentAuthMethod?.name}',
+      );
+      _resetAuthStateForNextFactor();
+    } else {
+      _markCurrentAuthMethodAttempted();
+    }
+
+    final continuableMethods = selectContinuableAuthMethods(
+      preferredMethods: _preferredAuthMethods,
+      serverMethods: message.methodsLeft,
+      availableMethods: _availableAuthMethods,
+      onNote: printDebug,
+    );
+    _authMethodsLeft
+      ..clear()
+      ..addAll(continuableMethods);
+
     _tryNextAuthMethod();
   }
 
@@ -997,7 +1044,10 @@ class SSHClient {
     printTrace?.call('<- $socket: $message');
 
     final response = await onChangePasswordRequest!(message.prompt);
-    if (response == null) return _tryNextAuthMethod();
+    if (response == null) {
+      _exhaustedAuthMethods.add(SSHAuthMethod.password);
+      return _tryNextAuthMethod();
+    }
 
     _sendMessage(SSH_Message_Userauth_Request.newPassword(
       user: username,
@@ -1015,7 +1065,10 @@ class SSHClient {
       SSHUserInfoRequest(message.name, message.instruction, message.prompts),
     );
 
-    if (responses == null) return _tryNextAuthMethod();
+    if (responses == null) {
+      _exhaustedAuthMethods.add(SSHAuthMethod.keyboardInteractive);
+      return _tryNextAuthMethod();
+    }
 
     if (responses.length != message.prompts.length) {
       throw ArgumentError(
@@ -1316,30 +1369,33 @@ class SSHClient {
     printDebug?.call('SSHClient._startAuthentication');
 
     if (identities != null && identities!.isNotEmpty) {
-      _authMethodsLeft.add(SSHAuthMethod.publicKey);
+      _preferredAuthMethods.add(SSHAuthMethod.publicKey);
     }
 
     if (onPasswordRequest != null) {
-      _authMethodsLeft.add(SSHAuthMethod.password);
+      _preferredAuthMethods.add(SSHAuthMethod.password);
     }
 
     if (onUserInfoRequest != null) {
-      _authMethodsLeft.add(SSHAuthMethod.keyboardInteractive);
+      _preferredAuthMethods.add(SSHAuthMethod.keyboardInteractive);
     }
 
-    _authMethodsLeft.add(SSHAuthMethod.none);
+    if (hostbasedIdentities != null &&
+        hostbasedIdentities!.isNotEmpty &&
+        hostName != null &&
+        userNameOnClientHost != null) {
+      _preferredAuthMethods.add(SSHAuthMethod.hostbased);
+    }
+
+    _authMethodsLeft
+      ..addAll(_preferredAuthMethods)
+      ..add(SSHAuthMethod.none);
 
     _tryNextAuthMethod();
   }
 
   void _tryNextAuthMethod() {
     printDebug?.call('SSHClient._tryNextAuthenticationMethod');
-
-    if (_currentAuthMethod == SSHAuthMethod.publicKey) {
-      if (_identitiesLeft.isNotEmpty) {
-        return _catch(() => _authWithNextPublicKey());
-      }
-    }
 
     if (_authMethodsLeft.isEmpty) {
       return _authenticated.completeError(
@@ -1360,6 +1416,8 @@ class SSHClient {
         return _catch(() => _authWithNextPublicKey());
       case SSHAuthMethod.keyboardInteractive:
         return _authWithKeyboardInteractive();
+      case SSHAuthMethod.hostbased:
+        return _catch(() => _authWithNextHostbased());
     }
   }
 
@@ -1373,6 +1431,7 @@ class SSHClient {
 
     final password = await onPasswordRequest!();
     if (password == null) {
+      _exhaustedAuthMethods.add(SSHAuthMethod.password);
       _tryNextAuthMethod();
       return;
     }
@@ -1384,6 +1443,12 @@ class SSHClient {
 
   Future<void> _authWithNextPublicKey() async {
     printDebug?.call('SSHClient._authWithPublicKey');
+
+    if (_identitiesLeft.isEmpty) {
+      _exhaustedAuthMethods.add(SSHAuthMethod.publicKey);
+      _tryNextAuthMethod();
+      return;
+    }
 
     final identity = _identitiesLeft.removeFirst();
     final publicKey = identity.toPublicKey();
@@ -1433,6 +1498,90 @@ class SSHClient {
     _sendMessage(
       SSH_Message_Userauth_Request.keyboardInteractive(user: username),
     );
+  }
+
+  Future<void> _authWithNextHostbased() async {
+    printDebug?.call('SSHClient._authWithHostbased');
+
+    if (_hostbasedIdentitiesLeft.isEmpty) {
+      _exhaustedAuthMethods.add(SSHAuthMethod.hostbased);
+      _tryNextAuthMethod();
+      return;
+    }
+
+    final identity = _hostbasedIdentitiesLeft.removeFirst();
+    final hostKey = identity.toPublicKey().encode();
+    final challenge = _transport.composeHostbasedChallenge(
+      username: username,
+      service: 'ssh-connection',
+      hostKeyAlgorithm: identity.type,
+      hostKey: hostKey,
+      clientHostName: hostName!,
+      clientUsername: userNameOnClientHost!,
+    );
+    final signature = await identity.sign(challenge);
+
+    if (isClosed || _currentAuthMethod != SSHAuthMethod.hostbased) {
+      return;
+    }
+
+    _sendMessage(
+      SSH_Message_Userauth_Request.hostbased(
+        username: username,
+        hostKeyAlgorithm: identity.type,
+        hostKey: hostKey,
+        clientHostName: hostName!,
+        clientUsername: userNameOnClientHost!,
+        signature: signature.encode(),
+      ),
+    );
+  }
+
+  Set<SSHAuthMethod> get _availableAuthMethods => {
+        if (_identitiesLeft.isNotEmpty) SSHAuthMethod.publicKey,
+        if (!_exhaustedAuthMethods.contains(SSHAuthMethod.password) &&
+            onPasswordRequest != null)
+          SSHAuthMethod.password,
+        if (!_exhaustedAuthMethods
+                .contains(SSHAuthMethod.keyboardInteractive) &&
+            onUserInfoRequest != null)
+          SSHAuthMethod.keyboardInteractive,
+        if (_hostbasedIdentitiesLeft.isNotEmpty &&
+            hostName != null &&
+            userNameOnClientHost != null)
+          SSHAuthMethod.hostbased,
+      };
+
+  void _markCurrentAuthMethodAttempted() {
+    switch (_currentAuthMethod) {
+      case SSHAuthMethod.password:
+      case SSHAuthMethod.keyboardInteractive:
+      case SSHAuthMethod.none:
+        _exhaustedAuthMethods.add(_currentAuthMethod!);
+        break;
+      case SSHAuthMethod.publicKey:
+        if (_identitiesLeft.isEmpty) {
+          _exhaustedAuthMethods.add(SSHAuthMethod.publicKey);
+        }
+        break;
+      case SSHAuthMethod.hostbased:
+        if (_hostbasedIdentitiesLeft.isEmpty) {
+          _exhaustedAuthMethods.add(SSHAuthMethod.hostbased);
+        }
+        break;
+      case null:
+        break;
+    }
+  }
+
+  void _resetAuthStateForNextFactor() {
+    _exhaustedAuthMethods.clear();
+    // OpenSSH resets public-key attempt state after partial success so the
+    // next authentication factor may use publickey again. Hostbased keys are
+    // consumed as they are tried and are intentionally not replenished.
+    _identitiesLeft
+      ..clear()
+      ..addAll(identities ?? const <SSHIdentity>[]);
   }
 
   Future<SSHChannelController> _openSessionChannel() {

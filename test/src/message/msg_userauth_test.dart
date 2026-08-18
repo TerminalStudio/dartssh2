@@ -90,11 +90,41 @@ void main() {
       expect(decoded.submethods, 'pam');
     });
 
+    test('hostbased follows the RFC 4252 field order', () {
+      final original = SSH_Message_Userauth_Request.hostbased(
+        username: 'remote-user',
+        hostKeyAlgorithm: 'rsa-sha2-512',
+        hostKey: publicKey,
+        clientHostName: 'client.example.com.',
+        clientUsername: 'local-user',
+        signature: signature,
+      );
+      final encoded = original.encode();
+      final reader = SSHMessageReader(encoded);
+
+      expect(reader.readUint8(), SSH_Message_Userauth_Request.messageId);
+      expect(reader.readUtf8(), 'remote-user');
+      expect(reader.readUtf8(), 'ssh-connection');
+      expect(reader.readUtf8(), 'hostbased');
+      expect(reader.readUtf8(), 'rsa-sha2-512');
+      expect(reader.readString(), publicKey);
+      expect(reader.readUtf8(), 'client.example.com.');
+      expect(reader.readUtf8(), 'local-user');
+      expect(reader.readString(), signature);
+
+      final decoded = SSH_Message_Userauth_Request.decode(encoded);
+      expect(decoded.hostKeyAlgorithm, 'rsa-sha2-512');
+      expect(decoded.hostKey, publicKey);
+      expect(decoded.clientHostName, 'client.example.com.');
+      expect(decoded.clientUsername, 'local-user');
+      expect(decoded.signature, signature);
+    });
+
     test('rejects an unknown method on encode and decode', () {
       final unknown = SSH_Message_Userauth_Request(
         user: 'demo',
         serviceName: 'ssh-connection',
-        methodName: 'hostbased',
+        methodName: 'gssapi-with-mic',
       );
 
       expect(unknown.encode, throwsUnimplementedError);
@@ -104,7 +134,7 @@ void main() {
       writer.writeUint8(SSH_Message_Userauth_Request.messageId);
       writer.writeUtf8('demo');
       writer.writeUtf8('ssh-connection');
-      writer.writeUtf8('hostbased');
+      writer.writeUtf8('gssapi-with-mic');
 
       expect(
         () => SSH_Message_Userauth_Request.decode(writer.takeBytes()),

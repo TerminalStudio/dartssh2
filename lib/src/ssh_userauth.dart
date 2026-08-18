@@ -3,7 +3,7 @@ enum SSHAuthMethod {
   password,
   publicKey,
   keyboardInteractive,
-  // hostbased,
+  hostbased,
 }
 
 extension SSHAuthMethodX on SSHAuthMethod {
@@ -17,6 +17,8 @@ extension SSHAuthMethodX on SSHAuthMethod {
         return 'publickey';
       case SSHAuthMethod.keyboardInteractive:
         return 'keyboard-interactive';
+      case SSHAuthMethod.hostbased:
+        return 'hostbased';
     }
   }
 }
