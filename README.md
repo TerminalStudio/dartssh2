@@ -24,7 +24,7 @@ SSH and SFTP client written in pure Dart, aiming to be feature-rich as well as e
 
 -  **Pure Dart**: Working with both Dart VM and Flutter.
 -  **SSH Session**: Executing commands, spawning shells, setting environment variables, pseudo terminals, etc.
--  **Authentication**: Supports password, in-memory private keys (`SSHKeyPair`), external asynchronous identities (`SSHIdentity` for Secure Enclave, YubiKey/FIDO2, smart cards, OS agents), RFC 4252 §7.8 public-key probing, and keyboard-interactive authentication.
+-  **Authentication**: Supports password, in-memory private keys (`SSHKeyPair`), external asynchronous identities (`SSHIdentity` for Secure Enclave, YubiKey/FIDO2, smart cards, OS agents), RFC 4252 §7.8 public-key probing, RFC 4252 §9 hostbased authentication, and keyboard-interactive authentication.
 -  **Forwarding**: Supports local forwarding, remote forwarding, and dynamic forwarding (SOCKS5 CONNECT).
 -  **SFTP**: Supports all operations defined in [SFTPv3 protocol](https://datatracker.ietf.org/doc/html/draft-ietf-secsh-filexfer-02) including upload, download, list, link, remove, rename, etc.
 -  **Non-blocking Key Exchange**: Automatically offloads heavy key exchange calculations (X25519, NIST Curves, DH) to background isolates on supported VM platforms, preventing the main UI thread from freezing during connection.
@@ -454,6 +454,29 @@ void main() async {
   );
 }
 ```
+
+### Authenticate with the client host key (hostbased)
+
+Hostbased authentication (RFC 4252 §9) proves the identity of the *machine* the
+client runs on, rather than the user. The server trusts the client host, and
+authorises the local account through it:
+
+```dart
+void main() async {
+  final client = SSHClient(
+    socket,
+    username: '<username on the server>',
+    hostbasedIdentities: [hostKeyPair],
+    hostName: 'workstation.example.com',
+    userNameOnClientHost: 'localuser',
+  );
+}
+```
+
+`hostbasedIdentities` holds keys belonging to the client host, not to the user,
+so they are usually the host keys in `/etc/ssh`. The method is only offered when
+all three options are set and the identity list is not empty, and `hostName`
+must be the fully qualified name the server knows the client host by.
 
 ### Use encrypted PEM files
 ```dart

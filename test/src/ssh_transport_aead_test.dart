@@ -71,10 +71,11 @@ void main() {
         algorithms: const SSHAlgorithms(
           cipher: [SSHCipherType.chacha20poly1305],
         ),
-        onPacket: (packet) {
+        onMessage: (packet) {
           if (!receivedPacket.isCompleted) {
             receivedPacket.complete(packet);
           }
+          return true;
         },
       );
       setPrivate(receiver, '_remoteVersion', 'SSH-2.0-test');
@@ -391,10 +392,11 @@ void main() {
             algorithms: SSHAlgorithms(
               cipher: [cipherType],
             ),
-            onPacket: (packet) {
+            onMessage: (packet) {
               if (!receivedPacket.isCompleted) {
                 receivedPacket.complete(packet);
               }
+              return true;
             },
           );
 
