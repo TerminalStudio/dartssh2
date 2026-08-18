@@ -735,11 +735,10 @@ void main() async {
 - `diffie-hellman-group1-sha1 `
   
 **Cipher**: 
+- `chacha20-poly1305@openssh.com`
 - `aes[128|256]-gcm@openssh.com`
 - `aes[128|192|256]-ctr`
 - `aes[128|192|256]-cbc`
-
-`chacha20-poly1305@openssh.com` is not supported yet.
 
 **Integrity**: 
 - `hmac-sha2-[256|512]-etm@openssh.com`
@@ -758,7 +757,7 @@ option and keep the weaker ones only as a fallback for old servers:
 |---|---|
 | **Key exchange** | curve25519 → ECDH NIST → DH group-exchange/group14 SHA-256 → the SHA-1 variants |
 | **Host key** | `ssh-ed25519` → `rsa-sha2-512/256` → ECDSA → `ssh-rsa` |
-| **Cipher** | AES-GCM → AES-CTR → AES-CBC |
+| **Cipher** | AES-GCM → ChaCha20-Poly1305 → AES-CTR → AES-CBC |
 | **Integrity** | ETM variants → `hmac-sha2-256/512` → `hmac-sha1` |
 
 Three groups are implemented but **left out of the defaults**, because they are

@@ -49,18 +49,37 @@ void main() {
       expect(SSHCipherType.aes128gcm.aeadTagSize, 16);
     });
 
-    test('AEAD ciphers do not expose BlockCipher API', () {
-      expect(
-        () => SSHCipherType.aes128gcm.createCipher(
-          Uint8List(SSHCipherType.aes128gcm.keySize),
-          Uint8List(SSHCipherType.aes128gcm.ivSize),
-          forEncryption: true,
-        ),
-        throwsA(isA<UnsupportedError>()),
-      );
+    test('OpenSSH ChaCha20-Poly1305 exposes packet-cipher metadata', () {
+      final cipher = SSHCipherType.chacha20poly1305;
+
+      expect(cipher.isAead, isTrue);
+      expect(cipher.keySize, 64);
+      expect(cipher.ivSize, 0);
+      expect(cipher.blockSize, 8);
+      expect(cipher.aeadTagSize, 16);
     });
 
-    test('fromName resolves AES-GCM ciphers', () {
+    test('AEAD ciphers do not expose BlockCipher API', () {
+      for (final cipher in [
+        SSHCipherType.chacha20poly1305,
+        SSHCipherType.aes128gcm,
+      ]) {
+        expect(
+          () => cipher.createCipher(
+            Uint8List(cipher.keySize),
+            Uint8List(cipher.ivSize),
+            forEncryption: true,
+          ),
+          throwsA(isA<UnsupportedError>()),
+        );
+      }
+    });
+
+    test('fromName resolves AEAD ciphers', () {
+      expect(
+        SSHCipherType.fromName('chacha20-poly1305@openssh.com'),
+        SSHCipherType.chacha20poly1305,
+      );
       expect(
         SSHCipherType.fromName('aes128-gcm@openssh.com'),
         SSHCipherType.aes128gcm,
@@ -133,6 +152,7 @@ void main() {
         equals([
           SSHCipherType.aes256gcm,
           SSHCipherType.aes128gcm,
+          SSHCipherType.chacha20poly1305,
           SSHCipherType.aes256ctr,
           SSHCipherType.aes128ctr,
           SSHCipherType.aes256cbc,
