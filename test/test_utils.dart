@@ -17,15 +17,6 @@ Future<SSHClient> getHoneypotClient({
   );
 }
 
-/// A honeypot that denies all passwords and public-keys
-Future<SSHClient> getDenyingHoneypotClient() async {
-  return SSHClient(
-    await SSHSocket.connect('honeypot.terminal.studio', 2023),
-    username: 'root',
-    onPasswordRequest: () => 'random',
-  );
-}
-
 /// A test server provided by test.rebex.net.
 Future<SSHClient> getTestClient() async {
   return SSHClient(
@@ -33,6 +24,37 @@ Future<SSHClient> getTestClient() async {
     username: 'demo',
     onPasswordRequest: () => 'password',
     onUserInfoRequest: (req) => [for (final _ in req.prompts) 'password'],
+  );
+}
+
+/// Connection details of the OpenSSH server started by CI.
+///
+/// Interop tests run against a real `sshd` rather than a third-party host, so
+/// they cannot break because someone else's server is down, and they can prove
+/// that what this library puts on the wire is what OpenSSH expects.
+const localSshdHost = '127.0.0.1';
+const localSshdPort = 2222;
+const localSshdUser = 'dartssh2';
+const localSshdPassword = 'dartssh2-test-password';
+
+/// Whether the local OpenSSH server is running. CI sets this.
+bool get hasLocalSshd => Platform.environment['DARTSSH2_LOCAL_SSHD'] == '1';
+
+/// Reason to skip a test when no local OpenSSH server is available.
+Object? get skipWithoutLocalSshd => hasLocalSshd
+    ? null
+    : 'needs the local OpenSSH server, start it with '
+        'tool/start_test_sshd.sh or set DARTSSH2_LOCAL_SSHD=1';
+
+/// A client connected to the OpenSSH server started by CI.
+Future<SSHClient> getLocalClient({
+  SSHAlgorithms algorithms = const SSHAlgorithms(),
+}) async {
+  return SSHClient(
+    await SSHSocket.connect(localSshdHost, localSshdPort),
+    username: localSshdUser,
+    onPasswordRequest: () => localSshdPassword,
+    algorithms: algorithms,
   );
 }
 
