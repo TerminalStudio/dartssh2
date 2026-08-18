@@ -63,6 +63,20 @@ class SSHPacketError with SSHMessageError implements SSHError {
   SSHPacketError(this.message);
 }
 
+/// Thrown when the peer terminates the connection with SSH_MSG_DISCONNECT.
+///
+/// The peer explains itself in that message, so its description is carried
+/// through to the caller instead of being reduced to a bare disconnection.
+class SSHDisconnectError with SSHMessageError implements SSHError {
+  /// The RFC 4253 §11.1 reason code sent by the peer.
+  final int reasonCode;
+
+  @override
+  final String message;
+
+  SSHDisconnectError(this.reasonCode, this.message);
+}
+
 /// Errors that happen when the library receives an unexpected packet.
 class SSHStateError with SSHMessageError implements SSHError {
   @override

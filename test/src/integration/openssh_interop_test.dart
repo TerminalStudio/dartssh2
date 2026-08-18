@@ -54,6 +54,9 @@ void main() {
         final client = await getLocalClient(
           algorithms: SSHAlgorithms(kex: [kex]),
         );
+        // A server that does not offer the algorithm answers with
+        // SSH_MSG_DISCONNECT, and SSHDisconnectError carries its explanation,
+        // so a failure here says which side refused and why.
         expect(await client.run('echo kex'), isNotEmpty);
         await client.close();
       });
