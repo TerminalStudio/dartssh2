@@ -349,6 +349,33 @@ void main() {
       expect(lengths, [8192, 8191, 8192, 8192]);
     });
 
+    // These two pin down how many round trips a download costs. The 512 byte
+    // collapse fixed in 3.0.2 was found by hand: every read after a single
+    // short reply shrank to the floor and never recovered, which is invisible
+    // to a test that only checks the bytes that come out.
+    test('a clean download costs exactly one read per chunk', () async {
+      final lengths = await _recordReadLengths(
+        totalLength: 1024 * 1024,
+        chunkSize: 64 * 1024,
+      );
+
+      expect(lengths, hasLength(16));
+      expect(lengths.every((length) => length == 64 * 1024), isTrue);
+    });
+
+    test('one tiny short reply costs exactly one extra read', () async {
+      final lengths = await _recordReadLengths(
+        totalLength: 1024 * 1024,
+        chunkSize: 64 * 1024,
+        firstReplyLength: 1,
+      );
+
+      // 16 chunks plus a single retry for the byte that was missed.
+      expect(lengths, hasLength(17));
+      expect(lengths[1], 64 * 1024 - 1);
+      expect(lengths.skip(2).every((length) => length == 64 * 1024), isTrue);
+    });
+
     test('a large short reply clamps later reads, as OpenSSH does', () async {
       final lengths = await _recordReadLengths(
         totalLength: 8192 * 3,
@@ -808,7 +835,7 @@ class _CollectingSink implements StreamSink<List<int>> {
 Future<List<int>> _recordReadLengths({
   required int totalLength,
   required int chunkSize,
-  required int firstReplyLength,
+  int? firstReplyLength,
 }) async {
   final harness = _SftpHarness();
   await harness.nextOutgoingPacket();
@@ -839,8 +866,9 @@ Future<List<int>> _recordReadLengths({
     final read = SftpReadPacket.decode(packet);
     requestedLengths.add(read.length);
 
-    final replyLength =
-        requestedLengths.length == 1 ? firstReplyLength : read.length;
+    final replyLength = requestedLengths.length == 1
+        ? (firstReplyLength ?? read.length)
+        : read.length;
     delivered += replyLength;
 
     harness.sendResponsePacket(
