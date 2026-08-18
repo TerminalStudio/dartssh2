@@ -42,16 +42,13 @@ void main() {
       });
     }
 
-    // The two finite-field Diffie-Hellman exchanges are left out for now: the
-    // test server closes the socket without an SSH_MSG_DISCONNECT when they
-    // are proposed, so there is nothing saying whether it refuses them or this
-    // client gets them wrong. Adding them back needs a server whose offered
-    // algorithms are known, not a guess.
     for (final kex in const [
       SSHKexType.x25519,
       SSHKexType.nistp256,
       SSHKexType.nistp384,
       SSHKexType.nistp521,
+      SSHKexType.dhGexSha256,
+      SSHKexType.dh14Sha256,
     ]) {
       test('negotiates ${kex.name}', () async {
         final client = await getLocalClient(
