@@ -31,6 +31,9 @@ const _kReadMaxPendingRequests = 64;
 const _kMinReadSize = 512;
 const _kDownloadChunkSize = 64 * 1024;
 const _kDownloadMaxPendingRequests = 128;
+// Matches SFTP_MAX_MSG_LENGTH in OpenSSH. The four-byte length prefix is not
+// included in this limit.
+const _kMaxPacketLength = 256 * 1024;
 
 class SftpClient {
   final SSHChannel _channel;
@@ -303,8 +306,17 @@ class SftpClient {
 
   void _sendPacket(SftpPacket packet) {
     _terminalState.throwIfTerminated();
-    printTrace?.call('-> $_channel: $packet');
     final data = packet.encode();
+    if (data.length > _kMaxPacketLength) {
+      final error = SftpError(
+        'Outgoing SFTP packet is too large: ${data.length} bytes '
+        '(maximum $_kMaxPacketLength bytes)',
+      );
+      _closeError(error);
+      _channel.destroy();
+      throw error;
+    }
+    printTrace?.call('-> $_channel: $packet');
     final writer = SSHMessageWriter();
     writer.writeUint32(data.length);
     writer.writeBytes(data);
@@ -488,6 +500,16 @@ class SftpClient {
     const lengthHeader = 4; // 4 bytes packet length header
     while (_buffer.length >= lengthHeader) {
       final length = _buffer.byteData.getUint32(0);
+      if (length > _kMaxPacketLength) {
+        _closeError(
+          SftpError(
+            'Incoming SFTP packet is too large: $length bytes '
+            '(maximum $_kMaxPacketLength bytes)',
+          ),
+        );
+        _channel.destroy();
+        return;
+      }
       if (_buffer.length < lengthHeader + length) break;
       final packet = _buffer.consume(lengthHeader + length);
       final payload = Uint8List.sublistView(packet, lengthHeader);
