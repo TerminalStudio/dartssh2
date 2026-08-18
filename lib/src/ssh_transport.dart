@@ -103,6 +103,15 @@ class SSHTransport {
   final SSHTransportReadyHandler? onReady;
 
   /// Function called when a packet is received.
+  ///
+  /// Every packet handed to this callback is assumed to be handled, so the
+  /// transport can never tell that a message was unrecognized and never
+  /// replies with SSH_MSG_UNIMPLEMENTED on its behalf.
+  @Deprecated(
+    'Use onMessage instead, which reports whether the message was recognized '
+    'so the transport can answer unknown ones as RFC 4253 requires. '
+    'Will be removed in a future major release.',
+  )
   final SSHPacketHandler? onPacket;
 
   /// Function called for messages not handled by the transport layer.
@@ -1465,6 +1474,9 @@ class SSHTransport {
         if (messageHandler != null) {
           if (messageHandler(message)) return;
         } else {
+          // Deprecated path, kept so existing callers keep working. It
+          // cannot report whether the message was recognized, so nothing is
+          // ever answered with SSH_MSG_UNIMPLEMENTED on its behalf.
           final packetHandler = onPacket;
           if (packetHandler != null) {
             packetHandler(message);
