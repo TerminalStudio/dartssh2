@@ -126,7 +126,10 @@ void main() {
     test('keeps the legacy packet callback behavior', () async {
       final socket = _CaptureSSHSocket();
       final received = <Uint8List>[];
-      final transport = SSHTransport(socket, onPacket: received.add);
+      final transport = SSHTransport(socket, onMessage: (packet) {
+        received.add(packet);
+        return true;
+      });
       socket.packets.clear();
       setPrivate(transport, '_kexInProgress', false);
       final extensionMessage = Uint8List.fromList([200, 1, 2, 3]);
