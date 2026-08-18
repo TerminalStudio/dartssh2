@@ -56,6 +56,10 @@ jobs:
         if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
         run: tool/start_test_sshd.sh
 
+      - name: Show the server's effective algorithms
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        run: docker exec dartssh2-test-sshd sshd -T | grep -iE '^(kexalgorithms|ciphers|macs)' || true
+
       - name: Run integration tests
         if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
         env:
