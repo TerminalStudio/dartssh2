@@ -8,7 +8,11 @@ import 'package:dartssh2/src/hostkey/hostkey_rsa.dart';
 import 'package:dartssh2/src/kex/kex_dh.dart';
 import 'package:dartssh2/src/kex/kex_nist.dart';
 import 'package:dartssh2/src/kex/kex_x25519.dart';
+import 'package:dartssh2/src/message/msg_debug.dart';
+import 'package:dartssh2/src/message/msg_disconnect.dart';
 import 'package:dartssh2/src/message/msg_userauth.dart';
+import 'package:dartssh2/src/message/msg_ignore.dart';
+import 'package:dartssh2/src/message/msg_unimplemented.dart';
 import 'package:dartssh2/src/ssh_algorithm.dart';
 import 'package:dartssh2/src/ssh_kex.dart';
 import 'package:dartssh2/src/utils/bigint.dart';
@@ -49,6 +53,9 @@ Uint8List _hostkeyFingerprint(Uint8List hostkey) {
 typedef SSHTransportReadyHandler = void Function();
 
 typedef SSHPacketHandler = void Function(Uint8List payload);
+
+/// Handles a packet and returns whether its message type is recognized.
+typedef SSHMessageHandler = bool Function(Uint8List payload);
 
 /// Pseudo algorithm names that are advertised inside the key exchange
 /// name-list without being key exchange algorithms themselves.
@@ -98,6 +105,13 @@ class SSHTransport {
   /// Function called when a packet is received.
   final SSHPacketHandler? onPacket;
 
+  /// Function called for messages not handled by the transport layer.
+  ///
+  /// Returning `false` causes the transport to reply with
+  /// SSH_MSG_UNIMPLEMENTED for the current packet. [onPacket] is retained for
+  /// backwards compatibility and assumes every packet it receives is handled.
+  final SSHMessageHandler? onMessage;
+
   /// Whether to bypass server host key verification.
   ///
   /// If set to `true`, the connection will proceed without checking the server's
@@ -126,8 +140,9 @@ class SSHTransport {
     this.onVerifyHostKey,
     this.onReady,
     this.onPacket,
+    this.onMessage,
     this.disableHostkeyVerification = false,
-  }) {
+  }) : assert(onPacket == null || onMessage == null) {
     _initSocket();
     _startHandshake();
   }
@@ -1396,6 +1411,7 @@ class SSHTransport {
     // allowed to appear between KEXINIT and NEWKEYS. Receiving one there means
     // someone is padding the transcript, so the connection is torn down.
     if (_strictKex &&
+        _isFirstKex &&
         _kexInProgress &&
         _isForbiddenDuringStrictKex(messageId)) {
       throw SSHHandshakeError(
@@ -1405,6 +1421,29 @@ class SSHTransport {
     }
 
     switch (messageId) {
+      case SSH_Message_Disconnect.messageId:
+        final disconnect = SSH_Message_Disconnect.decode(message);
+        printTrace?.call('<- $socket: $disconnect');
+        return close();
+      case SSH_Message_Ignore.messageId:
+        final ignore = SSH_Message_Ignore.decode(message);
+        printTrace?.call('<- $socket: $ignore');
+        return;
+      case SSH_Message_Unimplemented.messageId:
+        final unimplemented = SSH_Message_Unimplemented.decode(message);
+        printTrace?.call('<- $socket: $unimplemented');
+        printDebug?.call(
+          'Received SSH_MSG_UNIMPLEMENTED for packet '
+          '${unimplemented.sequenceNumber}',
+        );
+        return;
+      case SSH_Message_Debug.messageId:
+        final debug = SSH_Message_Debug.decode(message);
+        printTrace?.call('<- $socket: $debug');
+        printDebug?.call(
+          'Remote: ${utf8.decode(debug.message, allowMalformed: true)}',
+        );
+        return;
       case SSH_Message_KexInit.messageId:
         return _handleMessageKexInit(message);
       case SSH_Message_KexDH_Reply.messageId:
@@ -1413,10 +1452,55 @@ class SSHTransport {
       case SSH_Message_NewKeys.messageId:
         return _handleMessageNewKeys(message);
       case SSH_Message_ExtInfo.messageId:
+        if (_kexInProgress) {
+          return _handleUnexpectedKexMessage(messageId);
+        }
         return _handleMessageExtInfo(message);
       default:
-        onPacket?.call(message);
+        if (_kexInProgress) {
+          return _handleUnexpectedKexMessage(messageId);
+        }
+
+        final messageHandler = onMessage;
+        if (messageHandler != null) {
+          if (messageHandler(message)) return;
+        } else {
+          final packetHandler = onPacket;
+          if (packetHandler != null) {
+            packetHandler(message);
+            return;
+          }
+        }
+
+        _sendUnimplemented(messageId);
     }
+  }
+
+  /// Handles a message that is not valid during the current key exchange.
+  ///
+  /// OpenSSH disconnects for unexpected messages during the initial strict
+  /// key exchange. For non-strict exchanges and rekeys, it reports the
+  /// message as unimplemented.
+  void _handleUnexpectedKexMessage(int messageId) {
+    if (_strictKex && _isFirstKex) {
+      throw SSHHandshakeError(
+        'Strict key exchange violation: unexpected message $messageId '
+        'received during key exchange',
+      );
+    }
+    _sendUnimplemented(messageId);
+  }
+
+  /// Reports an unrecognized message using the rejected packet's sequence
+  /// number, before [_processPackets] advances it.
+  void _sendUnimplemented(int messageId) {
+    final message = SSH_Message_Unimplemented(_remotePacketSN.value);
+    printDebug?.call(
+      'Unsupported SSH message $messageId at packet '
+      '${_remotePacketSN.value}',
+    );
+    printTrace?.call('-> $socket: $message');
+    sendPacket(message.encode());
   }
 
   /// Records the extensions advertised by the peer in SSH_MSG_EXT_INFO.

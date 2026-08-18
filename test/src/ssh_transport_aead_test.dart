@@ -400,6 +400,7 @@ void main() {
           setPrivate(receiver, '_remoteCipherType', cipherType);
           setPrivate(receiver, '_remoteCipherKey', key);
           setPrivate(receiver, '_remoteIV', iv);
+          setPrivate(receiver, '_kexInProgress', false);
           setSequenceValue(receiver, '_remotePacketSN', 0);
 
           receiverSocket.addIncomingBytes(encryptedPacket);

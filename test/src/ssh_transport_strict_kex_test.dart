@@ -3,8 +3,11 @@ import 'dart:mirrors';
 import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
+import 'package:dartssh2/src/message/msg_debug.dart';
 import 'package:dartssh2/src/message/msg_ext_info.dart';
+import 'package:dartssh2/src/message/msg_ignore.dart';
 import 'package:dartssh2/src/message/msg_kex.dart';
+import 'package:dartssh2/src/message/msg_unimplemented.dart';
 import 'package:dartssh2/src/ssh_packet.dart';
 import 'package:test/test.dart';
 
@@ -236,10 +239,14 @@ void main() {
   });
 
   group('Strict key exchange message filtering', () {
-    for (final entry in {
-      'SSH_MSG_IGNORE': 2,
-      'SSH_MSG_UNIMPLEMENTED': 3,
-      'SSH_MSG_DEBUG': 4,
+    for (final entry in <String, Uint8List>{
+      'SSH_MSG_IGNORE': SSH_Message_Ignore.empty().encode(),
+      'SSH_MSG_UNIMPLEMENTED': SSH_Message_Unimplemented(0).encode(),
+      'SSH_MSG_DEBUG': SSH_Message_Debug(
+        alwaysDisplay: false,
+        message: Uint8List(0),
+        language: Uint8List(0),
+      ).encode(),
     }.entries) {
       test('rejects ${entry.key} during key exchange', () async {
         final socket = _CaptureSSHSocket();
@@ -250,7 +257,7 @@ void main() {
 
         await expectLater(
           invokePrivate(transport, '_handleMessage', [
-            Uint8List.fromList([entry.value, 0, 0, 0, 0])
+            entry.value,
           ]),
           throwsA(isA<SSHHandshakeError>()),
         );
@@ -266,7 +273,7 @@ void main() {
         setPrivate(transport, '_kexInProgress', false);
 
         await invokePrivate(transport, '_handleMessage', [
-          Uint8List.fromList([entry.value, 0, 0, 0, 0])
+          entry.value,
         ]);
 
         transport.close();
@@ -280,7 +287,7 @@ void main() {
         setPrivate(transport, '_kexInProgress', true);
 
         await invokePrivate(transport, '_handleMessage', [
-          Uint8List.fromList([entry.value, 0, 0, 0, 0])
+          entry.value,
         ]);
 
         transport.close();
