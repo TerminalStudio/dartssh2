@@ -1,3 +1,8 @@
+## [3.3.1] - 2026-08-19
+- Removed the background isolate offload from X25519 and NIST curve key exchange, which cost more than the work it was hiding. Generating an ephemeral key or computing the shared secret on these curves is one fixed-size scalar multiply, well under a millisecond, while `Isolate.run` takes several times that to spawn and tear down, and a client pays it twice per handshake. On a memory constrained Android device the spawn delay was long enough for the server to time out the key exchange and close the connection before `SSH_MSG_NEWKEYS` went out, surfacing as `SSHAuthAbortError` with a null reason [#226]. Thanks [@cesarcamps].
+- Kept the offload for finite field Diffie-Hellman, which is the one exchange whose cost the peer controls: group exchange lets the server name a modulus of up to 8192 bits, and modular exponentiation grows steeply with it.
+- Added debug logging around host key signature verification and the `onVerifyHostKey` callback. Everything between receiving the key exchange reply and sending `SSH_MSG_NEWKEYS` used to run without a single `printDebug` call, so a slow user callback and a slow shared secret were indistinguishable in a trace, and both looked like a hung handshake [#226].
+
 ## [3.3.0] - 2026-08-18
 - Added `SSHDisconnectError`, so the reason the peer gave for terminating the connection reaches the caller. `SSH_MSG_DISCONNECT` carries a reason code and a description, which is where OpenSSH puts lines such as "no matching key exchange method found"; the transport used to log it and close cleanly, leaving an unexplained disconnection [#224].
 - Fixed `SSHMessageReader.readBytes()` indexing the underlying buffer instead of the message, so it returned the wrong bytes whenever the message was a view into a larger buffer, which is what every SSH and SFTP payload is. Only OpenSSH private key decoding called it, on a freshly decoded blob where the two coincide, so nothing was broken in practice [#223].
@@ -379,6 +384,7 @@
 [#223]: https://github.com/vicajilau/dartssh2/pull/223
 [#224]: https://github.com/vicajilau/dartssh2/pull/224
 [#225]: https://github.com/vicajilau/dartssh2/pull/225
+[#226]: https://github.com/vicajilau/dartssh2/issues/226
 
 [@linhanyu]: https://github.com/linhanyu
 [@Migarl]: https://github.com/Migarl
@@ -397,3 +403,4 @@
 [@gkc]: https://github.com/gkc
 [@vicajilau]: https://github.com/vicajilau
 [@GT-610]: https://github.com/GT-610
+[@cesarcamps]: https://github.com/cesarcamps
