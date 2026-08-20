@@ -1650,19 +1650,27 @@ class SSHTransport {
     printDebug?.call('SSHTransport._serverMacType: $_serverMacType');
 
     switch (_kexType) {
+      // Elliptic curve key generation is a single fixed-size scalar multiply,
+      // well under a millisecond. Spawning an isolate for it costs several
+      // times more than the work it offloads, and the server is timing our
+      // handshake while we pay it, so it stays on this isolate.
       case SSHKexType.x25519:
       case SSHKexType.x25519Rfc:
-        _kex = await SSHKexX25519.createAsync();
+        _kex = SSHKexX25519();
         break;
       case SSHKexType.nistp256:
-        _kex = await SSHKexNist.p256Async();
+        _kex = SSHKexNist.p256();
         break;
       case SSHKexType.nistp384:
-        _kex = await SSHKexNist.p384Async();
+        _kex = SSHKexNist.p384();
         break;
       case SSHKexType.nistp521:
-        _kex = await SSHKexNist.p521Async();
+        _kex = SSHKexNist.p521();
         break;
+      // Finite field Diffie-Hellman is the one exchange whose cost the server
+      // controls: group exchange lets it name a modulus up to 8192 bits, and
+      // modular exponentiation grows steeply with that size. These stay
+      // offloaded so a large group cannot block the calling isolate.
       case SSHKexType.dh14Sha1:
       case SSHKexType.dh14Sha256:
         _kex = await SSHKexDH.group14Async();
@@ -1728,13 +1736,7 @@ class SSHTransport {
       hostSignature = message.signature;
       serverKexKey = message.ecdhPublicKey;
       clientKexKey = kex.publicKey;
-      if (kex is SSHKexX25519) {
-        sharedSecret = await kex.computeSecretAsync(message.ecdhPublicKey);
-      } else if (kex is SSHKexNist) {
-        sharedSecret = await kex.computeSecretAsync(message.ecdhPublicKey);
-      } else {
-        sharedSecret = kex.computeSecret(message.ecdhPublicKey);
-      }
+      sharedSecret = kex.computeSecret(message.ecdhPublicKey);
     } else {
       throw UnimplementedError('$kex');
     }
@@ -1753,6 +1755,7 @@ class SSHTransport {
     );
 
     if (!disableHostkeyVerification) {
+      printDebug?.call('SSHTransport._verifyHostkey');
       final verified = _verifyHostkey(
         keyBytes: hostkey,
         signatureBytes: hostSignature,
@@ -1773,9 +1776,14 @@ class SSHTransport {
       return;
     }
 
+    // The server is waiting for our NEWKEYS while this runs, and a slow
+    // callback here has already been mistaken for a hung key exchange, so
+    // bracket it in the debug log rather than leaving a silent gap.
+    printDebug?.call('SSHTransport.onVerifyHostKey');
     final userVerified = onVerifyHostKey != null
         ? await Future.value(onVerifyHostKey!(_hostkeyType!.name, fingerprint))
         : true;
+    printDebug?.call('SSHTransport.onVerifyHostKey = $userVerified');
 
     if (!userVerified) {
       closeWithError(SSHHostkeyError('Hostkey verification failed'));

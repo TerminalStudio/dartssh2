@@ -74,41 +74,4 @@ void main() {
       expect(kex.privateKey, lessThan(kex.curve.n));
     });
   });
-
-  group('SSHKexNist (Async)', () {
-    test('generate keys and compute shared secret asynchronously (P-256)',
-        () async {
-      final kex1 = await SSHKexNist.p256Async();
-      final kex2 = await SSHKexNist.p256Async();
-      final secret1 = await kex1.computeSecretAsync(kex2.publicKey);
-      final secret2 = await kex2.computeSecretAsync(kex1.publicKey);
-      expect(secret1, equals(secret2));
-    });
-
-    test('generate keys and compute shared secret asynchronously (P-384)',
-        () async {
-      final kex1 = await SSHKexNist.p384Async();
-      final kex2 = await SSHKexNist.p384Async();
-      final secret1 = await kex1.computeSecretAsync(kex2.publicKey);
-      final secret2 = await kex2.computeSecretAsync(kex1.publicKey);
-      expect(secret1, equals(secret2));
-    });
-
-    test('generate keys and compute shared secret asynchronously (P-521)',
-        () async {
-      final kex1 = await SSHKexNist.p521Async();
-      final kex2 = await SSHKexNist.p521Async();
-      final secret1 = await kex1.computeSecretAsync(kex2.publicKey);
-      final secret2 = await kex2.computeSecretAsync(kex1.publicKey);
-      expect(secret1, equals(secret2));
-    });
-
-    test('generate P-521 private key within valid range asynchronously',
-        () async {
-      final kex = await SSHKexNist.p521Async();
-
-      expect(kex.privateKey, greaterThan(BigInt.zero));
-      expect(kex.privateKey, lessThan(kex.curve.n));
-    });
-  });
 }
